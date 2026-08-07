@@ -1,0 +1,31 @@
+[submodule "submodules/mem0"]
+	path = submodules/mem0
+	url = https://github.com/mem0ai/mem0
+	shallow = true
+[submodule "submodules/graphiti"]
+	path = submodules/graphiti
+	url = https://github.com/getzep/graphiti
+	shallow = true
+[submodule "submodules/letta"]
+	path = submodules/letta
+	url = https://github.com/letta-ai/letta
+	shallow = true
+[submodule "submodules/langmem"]
+	path = submodules/langmem
+	url = https://github.com/langchain-ai/langmem
+	shallow = true
+[submodule "submodules/TencentDB-Agent-Memory"]
+	path = submodules/TencentDB-Agent-Memory
+	url = https://github.com/psiQAQ/TencentDB-Agent-Memory.git
+[submodule "submodules/MemRL"]
+	path = submodules/MemRL
+	url = https://github.com/MemTensor/MemRL
+	shallow = true
+[submodule "submodules/basic-memory"]
+	path = submodules/basic-memory
+	url = https://github.com/basicmachines-co/basic-memory
+	shallow = true
+[submodule "submodules/claude-mem"]
+	path = submodules/claude-mem
+	url = https://github.com/thedotmack/claude-mem
+	shallow = true
