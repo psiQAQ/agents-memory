@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { link, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -28,6 +28,7 @@ test('prepare-agent copies only the selected credential into an isolated private
   try {
     const homeA = join(f.root, 'home-a');
     const homeB = join(f.root, 'home-b');
+    await Promise.all([mkdir(homeA), mkdir(homeB)]);
     await prepareAgent({ agent: 'agent-a', stateDir: f.stateDir, homeDir: homeA, ...owner });
     await prepareAgent({ agent: 'agent-b', stateDir: f.stateDir, homeDir: homeB, ...owner });
     assert.equal((await readFile(join(homeA, '.memory', 'user-key'), 'utf8')).trim(), keys['agent-a']);
@@ -49,6 +50,7 @@ test('prepare-agent rejects invalid agent, key, and path inputs without leaving 
   const f = await fixture();
   try {
     const home = join(f.root, 'home');
+    await mkdir(home);
     await assert.rejects(prepareAgent({ agent: '../agent-a', stateDir: f.stateDir, homeDir: home, ...owner }), /invalid agent/);
     await assert.rejects(prepareAgent({ agent: 'agent-a', stateDir: 'relative', homeDir: home, ...owner }), /invalid path/);
     await writeFile(join(f.stateDir, 'credentials', 'agent-a.user-key'), `${keys['agent-a']}\nsecond-line\n`);
@@ -60,4 +62,28 @@ test('prepare-agent rejects invalid agent, key, and path inputs without leaving 
     assert.notEqual(cli.status, 0);
     assert.doesNotMatch(`${cli.stdout}${cli.stderr}`, new RegExp(keys['agent-a']));
   } finally { await rm(f.root, { recursive: true, force: true }); }
+});
+
+test('prepare-agent rejects a persistent-home junction escape and never writes the key outside the private volume', async () => {
+  const f = await fixture();
+  const outside = await mkdtemp(join(tmpdir(), 'memory-agent-escape-'));
+  try {
+    const home = join(f.root, 'home');
+    await mkdir(home);
+    await symlink(outside, join(home, '.memory'), process.platform === 'win32' ? 'junction' : 'dir');
+    await assert.rejects(prepareAgent({ agent: 'agent-a', stateDir: f.stateDir, homeDir: home, ...owner }), /unsafe path/);
+    await assert.rejects(readFile(join(outside, 'user-key'), 'utf8'), { code: 'ENOENT' });
+
+    await unlink(join(home, '.memory'));
+    const source = join(f.stateDir, 'credentials', 'agent-a.user-key');
+    const linkedSource = join(f.root, 'linked-source');
+    await writeFile(linkedSource, `${keys['agent-a']}\n`);
+    await unlink(source);
+    await link(linkedSource, source);
+    await assert.rejects(prepareAgent({ agent: 'agent-a', stateDir: f.stateDir, homeDir: home, ...owner }), /unsafe credential/);
+    await assert.rejects(readFile(join(home, '.memory', 'user-key'), 'utf8'), { code: 'ENOENT' });
+  } finally {
+    await rm(f.root, { recursive: true, force: true });
+    await rm(outside, { recursive: true, force: true });
+  }
 });

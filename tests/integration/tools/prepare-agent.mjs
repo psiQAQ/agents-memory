@@ -1,4 +1,4 @@
-import { chmod, chown, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { chmod, chown, lstat, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { dirname, isAbsolute, join, relative } from 'node:path';
 import { isMain } from './runtime-lib.mjs';
@@ -26,24 +26,58 @@ async function setOwnership(path, uid, gid, mode) {
   if (process.platform !== 'win32') await chown(path, uid, gid);
 }
 
+async function safeDirectory(path, allowMissing = false) {
+  let metadata;
+  try { metadata = await lstat(path); }
+  catch (error) {
+    if (allowMissing && error?.code === 'ENOENT') return false;
+    throw new Error('unsafe path');
+  }
+  if (metadata.isSymbolicLink() || !metadata.isDirectory()) throw new Error('unsafe path');
+  return true;
+}
+
+async function safeRegularFile(path, errorMessage, allowMissing = false) {
+  let metadata;
+  try { metadata = await lstat(path); }
+  catch (error) {
+    if (allowMissing && error?.code === 'ENOENT') return false;
+    throw new Error(errorMessage);
+  }
+  if (metadata.isSymbolicLink() || !metadata.isFile() || metadata.nlink !== 1) throw new Error(errorMessage);
+  return true;
+}
+
 export async function prepareAgent({ agent, stateDir, homeDir, uid = 10001, gid = 10001 }) {
   if (!agents.has(agent)) throw new Error('invalid agent');
   if (![stateDir, homeDir].every((path) => isAbsolute(path ?? '') && dirname(path) !== path) || isInside(stateDir, homeDir) || isInside(homeDir, stateDir)) throw new Error('invalid path');
   if (![uid, gid].every((value) => Number.isSafeInteger(value) && value >= 0)) throw new Error('invalid owner');
 
+  const credentialsDir = join(stateDir, 'credentials');
+  const credentialFile = join(credentialsDir, `${agent}.user-key`);
+  await safeDirectory(stateDir);
+  await safeDirectory(credentialsDir);
+  await safeRegularFile(credentialFile, 'unsafe credential');
+
   let key;
-  try { key = (await readFile(join(stateDir, 'credentials', `${agent}.user-key`), 'utf8')).replace(/\r?\n$/, ''); }
+  try { key = (await readFile(credentialFile, 'utf8')).replace(/\r?\n$/, ''); }
   catch { throw new Error('invalid credential'); }
   if (!keyPattern.test(key)) throw new Error('invalid credential');
 
   const memoryDir = join(homeDir, '.memory');
   const destination = join(memoryDir, 'user-key');
   const temporary = join(memoryDir, `.user-key.${process.pid}.${randomUUID()}.tmp`);
+  await safeDirectory(homeDir);
+  if (!(await safeDirectory(memoryDir, true))) {
+    try { await mkdir(memoryDir, { mode: 0o700 }); } catch { throw new Error('unsafe path'); }
+    await safeDirectory(memoryDir);
+  }
+  await safeRegularFile(destination, 'unsafe path', true);
   try {
-    await mkdir(memoryDir, { recursive: true, mode: 0o700 });
     await setOwnership(homeDir, uid, gid, 0o700);
     await setOwnership(memoryDir, uid, gid, 0o700);
-    await writeFile(temporary, `${key}\n`, { encoding: 'utf8', mode: 0o600 });
+    await writeFile(temporary, `${key}\n`, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+    await safeRegularFile(temporary, 'unsafe path');
     await setOwnership(temporary, uid, gid, 0o600);
     await rename(temporary, destination);
     await setOwnership(destination, uid, gid, 0o600);

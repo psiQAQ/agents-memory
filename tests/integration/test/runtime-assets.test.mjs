@@ -73,6 +73,14 @@ test('Proxy config selector accepts only the base and Redis generated filenames'
   assert.doesNotMatch(wrapper, /eval|set -x/);
 });
 
+test('Windows config wrapper verifies host attestation before rendering settings', async () => {
+  const wrapper = await read('tools/prepare-windows-config.mjs');
+  assert.match(wrapper, /verifyWindowsConfigAttestation/);
+  assert.match(wrapper, /renderSettings/);
+  assert.ok(wrapper.indexOf('await verifyWindowsConfigAttestation') < wrapper.indexOf('await renderSettings'));
+  assert.doesNotMatch(wrapper, /console\.log|set -x/);
+});
+
 test('Claude settings keep the exact DeepSeek primary and fast model contract', async () => {
   const rootSettings = JSON.parse(await readFile(new URL('../../../.claude/settings.template.json', import.meta.url), 'utf8'));
   const settings = JSON.parse(await read('claude/settings.template.json'));

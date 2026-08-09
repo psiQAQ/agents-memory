@@ -11,10 +11,13 @@ services:
         condition: service_completed_successfully
       memory-proxy:
         condition: service_healthy
+    environment:
+      HOST_PROJECT_ROOT: ${PROJECT_ROOT:?set the canonical repository root}
+      HOST_WINDOWS_CLAUDE_CONFIG_DIR: ${WINDOWS_CLAUDE_CONFIG_DIR:?set a canonical absolute project-specific Windows Claude config directory outside the repository}
     command:
-      - tools/render-settings.mjs
-      - --target
-      - windows
+      - tools/prepare-windows-config.mjs
+      - --attestation
+      - /gate/windows-config-attestation.json
       - --template
       - /lab/claude/settings.template.json
       - --config-dir
@@ -28,4 +31,8 @@ services:
       - type: bind
         source: ${WINDOWS_CLAUDE_CONFIG_DIR:?set a canonical absolute project-specific Windows Claude config directory}
         target: /windows-config
+      - type: bind
+        source: ${WINDOWS_CONFIG_ATTESTATION_FILE:?run the Windows host config gate first}
+        target: /gate/windows-config-attestation.json
+        read_only: true
     restart: "no"

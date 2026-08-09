@@ -1,5 +1,11 @@
 # Docker 多客户端记忆实验
 
+> **Docker Compose**：用 YAML 一次声明多个容器、网络和数据卷，再用同一组命令启动或停止实验环境。
+
+> **Canonical path**：操作系统解析符号链接和相对片段后得到的唯一绝对路径，用来避免同一文件以不同写法绕过目录检查。
+
+> **Gate**：真实模型或宿主配置操作前必须通过的安全检查；本项目使用短期 attestation 把 host 检查结果交给容器复核。
+
 > **Static Passed**：文件、渲染器、Gate 与 Compose 展开结果通过自动检查；不代表镜像或服务已经运行。
 
 > **Build Failed**：镜像构建曾在获取 Docker Hub OAuth token 时超时，尚未执行到项目 Dockerfile 的关键构建步骤。
@@ -8,15 +14,9 @@
 
 本目录保存可重复的 Docker 实验编排。当前状态为 Static Passed、Build Failed、Runtime Not Run，因此不能据此声称服务已启动或记忆业务已通过。
 
-> **Docker Compose**：用 YAML 一次声明多个容器、网络和数据卷，再用同一组命令启动或停止实验环境。
-
 > **Mock**：返回固定结果的模拟模型服务。它不访问真实模型，适合默认测试协议、失败和恢复路径。
 
 > **Profile**：只有显式选择才启用的一组 Compose 服务，例如 `redis`、`claude` 或会产生真实模型流量的 `real-claude`。
-
-> **Canonical path**：操作系统解析符号链接和相对片段后得到的唯一绝对路径，用来避免同一文件以不同写法绕过目录检查。
-
-> **Gate**：真实模型服务启动前必须通过的安全检查，包括显式付费开关、声明性预算与 turn 审批输入、run ID、宿主 canonical 路径、短期 attestation 和工作区外 secret。
 
 ## 文件分层
 
@@ -137,20 +137,33 @@ Windows 原生 Claude Code 需要 loopback Proxy，因此叠加 hardened 层：
 ```powershell
 $windowsConfigDir = Join-Path $env:LOCALAPPDATA 'refine-memory\claude-agent-a'
 [IO.Directory]::CreateDirectory($windowsConfigDir) | Out-Null
+$windowsGateDir = Join-Path ([IO.Path]::GetTempPath()) ('refine-memory-windows-gate-' + [guid]::NewGuid().ToString('N'))
+[IO.Directory]::CreateDirectory($windowsGateDir) | Out-Null
+$env:PROJECT_ROOT = (Resolve-Path -LiteralPath .).Path
 $env:WINDOWS_CLAUDE_CONFIG_DIR = (Resolve-Path -LiteralPath $windowsConfigDir).Path
+$env:WINDOWS_CONFIG_ATTESTATION_FILE = Join-Path $windowsGateDir 'windows-config-attestation.json'
 
-& $dockerCli compose `
-  --profile windows `
-  -f tests/integration/compose.yaml `
-  -f tests/integration/compose.hardened.yaml `
-  -f tests/integration/compose.windows.yaml `
-  run --rm windows-config-init
+node tests/integration/tools/windows-config-gate.mjs `
+  --write-attestation $env:WINDOWS_CONFIG_ATTESTATION_FILE
+if ($LASTEXITCODE -ne 0) { throw 'Windows config host gate failed' }
+
+try {
+  & $dockerCli compose `
+    --profile windows `
+    -f tests/integration/compose.yaml `
+    -f tests/integration/compose.hardened.yaml `
+    -f tests/integration/compose.windows.yaml `
+    run --rm windows-config-init
+  if ($LASTEXITCODE -ne 0) { throw 'Windows config init failed' }
+} finally {
+  Remove-Item -LiteralPath $windowsGateDir -Recurse -Force
+}
 
 $env:CLAUDE_CONFIG_DIR = $env:WINDOWS_CLAUDE_CONFIG_DIR
 claude
 ```
 
-`windows-config-init` 只读取 agent-a 私有 home 中的 Memory 用户 key，不挂共享 bootstrap state 或 DeepSeek secret。上述启动与 TUI 仍为 Runtime Not Run。
+Host gate 会把真实 worktree root 与 canonical Windows config 目录写入短期 attestation；config 目录必须是仓库外的绝对真实路径，不能使用相对路径、junction 或仓库内 `.runtime`。`windows-config-init` 先核对 attestation，再读取 agent-a 私有 home 中的 Memory 用户 key；它不挂共享 bootstrap state 或 DeepSeek secret。上述启动与 TUI 仍为 Runtime Not Run。
 
 ## 4. Redis profile
 
@@ -203,7 +216,7 @@ Headless 版本检查：
 
 ## 当前已知限制
 
-- **Static Passed**：41 项 Node 测试，以及 base、hardened、real 和可选 Windows override 四组 `docker compose config --quiet` 已通过。
+- **Static Passed**：45 项 Node 测试，以及 base、hardened、real 和可选 Windows override 四组 `docker compose config --quiet` 已通过。
 - **Build Failed**：Hub/Claude 构建在拉取 `docker/dockerfile:1` 的 Docker Hub OAuth token 时网络超时；named-context `COPY` 尚未得到实际构建证明。
 - **Runtime Not Run**：未执行 `up`、业务探针、故障恢复或 Claude TUI。
 - **Design Only / Runtime Not Run**：ACL、权限隔离、文件所有权和恢复语义尚未得到真实容器与服务行为证明。

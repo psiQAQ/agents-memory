@@ -1,13 +1,19 @@
 # Docker-first 多客户端记忆实验规格
 
-**状态：** Static（编排与业务流尚未运行）
+> **Docker Compose**：用一组 YAML 文件统一定义、连接和启动多个 Docker 容器的工具。
+
+> **Static Passed**：静态测试与 Compose 解析通过；不代表镜像或服务已经运行。
+
+> **Build Failed**：镜像构建在 Docker Hub registry 网络阶段失败，尚未执行到项目 Dockerfile 的关键构建步骤。
+
+> **Runtime Not Run**：尚未执行服务启动、业务探针、Claude TUI 或真实模型请求。
+
+**状态：** Static Passed；Build Failed（registry network）；Runtime Not Run
 **范围：** 私有根仓库的本地实验；不替代 TencentDB 公共派生仓库中的独立修复与测试。
 
 ## 目标与边界
 
 默认路径提供无付费、确定性 Mock 驱动的 Docker Compose 实验环境，用于验证 MemoryCore、Memory Hub、MemoryProxy、Windows 10 原生 Claude 与一个隔离 Docker Linux Claude 的协作。Codex、WSL、Win11 和局域网验证均后置。真实 DeepSeek 仅能在显式载入 `compose.real.yaml`、启用 `real-claude` profile 且通过付费 Gate 后使用。
-
-> **Docker Compose**：用一组 YAML 文件统一定义、连接和启动多个 Docker 容器的工具。
 
 > **MemoryProxy**：Claude 客户端访问模型和记忆能力的受控入口，负责认证、记忆注入、路由和请求转发。
 
@@ -17,7 +23,7 @@
 
 > **profile**：Docker Compose 中需要显式选择才会启用的一组可选服务或配置。
 
-> **付费 Gate**：真实模型调用前必须通过的前置检查，包括用户授权、secret 文件、预算和调用轮数限制；任一条件缺失即拒绝运行。
+> **付费 Gate**：真实模型调用前必须通过的前置检查，包括用户授权、工作区外 secret、host canonical 路径、预算声明和 turn 声明；任一条件缺失即拒绝启动。预算与 turn 只是审批输入和一致性比对，对 Claude、Proxy、Core、Knowledge 都不是请求计数器或硬上限。
 
 > **SQLite**：把结构化数据保存在单个本地文件中的轻量数据库，本阶段不需要单独部署数据库服务器。
 
@@ -41,9 +47,10 @@ flowchart LR
 
 | 层 | 文件 | 默认行为 | 当前状态 |
 | -- | -- | -- | -- |
-| Base | `compose.yaml` | Core、Hub、Proxy、Mock、隔离客户端与测试工具 | Not Run |
-| Hardened | `compose.hardened.yaml` | Proxy 持久卷和 loopback 最小端口暴露 | Not Run |
-| Real | `compose.real.yaml` | 仅在付费 Gate 通过时接入真实 DeepSeek | Not Run |
+| Base | `compose.yaml` | Core、Hub、Proxy、Mock、隔离客户端与测试工具 | Static Passed / Runtime Not Run |
+| Hardened | `compose.hardened.yaml` | Proxy 持久卷和 loopback 最小端口暴露 | Static Passed / Runtime Not Run |
+| Real | `compose.real.yaml` | 仅在付费 Gate 通过时接入真实 DeepSeek | Static Passed / Runtime Not Run |
+| Windows | `compose.windows.yaml` | 仅在 host path attestation 通过后生成 agent-a 项目配置 | Static Passed / Runtime Not Run |
 
 `docker compose up` 不得隐式启用 real profile。基础层保持 TencentDB standalone 的 SQLite/Core/Hub/Proxy 语义；不新增 PostgreSQL、独立 vector-db 或 Core Redis。Redis 仅可作为 Proxy 的可选 profile。
 
@@ -64,6 +71,6 @@ flowchart LR
 
 ## 可验证证据
 
-每次运行在未跟踪的 `.runtime/runs/<run-id>/` 保存脱敏 manifest 与日志，并在 `docs/reproduction/<run-id>.md` 记录命令、退出码、SHA、时间、环境、预期与实际。当前尚未执行 Docker、网络、镜像构建或业务流验证，因此本规格不宣称任何运行成功。
+每次运行在未跟踪的 `.runtime/runs/<run-id>/` 保存脱敏 manifest 与日志，并在 `docs/reproduction/<run-id>.md` 记录命令、退出码、SHA、时间、环境、预期与实际。当前 Compose 静态解析已通过；镜像构建已尝试但受 Docker Hub registry 网络阻塞；`docker compose up`、业务流、故障恢复与 Claude 交互仍未运行，因此本规格不宣称任何运行成功。
 
 > **manifest**：描述某次运行的版本、参数、状态和证据位置的结构化清单；脱敏后不包含 key。

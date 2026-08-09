@@ -2,6 +2,7 @@ import { chmod, mkdir, readFile, realpath, rename, stat, unlink, writeFile } fro
 import { randomUUID } from 'node:crypto';
 import { basename, dirname, isAbsolute, relative, sep } from 'node:path';
 import { isMain } from './runtime-lib.mjs';
+import { requireHostRepositoryRoot } from './host-paths.mjs';
 
 const maxAttestationAgeMs = 15 * 60 * 1000;
 
@@ -58,13 +59,14 @@ export async function writePaidGateAttestation(environment, attestationFile, now
   const { PROJECT_ROOT, DEEPSEEK_SECRET_FILE, EVIDENCE_DIR } = environment;
   if (![PROJECT_ROOT, DEEPSEEK_SECRET_FILE, EVIDENCE_DIR, attestationFile].every((path) => isAbsolute(path ?? ''))) invalid('path');
   const [projectRoot, secretFile, evidenceDir] = await Promise.all([
-    directory(PROJECT_ROOT, 'PROJECT_ROOT'),
-    validateSecret(DEEPSEEK_SECRET_FILE),
+    requireHostRepositoryRoot(PROJECT_ROOT),
+    regularFile(DEEPSEEK_SECRET_FILE, 'DEEPSEEK_SECRET_FILE'),
     directory(EVIDENCE_DIR, 'EVIDENCE_DIR'),
   ]);
   if (basename(evidenceDir) !== approved.runId) invalid('EVIDENCE_DIR');
   const fromRoot = relative(projectRoot, secretFile);
   if (!fromRoot || (!fromRoot.startsWith(`..${sep}`) && fromRoot !== '..' && !isAbsolute(fromRoot))) invalid('DEEPSEEK_SECRET_FILE');
+  await validateSecret(secretFile);
   const attestationDir = await directory(dirname(attestationFile), 'attestation path');
   if (attestationDir !== evidenceDir) invalid('attestation path');
   const issuedAt = now.toISOString();

@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, normalize } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { writeWindowsConfigAttestation } from '../tools/windows-config-gate.mjs';
 
 const integrationRoot = join(import.meta.dirname, '..');
+const repositoryRoot = await realpath(fileURLToPath(new URL('../../../', import.meta.url)));
 const baseEnvironment = {
   MEMORY_CORE_GATEWAY_API_KEY: 'static-lab-gateway-key',
   COMPOSE_PROJECT_NAME: 'memory-static-contract',
@@ -112,12 +115,17 @@ test('Windows override is opt-in, requires a canonical host config bind, and exp
 
   const missing = composeResult(['compose.yaml', 'compose.hardened.yaml', 'compose.windows.yaml'], {}, ['windows']);
   assert.notEqual(missing.status, 0);
-  assert.match(missing.stderr, /WINDOWS_CLAUDE_CONFIG_DIR/);
+  assert.match(missing.stderr, /PROJECT_ROOT|WINDOWS_(?:CLAUDE_CONFIG_DIR|CONFIG_ATTESTATION_FILE)/);
 
   const configDir = await mkdtemp(join(tmpdir(), 'memory-windows-claude-'));
+  const gateDir = await mkdtemp(join(tmpdir(), 'memory-windows-gate-'));
+  const attestationFile = join(gateDir, 'windows-config-attestation.json');
   try {
+    await writeWindowsConfigAttestation({ PROJECT_ROOT: repositoryRoot, WINDOWS_CLAUDE_CONFIG_DIR: await realpath(configDir) }, attestationFile);
     const { parsed } = composeConfig(['compose.yaml', 'compose.hardened.yaml', 'compose.windows.yaml'], {
       WINDOWS_CLAUDE_CONFIG_DIR: configDir,
+      WINDOWS_CONFIG_ATTESTATION_FILE: attestationFile,
+      PROJECT_ROOT: repositoryRoot,
     }, ['windows']);
     const service = parsed.services['windows-config-init'];
     assert.deepEqual(service.profiles, ['windows']);
@@ -130,9 +138,16 @@ test('Windows override is opt-in, requires a canonical host config bind, and exp
     assert.equal(normalize(volumes['/windows-config'].source), normalize(configDir));
     assert.equal(volumes['/agent-home'].source, 'claude-home-a');
     assert.equal(volumes['/agent-home'].read_only, true);
+    assert.equal(volumes['/gate/windows-config-attestation.json'].source, attestationFile);
+    assert.equal(volumes['/gate/windows-config-attestation.json'].read_only, true);
     assert.equal(volumes['/state'], undefined);
-    assert.match(JSON.stringify(service.command), /render-settings\.mjs.*--target.*windows.*\/agent-home\/\.memory\/user-key/);
-  } finally { await rm(configDir, { recursive: true, force: true }); }
+    assert.equal(service.environment.HOST_PROJECT_ROOT, repositoryRoot);
+    assert.equal(service.environment.HOST_WINDOWS_CLAUDE_CONFIG_DIR, configDir);
+    assert.match(JSON.stringify(service.command), /prepare-windows-config\.mjs.*--attestation.*windows-config-attestation.*\/agent-home\/\.memory\/user-key/);
+  } finally {
+    await rm(configDir, { recursive: true, force: true });
+    await rm(gateDir, { recursive: true, force: true });
+  }
 });
 
 test('hardened override publishes only Proxy on host loopback and adds durable logs', () => {
@@ -168,7 +183,7 @@ test('real override requires the explicit profile and keeps the dummy secret out
       REAL_LLM_MAX_TURNS: '1',
       RUN_ID: runId,
       EVIDENCE_DIR: evidence,
-      PROJECT_ROOT: integrationRoot,
+      PROJECT_ROOT: repositoryRoot,
       PAID_GATE_ATTESTATION_FILE: join(evidence, 'paid-gate-attestation.json'),
     });
     assert.doesNotMatch(text, new RegExp(marker));
@@ -176,7 +191,7 @@ test('real override requires the explicit profile and keeps the dummy secret out
     for (const name of ['paid-gate', 'real-config-init', 'memory-core', 'memory-hub', 'memory-proxy', 'bootstrap', 'claude-agent-a', 'claude-agent-b', 'claude-agent-c']) {
       assert.deepEqual(parsed.services[name].profiles, ['real-claude']);
     }
-    assert.equal(parsed.services['paid-gate'].environment.HOST_PROJECT_ROOT, integrationRoot);
+    assert.equal(parsed.services['paid-gate'].environment.HOST_PROJECT_ROOT, repositoryRoot);
     assert.equal(parsed.services['paid-gate'].environment.DEEPSEEK_SECRET_FILE, '/run/secrets/deepseek_key');
     assert.equal(parsed.services['paid-gate'].environment.EVIDENCE_DIR, `/evidence/${runId}`);
     assert.equal(parsed.services['real-config-init'].depends_on['paid-gate'].condition, 'service_completed_successfully');
@@ -199,7 +214,7 @@ test('real override requires the explicit profile and keeps the dummy secret out
 
     const active = composeConfig(['compose.yaml', 'compose.real.yaml'], {
       DEEPSEEK_SECRET_FILE: secretFile, RUN_PAID_LLM: '1', REAL_LLM_MAX_BUDGET_USD: '0.01', REAL_LLM_MAX_TURNS: '1',
-      RUN_ID: runId, EVIDENCE_DIR: evidence, PROJECT_ROOT: integrationRoot,
+      RUN_ID: runId, EVIDENCE_DIR: evidence, PROJECT_ROOT: repositoryRoot,
       PAID_GATE_ATTESTATION_FILE: join(evidence, 'paid-gate-attestation.json'),
     }, ['real-claude']).parsed.services;
     assert.equal(active['mock-llm'], undefined);

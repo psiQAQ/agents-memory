@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
@@ -10,10 +10,10 @@ const tool = fileURLToPath(new URL('../tools/paid-gate.mjs', import.meta.url));
 const secret = 'deepseek-test-secret-not-real';
 
 async function fixture() {
-  const root = await mkdtemp(join(tmpdir(), 'memory-project-'));
+  const root = await realpath(fileURLToPath(new URL('../../../', import.meta.url)));
   const outside = await mkdtemp(join(tmpdir(), 'memory-secret-'));
   const runId = 'paid-gate-1';
-  const evidence = join(root, 'evidence', runId);
+  const evidence = join(outside, 'evidence', runId);
   const secretFile = join(outside, 'secret');
   const attestationFile = join(evidence, 'paid-gate-attestation.json');
   await mkdir(evidence, { recursive: true });
@@ -68,18 +68,22 @@ test('host preflight validates canonical external paths and atomically writes a 
     assert.match(attestation.issued_at, /^\d{4}-\d{2}-\d{2}T/);
     assert.doesNotMatch(JSON.stringify(attestation), new RegExp(secret));
     if (process.platform !== 'win32') assert.equal((await stat(f.attestationFile)).mode & 0o777, 0o600);
-  } finally { await rm(f.root, { recursive: true, force: true }); await rm(f.outside, { recursive: true, force: true }); }
+  } finally { await rm(f.outside, { recursive: true, force: true }); }
 });
 
 test('host preflight rejects workspace secrets, mismatched evidence, bad controls, and multiline keys without leakage', async () => {
   const f = await fixture();
   try {
-    const insideSecret = join(f.root, 'inside-secret');
-    await writeFile(insideSecret, `${secret}\n`);
+    const insideSecret = join(f.root, 'README.md');
+    const linkedRoot = join(f.outside, 'linked-root');
+    await symlink(f.root, linkedRoot, process.platform === 'win32' ? 'junction' : 'dir');
     const good = controls(f);
     const cases = [
       { DEEPSEEK_SECRET_FILE: insideSecret },
-      { EVIDENCE_DIR: resolve(f.root, 'evidence', 'other') },
+      { EVIDENCE_DIR: resolve(f.outside, 'evidence', 'other') },
+      { PROJECT_ROOT: join(f.root, 'tests', 'integration') },
+      { PROJECT_ROOT: dirname(f.root) },
+      { PROJECT_ROOT: linkedRoot },
       { RUN_PAID_LLM: 'true' },
       { REAL_LLM_MAX_BUDGET_USD: '0' },
       { REAL_LLM_MAX_TURNS: '1.5' },
@@ -94,7 +98,7 @@ test('host preflight rejects workspace secrets, mismatched evidence, bad control
     const multiline = run(['--write-attestation', f.attestationFile], good);
     assert.notEqual(multiline.status, 0);
     assert.doesNotMatch(`${multiline.stdout}${multiline.stderr}`, new RegExp(secret));
-  } finally { await rm(f.root, { recursive: true, force: true }); await rm(f.outside, { recursive: true, force: true }); }
+  } finally { await rm(f.outside, { recursive: true, force: true }); }
 });
 
 test('runtime gate verifies host-path attestation fields and the actual mounted secret', async () => {
@@ -119,7 +123,7 @@ test('runtime gate verifies host-path attestation fields and the actual mounted 
     }
     await writeFile(f.secretFile, `${secret}\nsecond-line\n`);
     assert.notEqual(run(['--verify-attestation', f.attestationFile], good).status, 0);
-  } finally { await rm(f.root, { recursive: true, force: true }); await rm(f.outside, { recursive: true, force: true }); }
+  } finally { await rm(f.outside, { recursive: true, force: true }); }
 });
 
 test('runtime gate rejects tampered and stale attestations without key echo', async () => {
@@ -139,5 +143,5 @@ test('runtime gate rejects tampered and stale attestations without key echo', as
     result = run(['--verify-attestation', f.attestationFile], good);
     assert.notEqual(result.status, 0);
     assert.doesNotMatch(`${result.stdout}${result.stderr}`, new RegExp(secret));
-  } finally { await rm(f.root, { recursive: true, force: true }); await rm(f.outside, { recursive: true, force: true }); }
+  } finally { await rm(f.outside, { recursive: true, force: true }); }
 });
