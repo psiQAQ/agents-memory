@@ -52,7 +52,7 @@ services:
     restart: "no"
 
   memory-core:
-    image: refine-memory-core:fork-b75317b
+    image: refine-memory-core:fork-69fd8b
     build:
       context: ../../submodules/TencentDB-Agent-Memory/MemoryCore
       dockerfile: Dockerfile
@@ -70,7 +70,7 @@ services:
     expose: ["8420"]
 
   memory-hub:
-    image: refine-memory-hub:fork-b75317b
+    image: refine-memory-hub:fork-69fd8b
     build:
       context: images/hub
       dockerfile: Dockerfile
@@ -102,7 +102,7 @@ services:
     expose: ["8125", "8424"]
 
   memory-proxy:
-    image: refine-memory-proxy:fork-b75317b
+    image: refine-memory-proxy:fork-69fd8b
     build:
       context: ../../submodules/TencentDB-Agent-Memory/MemoryProxy
       dockerfile: Dockerfile

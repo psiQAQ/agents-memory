@@ -10,7 +10,7 @@
 
 > **Static Passed**：文件、渲染器、Gate 与 Compose 展开结果通过自动检查；不代表镜像或服务已经运行。
 
-> **Current agent context: Engine Inaccessible**：本轮 Codex 执行环境能运行 Docker client，但无法访问 engine；这不代表用户会话中的 Docker Desktop 一定无法启动。
+> **Engine Accessible**：本轮已确认 Docker client 与 engine 均为 29.6.2、Docker Desktop 为 4.85.0、context 为 `desktop-linux`，并可执行 Compose 5.3.1 命令。
 
 > **Runtime Not Run**：尚未执行 `up`、业务探针、Claude TUI 或真实模型请求。
 
@@ -18,7 +18,7 @@
 
 > **Agent bundle**：只放在单个客户端私有 home 中的 `0600` JSON 文件，把该客户端的 Memory 用户 key 与身份作为一个整体原子切换，避免更新中途出现“新 key 配旧身份”。
 
-本目录保存可重复的 Docker 实验编排。当前状态为 Static Passed、Current agent context: Engine Inaccessible、本轮 Build Not Run、Runtime Not Run；最近一次有证据的 Build 在 registry network 阶段 Failed。因此不能据此声称服务已启动或记忆业务已通过。
+本目录保存可重复的 Docker 实验编排。当前状态为 Static Passed、Engine Accessible；单独的 Proxy 镜像已构建成功并通过 `better-sqlite3=ok cost-guard=passthrough-stub` 运行时自检。完整 Compose build、Mock 业务 Gate、Claude TUI 与 DeepSeek 仍为 Not Run，因此不能据此声称服务已启动或记忆业务已通过。
 
 > **Mock**：返回固定结果的模拟模型服务。它不访问真实模型，适合默认测试协议、失败和恢复路径。
 
@@ -131,7 +131,7 @@ $env:TEST_SCENARIO = 'mock-contract'
 if ($LASTEXITCODE -ne 0) { throw 'Mock contract failed' }
 ```
 
-第二级 `standalone-memory` 使用真实 Core/Proxy API 验证 A 写入、Core L0/L1 oracle、B 显式共享、C 隔离、身份冲突和模型上游 header 脱敏。Public fork `b75317b2bb0deb72240b2016d54252e3232b48fa` 已写入根 gitlink，三个服务镜像统一标记 `fork-b75317b`；当前状态是 **Static Integrated / Runtime Not Run**，只有镜像构建和本命令实际 exit 0 后才允许转为业务 Passed：
+第二级 `standalone-memory` 使用真实 Core/Proxy API 验证 A 写入、Core L0/L1 oracle、B 显式共享、C 隔离、身份冲突和模型上游 header 脱敏。Public fork `69fd8b31e3fd4362af6c65407b92b26dfabebd0c` 已写入根 gitlink，三个服务镜像统一标记 `fork-69fd8b`；当前状态是 **Static Integrated / Runtime Not Run**，只有完整镜像构建和本命令实际 exit 0 后才允许转为业务 Passed：
 
 ```powershell
 $env:TEST_SCENARIO = 'standalone-memory'
@@ -266,10 +266,10 @@ Headless 版本检查：
 ## 当前已知限制
 
 - **Static Passed**：57/57 Node 测试，以及 base、hardened、real 和可选 Windows override 四组 `docker compose config --quiet` 已通过提交前复验。
-- **本轮 Build Not Run**：当前 agent context 无法访问 Docker engine；最近一次有证据的 Hub/Claude Build 在拉取 Docker Hub token 时网络超时，named-context `COPY` 尚未得到实际构建证明。
+- **Engine Accessible / Full Compose Build Not Run**：当前 Docker engine 可访问。单独的 Proxy 镜像已构建成功并通过 `better-sqlite3=ok cost-guard=passthrough-stub` 运行时自检；完整 Compose build 仍等待 controller 执行，较早的 Hub/Claude build 曾在拉取 Docker Hub token 时网络超时。
 - **Runtime Not Run**：未执行 `up`、业务探针、故障恢复或 Claude TUI。
-- **Static Integrated / Runtime Not Run**：B shared bridge 依赖的 ACL/envelope/session 修复已锁定到 public fork `b75317b2bb0d`、根 gitlink 与 `fork-b75317b` 镜像标签；真实 B shared/C isolation 仍必须由容器业务 Gate 证明。
+- **Static Integrated / Runtime Not Run**：B shared bridge 依赖的 ACL/envelope/session 修复已锁定到 public fork `69fd8b31e3fd4362af6c65407b92b26dfabebd0c`、根 gitlink 与 `fork-69fd8b` 镜像标签；真实 B shared/C isolation 仍必须由容器业务 Gate 证明。
 - **Static Integrated / Runtime Not Run**：Proxy auth、session、injection、extraction 与 tdai L0/L1 实现及模板已锁定到 final fork；真实行为仍等待容器业务 Gate。
 - **Static Integrated / Runtime Not Run**：settings renderer 分别固定 Docker `http://memory-proxy:8096` 与 Windows `http://127.0.0.1:8096` 的 `TDAI_MEMORY_PROXY_BASE_URL`，public fork 工具注入只在客户端运行时读取该变量；Windows memory tool 仍需真实 TUI/bridge 验证。
-- MemoryPanel 的 deny-by-default `.dockerignore` 已在 public fork 通过 4/4 语义测试及 backend/web build；根 Docker/BuildKit 仍是 Not Run。
-- **Local-only SHA**：public fork `b75317b2bb0d` 尚未 push。当前工作区可用；新 clone 在用户授权 push 前不能取得根 gitlink 目标。
+- MemoryPanel 的 deny-by-default `.dockerignore` 已在 public fork 通过 4/4 语义测试及 backend/web build；单独的 Proxy image build/runtime self-check 已通过，根完整 Compose build 仍是 Not Run。
+- **Local-only SHA**：public fork `69fd8b31e3fd4362af6c65407b92b26dfabebd0c` 尚未 push；从首个本地修复 `c75ef58` 起至当前修复，共 27 个本地 public commit。当前工作区可用；新 clone 在用户授权 push 前不能取得根 gitlink 目标。

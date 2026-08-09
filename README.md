@@ -84,11 +84,11 @@ refine-memory/
 git submodule update --init submodules/TencentDB-Agent-Memory
 ```
 
-当前 gitlink 指向尚未 push 的本地 public fork 提交 `b75317b2bb0deb72240b2016d54252e3232b48fa`。本工作区可直接构建，但新的 clone 在该提交推送到 `psiQAQ/TencentDB-Agent-Memory` 前无法取得它；本任务没有 push 授权。
+当前 gitlink 指向尚未 push 的本地 public fork 提交 `69fd8b31e3fd4362af6c65407b92b26dfabebd0c`。从首个本地修复 `c75ef58` 起至当前修复，共 27 个本地 public commit。单独的 Proxy 镜像已完成构建与运行时自检，当前 Docker engine 可访问；完整 Compose 构建、Mock 业务 Gate、Claude TUI 与 DeepSeek 仍为 Not Run，等待 controller 执行。新的 clone 在该提交推送到 `psiQAQ/TencentDB-Agent-Memory` 前无法取得它；本任务没有 push 授权。
 
 ## 当前执行顺序
 
-当前主入口是[企业智能体记忆系统评估](docs/enterprise-memory-system-evaluation.md)，其中集中记录证据状态、风险、评分门槛和下一步；本轮 Docker-first 约束见[规格](docs/specs/2026-08-09-docker-memory-lab.md)。Standalone 业务 Gate 的身份、共享与证据边界见[决策记录](docs/decisions/2026-08-09-standalone-memory-gate.md)，根 Gate 静态实现见[复现记录](docs/reproduction/2026-08-09-standalone-memory-static-contract.md)；public fork 集成边界见[决策记录](docs/decisions/2026-08-10-public-fork-integration.md)与[集成记录](docs/reproduction/2026-08-10-public-fork-integration-static.md)。
+当前主入口是[企业智能体记忆系统评估](docs/enterprise-memory-system-evaluation.md)，其中集中记录证据状态、风险、评分门槛和下一步；本轮 Docker-first 约束见[规格](docs/specs/2026-08-09-docker-memory-lab.md)。Standalone 业务 Gate 的身份、共享与证据边界见[决策记录](docs/decisions/2026-08-09-standalone-memory-gate.md)，根 Gate 静态实现见[复现记录](docs/reproduction/2026-08-09-standalone-memory-static-contract.md)；public fork 的原始集成边界见[决策记录](docs/decisions/2026-08-10-public-fork-integration.md)与[集成记录](docs/reproduction/2026-08-10-public-fork-integration-static.md)，当前 Proxy 公开构建回退见[新决策记录](docs/decisions/2026-08-10-public-proxy-docker-fallback.md)。
 
 1. 先以默认 Mock 的 Docker Compose 验证 Core、Hub、Proxy 与隔离客户端的业务探针，不调用真实 DeepSeek。
 2. 再验证 Windows 10 原生 Claude 与隔离 Docker Linux Claude 经 MemoryProxy 的身份隔离、共享读取和写入治理。

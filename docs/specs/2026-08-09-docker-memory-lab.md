@@ -4,13 +4,13 @@
 
 > **Static Passed**：静态测试与 Compose 解析通过；不代表镜像或服务已经运行。
 
-> **Current agent context: Engine Inaccessible**：本轮 Codex 执行环境能运行 Docker client，但无法访问 engine；这不代表用户会话中的 Docker Desktop 一定无法启动。
+> **Engine Accessible**：本轮已确认 Docker client 与 engine 均为 29.6.2、Docker Desktop 为 4.85.0、context 为 `desktop-linux`，并可执行 Compose 5.3.1 命令。
 
 > **Runtime Not Run**：尚未执行服务启动、业务探针、Claude TUI 或真实模型请求。
 
 > **付费 Gate**：真实模型调用前必须通过的前置检查，包括用户授权、工作区外 secret、host canonical 路径、预算声明和 turn 声明；任一条件缺失即拒绝启动。预算与 turn 只是审批输入和一致性比对，对 Claude、Proxy、Core、Knowledge 都不是请求计数器或硬上限。
 
-**状态：** Static Passed；Current agent context: Engine Inaccessible；本轮 Build Not Run；Runtime Not Run；最近一次有证据的 Build 为 registry network 阶段 Failed
+**状态：** Static Passed；Engine Accessible；单独 Proxy image build/runtime self-check Passed；完整 Compose Build、Mock 业务 Gate、Claude TUI 与 DeepSeek Not Run
 **范围：** 私有根仓库的本地实验；不替代 TencentDB 公共派生仓库中的独立修复与测试。
 
 ## 目标与边界
@@ -78,7 +78,7 @@ flowchart LR
 
 - Claude 模板从 `.claude/settings.template.json` 渲染到隔离 `CLAUDE_CONFIG_DIR`；其 `ANTHROPIC_BASE_URL` 必须指向 MemoryProxy，不得直接指向 DeepSeek。
 - 每个客户端的 `.memory/agent-bundle.json` 只含当前客户端的 Memory 用户 key，以及 `service_id`、`team_id`、`user_id`、`agent_id`、`task_id`、`session_id`、`display_name` identity。文件以 `0600`、同目录临时文件和单次 rename 发布；settings renderer 一次读取该 bundle，只把 team/agent/task/session 转成四行 custom headers，key 只进入 `ANTHROPIC_AUTH_TOKEN`。
-- Settings renderer 还按目标写入固定的 memory tool Proxy URL：Docker 为 `TDAI_MEMORY_PROXY_BASE_URL=http://memory-proxy:8096`，Windows 为 `http://127.0.0.1:8096`；拒绝模板预设外部 URL。Public fork `b75317b2bb0d` 已在工具注入中改为运行时读取该字段，并由根 gitlink 与 `fork-b75317b` 镜像标签锁定；状态为 Static Integrated / Runtime Not Run。
+- Settings renderer 还按目标写入固定的 memory tool Proxy URL：Docker 为 `TDAI_MEMORY_PROXY_BASE_URL=http://memory-proxy:8096`，Windows 为 `http://127.0.0.1:8096`；拒绝模板预设外部 URL。Public fork `69fd8b31e3fd4362af6c65407b92b26dfabebd0c` 已在工具注入中改为运行时读取该字段，并由根 gitlink 与 `fork-69fd8b` 镜像标签锁定；状态为 Static Integrated / Runtime Not Run。
 - Memory bridge 每次请求显式携带 `x-tdai-agent-source: claude-code`、当前 session 与用户 bearer；不得从 raw session 字符串猜身份。Public fork 已实现并 Static Integrated，真实 bridge 行为仍需 runtime 验证。
 - Proxy 的真实上游为 `https://api.deepseek.com/anthropic/v1`，模型为 `deepseek-v4-pro[1m]`。
 - Core/Knowledge 的 OpenAI-compatible 上游为 `https://api.deepseek.com`，模型为 `deepseek-v4-flash`。
@@ -91,8 +91,8 @@ flowchart LR
 
 > **manifest**：描述某次运行的版本、参数、状态和证据位置的结构化清单；脱敏后不包含 key。
 
-每次运行在未跟踪的 `.runtime/runs/<run-id>/` 保存脱敏 manifest、runner JSON 与日志，并在 `docs/reproduction/<run-id>.md` 记录命令、退出码、SHA、时间、环境、预期与实际。Bootstrap 的 manifest 和 runner 证据都用同目录 `0600` 临时文件加 rename 发布；失败不留下被误认为完成的目标文件。Runner 结果只允许 status、count、latency 和不由 key 派生的证据 hash。Mock 对 header 与 body 只保存 `sensitive_value_seen`、`unexpected_credential_seen`、`memory_user_credential_seen` 三个布尔结果，不保存 key hash、前缀、长度、请求内容或 header 值；任何诱饵、Memory 用户 key 形态或内部 header 到达模型上游都会 fail-closed。当前 Compose 静态解析已通过；本轮因当前 agent context 无法访问 engine 而没有构建，最近一次有证据的构建受 Docker Hub registry 网络阻塞；`docker compose up`、业务流、故障恢复与 Claude 交互仍未运行，因此本规格不宣称任何运行成功。
+每次运行在未跟踪的 `.runtime/runs/<run-id>/` 保存脱敏 manifest、runner JSON 与日志，并在 `docs/reproduction/<run-id>.md` 记录命令、退出码、SHA、时间、环境、预期与实际。Bootstrap 的 manifest 和 runner 证据都用同目录 `0600` 临时文件加 rename 发布；失败不留下被误认为完成的目标文件。Runner 结果只允许 status、count、latency 和不由 key 派生的证据 hash。Mock 对 header 与 body 只保存 `sensitive_value_seen`、`unexpected_credential_seen`、`memory_user_credential_seen` 三个布尔结果，不保存 key hash、前缀、长度、请求内容或 header 值；任何诱饵、Memory 用户 key 形态或内部 header 到达模型上游都会 fail-closed。当前 Docker engine 可访问，Compose 静态解析已通过，单独的 Proxy 镜像也已构建成功并通过 `better-sqlite3=ok cost-guard=passthrough-stub` 运行时自检；完整 Compose build、Mock 业务 Gate、`docker compose up`、故障恢复、Claude TUI 与 DeepSeek 仍未运行，因此本规格不宣称这些行为成功。
 
 Runner 的拒绝跟随链接检查发生在容器内目标路径。Docker 会先在宿主解析 `EVIDENCE_DIR` 再完成目录挂载，所以基础 Mock 运行仍信任本地账户和人工确认的宿主证据目录；该静态检查不能证明宿主 junction/symlink 已被阻止。
 
-根 settings 静态契约已经为 Docker 与 Windows 分别生成容器内地址和 loopback 地址，public fork `b75317b2bb0d` 也只在客户端运行时读取 `TDAI_MEMORY_PROXY_BASE_URL`，解决单一烘焙 URL 的配置问题。该 SHA、根 gitlink 与镜像标签已静态集成；Windows memory tool UX 仍是 Runtime Not Run，不把 renderer 或 fork 单测等同于真实工具可用。该 public SHA 尚未 push，因此新 clone 在用户授权 push 前不能取得 gitlink 目标。
+根 settings 静态契约已经为 Docker 与 Windows 分别生成容器内地址和 loopback 地址，public fork `69fd8b31e3fd4362af6c65407b92b26dfabebd0c` 也只在客户端运行时读取 `TDAI_MEMORY_PROXY_BASE_URL`，解决单一烘焙 URL 的配置问题。该 SHA、根 gitlink 与 `fork-69fd8b` 镜像标签已静态集成；从首个本地修复 `c75ef58` 起至当前修复，共 27 个本地 public commit。Windows memory tool UX 仍是 Runtime Not Run，不把 renderer、fork 单测或单独 Proxy 自检等同于真实工具可用。该 public SHA 尚未 push，因此新 clone 在用户授权 push 前不能取得 gitlink 目标。

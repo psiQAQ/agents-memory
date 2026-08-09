@@ -12,7 +12,7 @@
 
 > **Docker client / engine**：client 是发出 Docker 命令的前端，engine 是实际构建镜像和运行容器的后台服务；能运行 client 不代表能连接 engine。
 
-> **Current agent context: Engine Inaccessible**：本轮 Codex 执行账户能运行 Docker client 29.6.2，但没有 engine 响应，且读取配置、连接本机 Docker 通信通道均被拒绝。这只说明当前 Codex 执行环境无法访问 engine，不外推为用户会话中的 Docker Desktop 一定无法启动。
+> **Engine Accessible**：本轮已确认 Docker client 与 engine 均为 29.6.2、Docker Desktop 为 4.85.0、context 为 `desktop-linux`，并可执行 Compose 5.3.1 命令。
 
 > **TUI**：在终端中显示并接收键盘操作的交互界面；Claude Code 的主要交互界面属于 TUI。
 
@@ -44,12 +44,12 @@
 
 > **Go / Conditional Go / No-Go**：分别表示可进入目标阶段、满足列明条件后才可进入、以及当前不得进入。
 
-**评估状态：** Static Passed；Current agent context: Engine Inaccessible；本轮 Build Not Run；Runtime Not Run；最近一次有证据的 Build 为 registry network 阶段 Failed
+**评估状态：** Static Passed；Engine Accessible；单独 Proxy image build/runtime self-check Passed；完整 Compose Build、Mock 业务 Gate、Claude TUI 与 DeepSeek Not Run
 **更新时间：** 2026-08-10
 
 **当前决策：** 对公司试点或部署为 **No-Go**；对继续本机、无付费、默认先使用 Mock 的开发为 **Conditional Go**。原因不是已经证明系统失败，而是共享 ACL、安全隔离、持久化恢复和 Claude 交互等硬 Gate 仍为 Runtime Not Run，尚无资格进入试点。
 
-本页是管理者与开发者的主评估入口：把架构假设、已验证证据、风险与下一步集中在同一处。详细设计见 [企业记忆管理方案](design/2026-08-06-enterprise-memory-design.md)，本轮实施范围见 [Docker-first 规格](specs/2026-08-09-docker-memory-lab.md)、[Standalone 业务 Gate 决策](decisions/2026-08-09-standalone-memory-gate.md)、[public fork 集成决策](decisions/2026-08-10-public-fork-integration.md)、[public fork 集成记录](reproduction/2026-08-10-public-fork-integration-static.md)、[默认边界决策](decisions/2026-08-09-docker-memory-lab.md)、[凭证与 attestation 决策](decisions/2026-08-09-credential-fanout-and-paid-attestation.md)、[host path/no-follow 决策](decisions/2026-08-09-host-path-and-no-follow-hardening.md)、[attestation 信任边界补充决策](decisions/2026-08-09-attestation-trust-boundary.md)、[Standalone 静态契约记录](reproduction/2026-08-09-standalone-memory-static-contract.md)、[初始静态运行记录](reproduction/2026-08-09-docker-compose-static.md)、[安全 Gate 静态复验](reproduction/2026-08-09-docker-compose-security-gates-static.md) 和 [该复验的证据边界勘误](reproduction/2026-08-09-docker-compose-security-gates-static-errata.md)。
+本页是管理者与开发者的主评估入口：把架构假设、已验证证据、风险与下一步集中在同一处。详细设计见 [企业记忆管理方案](design/2026-08-06-enterprise-memory-design.md)，本轮实施范围见 [Docker-first 规格](specs/2026-08-09-docker-memory-lab.md)、[Standalone 业务 Gate 决策](decisions/2026-08-09-standalone-memory-gate.md)、[public fork 集成决策](decisions/2026-08-10-public-fork-integration.md)、[Public Proxy 公开构建回退决策](decisions/2026-08-10-public-proxy-docker-fallback.md)、[public fork 集成记录](reproduction/2026-08-10-public-fork-integration-static.md)、[默认边界决策](decisions/2026-08-09-docker-memory-lab.md)、[凭证与 attestation 决策](decisions/2026-08-09-credential-fanout-and-paid-attestation.md)、[host path/no-follow 决策](decisions/2026-08-09-host-path-and-no-follow-hardening.md)、[attestation 信任边界补充决策](decisions/2026-08-09-attestation-trust-boundary.md)、[Standalone 静态契约记录](reproduction/2026-08-09-standalone-memory-static-contract.md)、[初始静态运行记录](reproduction/2026-08-09-docker-compose-static.md)、[安全 Gate 静态复验](reproduction/2026-08-09-docker-compose-security-gates-static.md) 和 [该复验的证据边界勘误](reproduction/2026-08-09-docker-compose-security-gates-static-errata.md)。
 
 > **Profile**：必须显式选择才启用的服务组。本项目把 Redis、Docker Claude 和真实 DeepSeek 分别放在受控 profile 中。
 
@@ -101,11 +101,11 @@ flowchart LR
   T --> M
   H["Hub<br/>Panel + Knowledge"] --> C
   H -->|"OpenAI Mock"| M
-  P -. "public fork b75317b 静态集成；runtime 未运行" .-> C
+  P -. "public fork 69fd8b3 静态集成；runtime 未运行" .-> C
   R["Redis profile"] -. "Proxy 临时状态层" .-> P
 ```
 
-非技术说明：Bootstrap 会创建三套测试身份，每套 key 与 identity 只以单个私有 bundle 整体切换，不会出现新 key 配旧身份；A 的团队可见 chat-memory asset 显式追加给 B，C 不绑定。Runner 直接查询 Core 的 L0 对话与 L1 原子记忆，不用“模型看起来记住了”代替证据；Mock 对 header/body 只保留三项泄漏布尔值，不保存 key fingerprint。Windows 项目配置必须位于真实仓库外，并由 host attestation 与容器 runtime 二次核对。A/B/C 是自动测试样本，首轮人工交互只运行一个 Docker Claude agent-a 和一个 Windows Claude agent-a。默认模型请求只到 Mock；Proxy 不依赖 Hub 才能启动。Public fork `b75317b2bb0d` 已静态集成，图中业务运行行为仍是 Not Run。
+非技术说明：Bootstrap 会创建三套测试身份，每套 key 与 identity 只以单个私有 bundle 整体切换，不会出现新 key 配旧身份；A 的团队可见 chat-memory asset 显式追加给 B，C 不绑定。Runner 直接查询 Core 的 L0 对话与 L1 原子记忆，不用“模型看起来记住了”代替证据；Mock 对 header/body 只保留三项泄漏布尔值，不保存 key fingerprint。Windows 项目配置必须位于真实仓库外，并由 host attestation 与容器 runtime 二次核对。A/B/C 是自动测试样本，首轮人工交互只运行一个 Docker Claude agent-a 和一个 Windows Claude agent-a。默认模型请求只到 Mock；Proxy 不依赖 Hub 才能启动。Public fork `69fd8b31e3fd4362af6c65407b92b26dfabebd0c` 已静态集成，图中业务运行行为仍是 Not Run。
 
 ## DeepSeek 三层协议与凭证边界
 
@@ -148,7 +148,7 @@ flowchart LR
 | -- | -- | -- | -- |
 | 架构与权限模型 | Design Only / Runtime Not Run | 现有设计、Docker-first 规格与 ADR | 实际服务端 ACL、文件所有权和越权拒绝行为 |
 | 默认 Mock 编排 | Static Passed / Runtime Not Run | 57/57 Node tests；base/hardened/real/Windows override `config --quiet` exit 0 | 镜像可构建、容器可启动和业务探针 |
-| Standalone 业务 Gate | Static Integrated / Runtime Not Run | A/B/C 单 bundle 身份、asset binding、L0/L1 oracle、冲突身份、header/body sentinel；public fork `b75317b2bb0d` 已独立复审并锁定 gitlink/tag | B shared/C isolation 的真实容器业务流 |
+| Standalone 业务 Gate | Static Integrated / Runtime Not Run | A/B/C 单 bundle 身份、asset binding、L0/L1 oracle、冲突身份、header/body sentinel；public fork `69fd8b31e3fd4362af6c65407b92b26dfabebd0c` 已独立复审并锁定 gitlink/`fork-69fd8b` tag | B shared/C isolation 的真实容器业务流 |
 | Windows 10 原生 Claude + Docker Linux Claude | Static Passed / Runtime Not Run | 私有 agent bundle 单点发布、路径防链接绕过、Windows host/runtime attestation 与 Proxy 契约已定义 | 两客户端真实读写、TUI；Windows memory tool URL 可达性 |
 | Codex / WSL / Win11 / LAN | Deferred / Not Run | 不在当前批准范围 | 跨客户端共享、Win11 和局域网行为 |
 | 真实 DeepSeek 路径 | Blocked / Runtime Not Run | Host canonical preflight、短期 attestation、Compose secret、Proxy 私有配置卷、internal/egress 双网络和 Agent secret 隔离已通过静态契约测试 | 协议兼容、质量、延迟和费用 |
@@ -159,7 +159,7 @@ flowchart LR
 | 风险 | 控制 | 状态 |
 | -- | -- | -- |
 | DeepSeek key 或 Memory key 泄漏到受跟踪模板、非本客户端配置、日志或报告 | 工作区外 secret、host attestation、脱敏模板、忽略规则与 Gate；每客户端私有 runtime `settings.json` 中的 `ANTHROPIC_AUTH_TOKEN` 是 Memory key 的预期落点，不保存其 hash/前缀/长度 | Static Passed / Runtime Not Run |
-| Gateway service token、Memory 用户 key 或内部身份进入模型 header/body | 根 runner 注入非凭证诱饵并检查三个布尔结果；public fork `b75317b2bb0d` 的 OpenAI/Anthropic 主请求、重试、`count_tokens` 与 system-user 路径使用上游 allowlist | Static Integrated / Runtime Not Run |
+| Gateway service token、Memory 用户 key 或内部身份进入模型 header/body | 根 runner 注入非凭证诱饵并检查三个布尔结果；public fork `69fd8b31e3fd4362af6c65407b92b26dfabebd0c` 的 OpenAI/Anthropic 主请求、重试、`count_tokens` 与 system-user 路径使用上游 allowlist | Static Integrated / Runtime Not Run |
 | Windows config 写入仓库或目录链接目标 | 工具推导真实 root；只允许仓库外 canonical absolute path；host/runtime attestation；持久 home 逐层拒绝跟随链接 | Static Passed / Runtime Not Run |
 | 默认运行产生付费或客户端绕过 Proxy 访问外网 | base/real 默认网络均为 internal；真实层需显式 profile 与 Gate，且只有 Proxy/Core/Hub 加入 egress network | Static Passed / Runtime Not Run |
 | Proxy 配置内嵌 DeepSeek key 被 bootstrap/runner/Claude 间接读取 | DeepSeek 配置独立写入 `proxy-private-config`；只有一次性 renderer 与 Proxy 挂载，其他服务只能挂不含 DeepSeek key 的 Core 配置卷 | Static Passed / Runtime Not Run |
@@ -168,7 +168,7 @@ flowchart LR
 | 旧部署数据库仍含历史 `user_key` | 已集成的 public fork 阻止新 L1/L2/hydrate 持久化并在点查时清除命中的旧值，但没有全库扫描；旧部署必须离线 scrub 后轮换全部 Memory 用户 key | Legacy Data No-Go / Runtime Not Run |
 | DeepSeek Anthropic 内容类型不兼容 | 以 Mock 契约和后续真实 Gate 分别记录 | Not Run |
 | 统一费用硬上限缺失 | budget/turn 仅是声明性审批输入；对 Claude、Proxy、Core、Knowledge 都不是硬限额 | Static Passed / Runtime Not Run |
-| Public fork 提交只存在本机 | 通用修复由 25 个独立本地 commit 组成，`b75317b2bb0d` 已独立复审并更新根 gitlink/tag，但没有 push 授权；新 clone 暂时无法获取 | Local Evidence Only / Reproduction Blocked for Fresh Clone |
+| Public fork 提交只存在本机 | 从首个本地修复 `c75ef58` 起至当前修复，共 27 个本地 public commit；active pin `69fd8b31e3fd4362af6c65407b92b26dfabebd0c` 已独立复审并更新根 gitlink/`fork-69fd8b` tag，但没有 push 授权；新 clone 暂时无法获取 | Local Evidence Only / Reproduction Blocked for Fresh Clone |
 
 ## 评分与后续证据
 
@@ -180,19 +180,19 @@ flowchart LR
 | -- | -- | -- | -- | -- | -- |
 | 可靠性 | Not Rated | Low | No-Go | [规格](specs/2026-08-09-docker-memory-lab.md)仅静态定义持久卷、业务 Gate 和恢复场景 | Core/Proxy/Hub/Redis stop、restart、recreate、backup/restore 的真实结果 |
 | 安全性 | 1/5 | Medium | No-Go | 根静态契约与已集成 public fork 证明 secret、bundle、最小 egress、ACL/identity/header 的代码与负测边界 | 旧库离线清理、真实越权/key 撤销、日志/inspect 扫描与容器故障实验 |
-| 使用便利性 | 1/5 | Low | Conditional | [集成说明](../tests/integration/README.md)已有两步 Gate 与 Windows 配置命令，但当前 agent context 无法访问 Docker engine | 镜像构建成功、一个命令复现、失败提示和清理/恢复由非开发者实际操作 |
+| 使用便利性 | 1/5 | Low | Conditional | [集成说明](../tests/integration/README.md)已有两步 Gate 与 Windows 配置命令，Docker engine 可访问且单独 Proxy image 自检通过，但完整 Compose build 尚未运行 | 完整镜像构建成功、一个命令复现、失败提示和清理/恢复由非开发者实际操作 |
 | Claude Code 适配性 | 1/5 | Low | No-Go | [决策记录](decisions/2026-08-09-standalone-memory-gate.md)已有 settings、Anthropic path 与协议契约 | Docker/Windows headless 通过并由用户确认 TUI、stream、tool use、thinking 和长会话 |
 | 跨平台兼容性 | 1/5 | Low | No-Go | Windows path Gate 与 Docker Linux 配置仅静态通过 | Windows 10 实机双客户端后，再做 Windows 11、WSL 与 LAN |
 | 记忆治理能力 | 1/5 | Medium | No-Go | 根静态契约覆盖 A 资产、B 绑定、C 排除、owner oracle；共享 ACL 已在 final fork 中 Static Integrated | B shared/C isolation 真实业务 Gate、撤销、审计、生命周期和恶意记忆测试 |
 | 效率 | Not Rated | Low | Conditional | 尚无 10 组成对任务 | 至少 10 组“启用/关闭记忆”任务的成功率、turns、延迟和重复纠正率 |
 | 成本 | Not Rated | Low | Conditional | 真实模型未调用，且没有统一硬费用上限 | 分别记录 Proxy/Core/Knowledge 请求、token、单次成功成本与预算停止行为 |
 
-**No-Go（公司试点/部署）：** 安全与可靠性是硬门槛。Public fork 已静态集成，但当前 agent context 无法访问 Docker engine，业务 runtime、恢复、Claude TUI 和真实 DeepSeek 均未执行。已有部署还必须先离线清理历史数据库中的 `user_key` 并轮换 Memory 用户 key；点查清除不等于全库已清除。任何总分都不能覆盖这些缺口。
+**No-Go（公司试点/部署）：** 安全与可靠性是硬门槛。Public fork 已静态集成，Docker engine 可访问且单独 Proxy image 自检通过，但完整 Compose build、Mock 业务 Gate、恢复、Claude TUI 和真实 DeepSeek 均未执行。已有部署还必须先离线清理历史数据库中的 `user_key` 并轮换 Memory 用户 key；点查清除不等于全库已清除。任何总分都不能覆盖这些缺口。
 
-**Conditional Go（继续本机开发）：** 可以继续锁定 `b75317b2bb0d`、默认 Mock、无付费、internal network 的静态与本地开发，但条件是不得加载真实 secret、不得把 Static Integrated 写成 Runtime Passed，且每次变更同步测试和复现记录。该 SHA 未 push，当前只在本工作区可复现。
+**Conditional Go（继续本机开发）：** 可以继续锁定 `69fd8b31e3fd4362af6c65407b92b26dfabebd0c`、默认 Mock、无付费、internal network 的静态与本地开发，但条件是不得加载真实 secret、不得把 Static Integrated 或单镜像自检写成完整 Runtime Passed，且每次变更同步测试和复现记录。该 SHA 未 push，当前只在本工作区可复现。
 
-**Recommendation：** 由用户会话先确认 Docker Desktop engine 可访问，再构建锁定 `b75317b2bb0d` 的镜像；随后先运行 `mock-contract`，再运行 `standalone-memory`。只有两级 Gate 和脱敏证据都通过，才以一个 Docker Claude agent-a 和一个 Windows Claude agent-a 验证交互，最后在用户提供工作区外新 secret 后执行受限真实 DeepSeek Gate。A/B/C 仅是自动化 fixture；Codex、WSL、Win11 和 LAN 另行排期。每次结果新增不可变 reproduction 记录，不以 health check 代替业务流证据；是否 push public fork 另行授权。
+**Recommendation：** Docker Desktop engine 已确认可访问；下一步由 controller 构建锁定 `69fd8b31e3fd4362af6c65407b92b26dfabebd0c` 的完整 Compose 镜像，随后先运行 `mock-contract`，再运行 `standalone-memory`。只有两级 Gate 和脱敏证据都通过，才以一个 Docker Claude agent-a 和一个 Windows Claude agent-a 验证交互，最后在用户提供工作区外新 secret 后执行受限真实 DeepSeek Gate。A/B/C 仅是自动化 fixture；Codex、WSL、Win11 和 LAN 另行排期。每次结果新增不可变 reproduction 记录，不以 health check 或单独 Proxy 自检代替业务流证据；是否 push public fork 另行授权。
 
 > **BuildKit named contexts**：Docker 构建镜像时从多个明确目录读取源码的机制；这里让 Hub 直接使用当前 Tencent fork 的 Panel 和 Knowledge，而不复制一份容易过期的源码快照。
 
-当前镜像 Gate 的事实边界：本轮 Codex 执行环境无法访问 Docker engine，所以 **本轮 Build Not Run、Runtime Not Run**。最近一次已有记录的构建在获取 Docker Hub 下载认证令牌时网络超时，状态是 **Failed at registry network**，尚未执行到 named-context `COPY`；这项历史结果不能冒充本轮重试，也不能证明代码构建成功。Compose 的 BuildKit named contexts 已被 Compose 5.3.1 接受并通过静态解析。Public fork `b75317b2bb0d` 的 MemoryPanel deny-by-default `.dockerignore`、backend/web build，以及 Windows/Docker runtime tool base 已通过分支测试并更新根 gitlink/tag；它们仍是 **Static Integrated / Runtime Not Run**。开发命令、静态证据和当前限制见 [集成测试说明](../tests/integration/README.md)、[public fork 集成记录](reproduction/2026-08-10-public-fork-integration-static.md)、[Standalone 静态契约记录](reproduction/2026-08-09-standalone-memory-static-contract.md)、[初始静态运行记录](reproduction/2026-08-09-docker-compose-static.md)、[最新安全复验](reproduction/2026-08-09-docker-compose-security-gates-static.md) 与 [证据边界勘误](reproduction/2026-08-09-docker-compose-security-gates-static-errata.md)。
+当前镜像 Gate 的事实边界：Docker engine 已确认可访问；public fork `69fd8b31e3fd4362af6c65407b92b26dfabebd0c` 的单独 Proxy image build exit 0，built image 运行时自检输出 `better-sqlite3=ok cost-guard=passthrough-stub`。完整 Compose build、Mock 业务 Gate、Claude TUI 与 DeepSeek 仍为 **Not Run**，等待 controller 执行。较早的完整构建曾在获取 Docker Hub 下载认证令牌时网络超时；该历史失败不代表当前引擎状态，也不能替代完整重试。Compose 的 BuildKit named contexts 已被 Compose 5.3.1 接受并通过静态解析。该 public SHA 的 MemoryPanel deny-by-default `.dockerignore`、backend/web build、Windows/Docker runtime tool base 与 Proxy 公开构建回退已通过分支测试并更新根 gitlink/`fork-69fd8b` tag；业务行为仍是 **Static Integrated / Runtime Not Run**。开发命令、静态证据和当前限制见 [集成测试说明](../tests/integration/README.md)、[Public Proxy 公开构建回退决策](decisions/2026-08-10-public-proxy-docker-fallback.md)、[public fork 集成记录](reproduction/2026-08-10-public-fork-integration-static.md)、[Standalone 静态契约记录](reproduction/2026-08-09-standalone-memory-static-contract.md)、[初始静态运行记录](reproduction/2026-08-09-docker-compose-static.md)、[最新安全复验](reproduction/2026-08-09-docker-compose-security-gates-static.md) 与 [证据边界勘误](reproduction/2026-08-09-docker-compose-security-gates-static-errata.md)。
