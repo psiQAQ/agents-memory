@@ -2,11 +2,11 @@
 
 > **Docker Compose**：用 YAML 文件统一定义、连接和启动多个 Docker 容器的工具。
 
-> **Gate**：在受控操作开始前执行的 fail-closed 检查；本项目分别检查付费模型输入和 Windows 宿主配置路径。
+> **Gate**：在受控操作开始前执行的检查；本项目分别检查付费模型输入和 Windows 宿主配置路径，任一检查失败就拒绝执行。
 
 > **Canonical path**：操作系统解析符号链接和相对片段后得到的唯一绝对路径，用来防止同一文件换一种路径写法后绕过目录检查。
 
-> **Attestation**：宿主预检成功后生成的短期证明文件；它记录本次批准的 canonical 路径和参数，但不包含模型 key。
+> **Attestation**：宿主预检成功后生成的短期核对记录，不是带签名的加密证明。它记录本次批准的 canonical 路径和参数，但不包含模型 key；它只在宿主账户、Compose 启动环境和实验证据目录可信时防止误配置、字段不一致与过期复用，不抵御能同时改写记录和环境变量的本地操作者。
 
 > **Static Passed**：文件、渲染器、Gate 与 Compose 展开结果通过自动检查；不代表镜像或服务已经运行。
 
@@ -17,7 +17,7 @@
 **评估状态：** Static Passed；Build Failed；Runtime Not Run
 **更新时间：** 2026-08-09
 
-本页是管理者与开发者的主评估入口：把架构假设、已验证证据、风险与下一步集中在同一处。详细设计见 [企业记忆管理方案](design/2026-08-06-enterprise-memory-design.md)，本轮实施范围见 [Docker-first 规格](specs/2026-08-09-docker-memory-lab.md)、[默认边界决策](decisions/2026-08-09-docker-memory-lab.md)、[凭证与 attestation 决策](decisions/2026-08-09-credential-fanout-and-paid-attestation.md)、[host path/no-follow 决策](decisions/2026-08-09-host-path-and-no-follow-hardening.md)、[初始静态运行记录](reproduction/2026-08-09-docker-compose-static.md) 和 [安全 Gate 静态复验](reproduction/2026-08-09-docker-compose-security-gates-static.md)。
+本页是管理者与开发者的主评估入口：把架构假设、已验证证据、风险与下一步集中在同一处。详细设计见 [企业记忆管理方案](design/2026-08-06-enterprise-memory-design.md)，本轮实施范围见 [Docker-first 规格](specs/2026-08-09-docker-memory-lab.md)、[默认边界决策](decisions/2026-08-09-docker-memory-lab.md)、[凭证与 attestation 决策](decisions/2026-08-09-credential-fanout-and-paid-attestation.md)、[host path/no-follow 决策](decisions/2026-08-09-host-path-and-no-follow-hardening.md)、[attestation 信任边界补充决策](decisions/2026-08-09-attestation-trust-boundary.md)、[初始静态运行记录](reproduction/2026-08-09-docker-compose-static.md)、[安全 Gate 静态复验](reproduction/2026-08-09-docker-compose-security-gates-static.md) 和 [该复验的证据边界勘误](reproduction/2026-08-09-docker-compose-security-gates-static-errata.md)。
 
 > **Mock**：返回固定结果的模拟模型服务。它让协议和故障测试可重复，默认不会产生真实模型费用。
 
@@ -88,4 +88,4 @@ flowchart LR
 
 > **BuildKit named contexts**：Docker 构建镜像时从多个明确目录读取源码的机制；这里让 Hub 直接使用当前 Tencent fork 的 Panel 和 Knowledge，而不复制一份容易过期的源码快照。
 
-当前镜像 Gate 的事实边界：Compose 的 BuildKit named contexts 已被本机 Compose 5.3.1 接受并通过静态解析，但 Hub/Claude 实际构建在获取 Docker Hub 下载认证令牌时网络超时，尚未执行到 named-context `COPY`。因此构建状态是 **Failed（镜像仓库网络阻塞）**，不是代码构建通过或 Docker 不可用。MemoryPanel 还缺少收窄 build context 的 `.dockerignore`，作为 Medium 项留到下一次 Task 4 public fork commit；本轮没有用 root preflight 掩盖该问题。开发命令、静态证据和当前限制见 [集成测试说明](../tests/integration/README.md) 与 [本次运行记录](reproduction/2026-08-09-docker-compose-static.md)。
+当前镜像 Gate 的事实边界：Compose 的 BuildKit named contexts 已被本机 Compose 5.3.1 接受并通过静态解析，但 Hub/Claude 实际构建在获取 Docker Hub 下载认证令牌时网络超时，尚未执行到 named-context `COPY`。因此构建状态是 **Failed（镜像仓库网络阻塞）**，不是代码构建通过或 Docker 不可用。MemoryPanel 还缺少收窄 build context 的 `.dockerignore`，作为 Medium 项留到下一次 Task 4 public fork commit；本轮没有用 root preflight 掩盖该问题。开发命令、静态证据和当前限制见 [集成测试说明](../tests/integration/README.md)、[初始静态运行记录](reproduction/2026-08-09-docker-compose-static.md)、[最新安全复验](reproduction/2026-08-09-docker-compose-security-gates-static.md) 与 [证据边界勘误](reproduction/2026-08-09-docker-compose-security-gates-static-errata.md)。

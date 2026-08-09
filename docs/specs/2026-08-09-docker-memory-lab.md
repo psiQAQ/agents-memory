@@ -8,6 +8,8 @@
 
 > **Runtime Not Run**：尚未执行服务启动、业务探针、Claude TUI 或真实模型请求。
 
+> **付费 Gate**：真实模型调用前必须通过的前置检查，包括用户授权、工作区外 secret、host canonical 路径、预算声明和 turn 声明；任一条件缺失即拒绝启动。预算与 turn 只是审批输入和一致性比对，对 Claude、Proxy、Core、Knowledge 都不是请求计数器或硬上限。
+
 **状态：** Static Passed；Build Failed（registry network）；Runtime Not Run
 **范围：** 私有根仓库的本地实验；不替代 TencentDB 公共派生仓库中的独立修复与测试。
 
@@ -22,8 +24,6 @@
 > **Memory Hub**：由 Panel 管理界面与 Knowledge 知识服务组成的应用层；Panel 访问 MemoryCore，并与 Knowledge 互通。
 
 > **profile**：Docker Compose 中需要显式选择才会启用的一组可选服务或配置。
-
-> **付费 Gate**：真实模型调用前必须通过的前置检查，包括用户授权、工作区外 secret、host canonical 路径、预算声明和 turn 声明；任一条件缺失即拒绝启动。预算与 turn 只是审批输入和一致性比对，对 Claude、Proxy、Core、Knowledge 都不是请求计数器或硬上限。
 
 > **SQLite**：把结构化数据保存在单个本地文件中的轻量数据库，本阶段不需要单独部署数据库服务器。
 
