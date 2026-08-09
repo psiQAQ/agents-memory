@@ -46,13 +46,15 @@ git submodule update --init submodules/TencentDB-Agent-Memory
 
 ## 当前优先级
 
-1. Windows 原样复现 TencentDB Agent Memory，并保留真实运行证据。
-2. 复现 Claude Code 适配问题，在 fork 中做最小修复和针对性测试。
-3. 验证 Windows Codex、Windows Claude Code、WSL Claude Code 共享同一记忆服务。
+1. 先运行默认 Mock 的 Docker Compose 实验，验证业务探针而不调用真实 DeepSeek；规格见 `docs/specs/2026-08-09-docker-memory-lab.md`。
+2. 以隔离配置验证 Windows 10 原生 Claude 与 Docker Linux Claude 经 MemoryProxy 共享同一记忆服务；Codex、WSL、Win11 和 LAN 验证后置。
+3. 仅在工作区外新 secret 文件与真实 Gate 齐备时执行 real profile；再在 fork 中做可复现的最小兼容性修复和针对性测试。
 
 `docs/superpowers/plans/2026-08-07-tencentdb-memory-retrofit.md` 是早期需求草案，包含与当前 `fe3230f` 快照不一致的 `services/*`、`packages/*` 路径。完成复现并重新定位源码后才能执行或重写。
 
 ## 常用操作
 
 - 更新 README:遵循用户全局文档规范——记录每次交互原文(按版本)、保持前后一致、减少结构碎片。
+- Docker-first 文档或配置变更与对应实现 commit 必须同步更新：规格、ADR、企业评估的状态矩阵，以及 README 主入口；未运行项明确标为 `Static`、`Not Run` 或 `Blocked`，不得用 health check 声称业务流通过。
+- Claude 配置只跟踪 `.claude/settings.template.json`；不读取、复制或提交本地 settings、Claude home、secret、运行期日志或 `.runtime/` 证据。模板中的 URL 必须是 MemoryProxy 占位符，客户端不得持有 DeepSeek key。
 - git:操作前检查根仓库与 submodule 各自的分支和状态；每个完整逻辑阶段独立提交；push 仅在负责人明确要求时执行。

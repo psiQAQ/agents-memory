@@ -86,15 +86,18 @@ git submodule update --init submodules/TencentDB-Agent-Memory
 
 ## 当前执行顺序
 
-1. 在本机 Windows 上按 fork 当前说明原样启动 TencentDB Agent Memory，记录环境、命令、端口和真实运行结果。
-2. 用本机 Claude Code 接入并复现适配问题，只在 fork 中做最小修复；修复稳定后向腾讯上游提交独立 PR。
-3. 在同一记忆服务上验证 Windows Codex、Windows Claude Code、WSL Claude Code 的身份隔离、共享读取和写入治理。
+当前主入口是[企业智能体记忆系统评估](docs/enterprise-memory-system-evaluation.md)，其中集中记录证据状态、风险、评分门槛和下一步；本轮 Docker-first 约束见[规格](docs/specs/2026-08-09-docker-memory-lab.md)。
+
+1. 先以默认 Mock 的 Docker Compose 验证 Core、Hub、Proxy 与隔离客户端的业务探针，不调用真实 DeepSeek。
+2. 再验证 Windows 10 原生 Claude 与隔离 Docker Linux Claude 经 MemoryProxy 的身份隔离、共享读取和写入治理。
+3. 仅在用户提供工作区外的新 secret 文件且真实 Gate 通过后，显式加载 real profile 验证 DeepSeek；Codex、WSL、Win11 和 LAN 验证后置；public fork 的可复现通用修复独立提交，不混入私有编排。
 
 现有企业改造计划先作为需求清单，不在原样复现前执行。尤其不能直接使用其中不存在的 `services/*`、`packages/*` 路径。
 
 ## 注意事项
 
 - 根仓库没有构建与测试命令；源码构建、测试和依赖均位于 TencentDB submodule 内。
+- `.claude/settings.template.json` 是唯一受跟踪的 Claude settings 模板；本地 settings、Claude home、secret、运行证据和原始日志均不提交。
 - 厂商自报基准(Mem0/Zep 等)与独立评测差异可达 ±15-19 个百分点,引用数字时优先采用非利益相关方来源。
 - 调研报告中已明确标注未找到可靠来源的点(如 cmem 隐私争议、memory ROI 公开数字),引用时勿当作已证实结论。
 - 修改或推翻负责人方案基本思想前,须先向负责人确认(见 `docs/repo-author-comment/comment.md`)。
