@@ -78,8 +78,8 @@ flowchart LR
 
 - Claude 模板从 `.claude/settings.template.json` 渲染到隔离 `CLAUDE_CONFIG_DIR`；其 `ANTHROPIC_BASE_URL` 必须指向 MemoryProxy，不得直接指向 DeepSeek。
 - 每个客户端的 `.memory/agent-bundle.json` 只含当前客户端的 Memory 用户 key，以及 `service_id`、`team_id`、`user_id`、`agent_id`、`task_id`、`session_id`、`display_name` identity。文件以 `0600`、同目录临时文件和单次 rename 发布；settings renderer 一次读取该 bundle，只把 team/agent/task/session 转成四行 custom headers，key 只进入 `ANTHROPIC_AUTH_TOKEN`。
-- Settings renderer 还按目标写入固定的 memory tool Proxy URL：Docker 为 `TDAI_MEMORY_PROXY_BASE_URL=http://memory-proxy:8096`，Windows 为 `http://127.0.0.1:8096`；拒绝模板预设外部 URL。Public fork 消费该运行时字段的最终实现尚未更新根 gitlink，所以当前仍是 Expected Blocked / Runtime Not Run。
-- Memory bridge 每次请求显式携带 `x-tdai-agent-source: claude-code`、当前 session 与用户 bearer；不得从 raw session 字符串猜身份。该契约等待 public fork 最终实现后进行 runtime 验证。
+- Settings renderer 还按目标写入固定的 memory tool Proxy URL：Docker 为 `TDAI_MEMORY_PROXY_BASE_URL=http://memory-proxy:8096`，Windows 为 `http://127.0.0.1:8096`；拒绝模板预设外部 URL。Public fork `b75317b2bb0d` 已在工具注入中改为运行时读取该字段，并由根 gitlink 与 `fork-b75317b` 镜像标签锁定；状态为 Static Integrated / Runtime Not Run。
+- Memory bridge 每次请求显式携带 `x-tdai-agent-source: claude-code`、当前 session 与用户 bearer；不得从 raw session 字符串猜身份。Public fork 已实现并 Static Integrated，真实 bridge 行为仍需 runtime 验证。
 - Proxy 的真实上游为 `https://api.deepseek.com/anthropic/v1`，模型为 `deepseek-v4-pro[1m]`。
 - Core/Knowledge 的 OpenAI-compatible 上游为 `https://api.deepseek.com`，模型为 `deepseek-v4-flash`。
 - Real Compose 继续把默认网络设为 `internal`；只有 Proxy、Core、Hub 额外加入可出网的 `egress-net`。Claude、bootstrap、runner 与各 Gate 不能直接访问外网。
@@ -95,4 +95,4 @@ flowchart LR
 
 Runner 的拒绝跟随链接检查发生在容器内目标路径。Docker 会先在宿主解析 `EVIDENCE_DIR` 再完成目录挂载，所以基础 Mock 运行仍信任本地账户和人工确认的宿主证据目录；该静态检查不能证明宿主 junction/symlink 已被阻止。
 
-根 settings 静态契约已经为 Docker 与 Windows 分别生成容器内地址和 loopback 地址，解决单一烘焙 URL 的配置问题；但 public fork 使用 `TDAI_MEMORY_PROXY_BASE_URL` 的最终 commit 尚未更新根 gitlink。在此之前，Windows memory tool UX 仍标记为 Expected Blocked / Runtime Not Run，不把 renderer 测试等同于真实工具可用。
+根 settings 静态契约已经为 Docker 与 Windows 分别生成容器内地址和 loopback 地址，public fork `b75317b2bb0d` 也只在客户端运行时读取 `TDAI_MEMORY_PROXY_BASE_URL`，解决单一烘焙 URL 的配置问题。该 SHA、根 gitlink 与镜像标签已静态集成；Windows memory tool UX 仍是 Runtime Not Run，不把 renderer 或 fork 单测等同于真实工具可用。该 public SHA 尚未 push，因此新 clone 在用户授权 push 前不能取得 gitlink 目标。

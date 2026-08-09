@@ -67,6 +67,9 @@ test('base Compose parses as a Mock-only private topology with isolated Claude a
 
   assert.match(normalize(parsed.services['memory-core'].build.context), /submodules\\TencentDB-Agent-Memory\\MemoryCore$/i);
   assert.match(normalize(parsed.services['memory-proxy'].build.context), /submodules\\TencentDB-Agent-Memory\\MemoryProxy$/i);
+  for (const service of ['memory-core', 'memory-hub', 'memory-proxy']) {
+    assert.equal(parsed.services[service].image, `refine-${service}:fork-b75317b`);
+  }
   const hubContexts = JSON.stringify(parsed.services['memory-hub'].build.additional_contexts);
   assert.match(hubContexts, /MemoryPanel/);
   assert.match(hubContexts, /MemoryKnowledge/);

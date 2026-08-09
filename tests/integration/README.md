@@ -14,7 +14,7 @@
 
 > **Runtime Not Run**：尚未执行 `up`、业务探针、Claude TUI 或真实模型请求。
 
-> **Expected Blocked**：测试契约已定义，但依赖的 public fork 修复尚未更新到根仓库 gitlink；当前不得执行后宣称通过。
+> **Static Integrated**：独立复审通过的 public fork 精确 SHA 已写入根 gitlink、镜像标签和静态测试；不代表镜像、服务或业务流已经运行。
 
 > **Agent bundle**：只放在单个客户端私有 home 中的 `0600` JSON 文件，把该客户端的 Memory 用户 key 与身份作为一个整体原子切换，避免更新中途出现“新 key 配旧身份”。
 
@@ -131,7 +131,7 @@ $env:TEST_SCENARIO = 'mock-contract'
 if ($LASTEXITCODE -ne 0) { throw 'Mock contract failed' }
 ```
 
-第二级 `standalone-memory` 使用真实 Core/Proxy API 验证 A 写入、Core L0/L1 oracle、B 显式共享、C 隔离、身份冲突和模型上游 header 脱敏。当前 public fork 最终 ACL/envelope 修复尚未更新到根仓库 gitlink，因此 B shared bridge 的状态是 **Expected Blocked / Not Run**；只有 Task 4 最终 SHA、镜像标签和 gitlink 集成后才执行并允许转为 Passed：
+第二级 `standalone-memory` 使用真实 Core/Proxy API 验证 A 写入、Core L0/L1 oracle、B 显式共享、C 隔离、身份冲突和模型上游 header 脱敏。Public fork `b75317b2bb0deb72240b2016d54252e3232b48fa` 已写入根 gitlink，三个服务镜像统一标记 `fork-b75317b`；当前状态是 **Static Integrated / Runtime Not Run**，只有镜像构建和本命令实际 exit 0 后才允许转为业务 Passed：
 
 ```powershell
 $env:TEST_SCENARIO = 'standalone-memory'
@@ -142,7 +142,7 @@ $env:TEST_SCENARIO = 'standalone-memory'
 if ($LASTEXITCODE -ne 0) { throw 'Standalone memory gate failed' }
 ```
 
-两个 Gate 都 exit 0 且 `$env:EVIDENCE_DIR` 内的 JSON 通过脱敏检查后，才进入 Claude headless 与 TUI。Runner 不保存 key hash、前缀或长度。Mock 只保存三个列明的布尔结果：`sensitive_value_seen` 检查 header 或 body 中的非凭证诱饵，`unexpected_credential_seen` 检查模型认证 header 是否偏离协议固定的 `mock-key`，`memory_user_credential_seen` 检查任意模型 header 或 body 是否出现 Memory 用户 key 的形态；原值、稳定派生值和长度均不保存。每次 bridge 请求还必须携带 `x-tdai-agent-source: claude-code`；它与 `x-vertex-ai-session-id`、gateway service token、team/agent/task/conversation headers 都不得到达模型上游。
+两个 Gate 都 exit 0 且 `$env:EVIDENCE_DIR` 内的 JSON 通过脱敏检查后，才进入 Claude headless 与 TUI。Runner 不保存 key hash、前缀或长度。Mock 只保存三个列明的布尔结果：`sensitive_value_seen` 检查 header/body 的值和名称中的非凭证诱饵，`unexpected_credential_seen` 要求 OpenAI/Anthropic 使用各自固定的 `mock-key`，`memory_user_credential_seen` 检查任意模型 header/body 是否出现 Memory 用户 key 形态；敏感名称只保存固定占位符，原值、稳定派生值和长度均不保存。每次 bridge 请求还必须携带 `x-tdai-agent-source: claude-code`；它与 `x-claude-code-session-id`、`x-vertex-ai-session-id`、gateway service token、team/agent/task/conversation headers 都不得到达模型上游。
 
 证据 writer 在容器内拒绝符号链接/硬链接，并用同目录临时文件原子发布；这不等于验证了宿主 bind source。Docker 会先解析宿主的 `$env:EVIDENCE_DIR`，因此基础 Mock 实验仍把本地账户和该目录视为受信任边界。运行前需确认它是本次 run 的真实普通目录而非 junction/symlink；不要把容器内 no-follow 测试写成宿主防护已通过。
 
@@ -268,7 +268,8 @@ Headless 版本检查：
 - **Static Passed**：57/57 Node 测试，以及 base、hardened、real 和可选 Windows override 四组 `docker compose config --quiet` 已通过提交前复验。
 - **本轮 Build Not Run**：当前 agent context 无法访问 Docker engine；最近一次有证据的 Hub/Claude Build 在拉取 Docker Hub token 时网络超时，named-context `COPY` 尚未得到实际构建证明。
 - **Runtime Not Run**：未执行 `up`、业务探针、故障恢复或 Claude TUI。
-- **Expected Blocked / Runtime Not Run**：B shared bridge 的 runner 契约已定义，但 ACL/envelope 修复的最终 public fork SHA、镜像标签和根 gitlink 尚未集成；不得误报通过。
-- **Static config only**：Proxy auth、session、injection、extraction 与 tdai L0/L1 模板已启用，真实行为仍等待 public fork 集成与容器业务 Gate。
-- **Expected Blocked / Runtime Not Run**：settings renderer 已分别固定 Docker `http://memory-proxy:8096` 与 Windows `http://127.0.0.1:8096` 的 `TDAI_MEMORY_PROXY_BASE_URL`，但 public fork 消费该字段的最终 commit 尚未更新根 gitlink；不能据此宣称 Windows memory tool 已可用。
-- MemoryPanel 构建上下文缺少收窄用 `.dockerignore`；该 Medium 项留到下一次 Task 4 public fork commit，本轮不修改 submodule。
+- **Static Integrated / Runtime Not Run**：B shared bridge 依赖的 ACL/envelope/session 修复已锁定到 public fork `b75317b2bb0d`、根 gitlink 与 `fork-b75317b` 镜像标签；真实 B shared/C isolation 仍必须由容器业务 Gate 证明。
+- **Static Integrated / Runtime Not Run**：Proxy auth、session、injection、extraction 与 tdai L0/L1 实现及模板已锁定到 final fork；真实行为仍等待容器业务 Gate。
+- **Static Integrated / Runtime Not Run**：settings renderer 分别固定 Docker `http://memory-proxy:8096` 与 Windows `http://127.0.0.1:8096` 的 `TDAI_MEMORY_PROXY_BASE_URL`，public fork 工具注入只在客户端运行时读取该变量；Windows memory tool 仍需真实 TUI/bridge 验证。
+- MemoryPanel 的 deny-by-default `.dockerignore` 已在 public fork 通过 4/4 语义测试及 backend/web build；根 Docker/BuildKit 仍是 Not Run。
+- **Local-only SHA**：public fork `b75317b2bb0d` 尚未 push。当前工作区可用；新 clone 在用户授权 push 前不能取得根 gitlink 目标。
