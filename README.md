@@ -84,15 +84,25 @@ refine-memory/
 git submodule update --init submodules/TencentDB-Agent-Memory
 ```
 
-当前 gitlink 指向尚未 push 的本地 public fork 提交 `69fd8b31e3fd4362af6c65407b92b26dfabebd0c`。从首个本地修复 `c75ef58` 起至当前修复，共 27 个本地 public commit。单独的 Proxy 镜像已完成构建与运行时自检，当前 Docker engine 可访问；完整 Compose 构建、Mock 业务 Gate、Claude TUI 与 DeepSeek 仍为 Not Run，等待 controller 执行。新的 clone 在该提交推送到 `psiQAQ/TencentDB-Agent-Memory` 前无法取得它；本任务没有 push 授权。
+当前 gitlink 指向尚未 push 的本地 public fork 提交 `69fd8b31e3fd4362af6c65407b92b26dfabebd0c`。从首个本地修复 `c75ef58` 起至当前修复，共 27 个本地 public commit。Windows 重启后 Docker engine 已恢复；完整所选镜像构建、无付费 Mock 两级 Gate、Hub health 与只读业务探针、Docker Claude `2.1.207` headless 检查均已通过。该结果只覆盖当前 Mock/Standalone/Hub 只读/headless 范围；Docker Claude TUI 等待用户确认，Windows Claude、真实 DeepSeek、stream/tool/thinking、故障恢复、Win11/LAN 仍未验证。新的 clone 在该提交推送到 `psiQAQ/TencentDB-Agent-Memory` 前无法取得它；本任务没有 push 授权。
 
 ## 当前执行顺序
 
 当前主入口是[企业智能体记忆系统评估](docs/enterprise-memory-system-evaluation.md)，其中集中记录证据状态、风险、评分门槛和下一步；本轮 Docker-first 约束见[规格](docs/specs/2026-08-09-docker-memory-lab.md)。Standalone 业务 Gate 的身份、共享与证据边界见[决策记录](docs/decisions/2026-08-09-standalone-memory-gate.md)，根 Gate 静态实现见[复现记录](docs/reproduction/2026-08-09-standalone-memory-static-contract.md)；public fork 的原始集成边界见[决策记录](docs/decisions/2026-08-10-public-fork-integration.md)与[集成记录](docs/reproduction/2026-08-10-public-fork-integration-static.md)，当前 Proxy 公开构建回退见[新决策记录](docs/decisions/2026-08-10-public-proxy-docker-fallback.md)。
 
-1. 先以默认 Mock 的 Docker Compose 验证 Core、Hub、Proxy 与隔离客户端的业务探针，不调用真实 DeepSeek。
+本轮运行证据按 run ID 保持不可变，不用后一次成功覆盖前一次失败：
+
+| Run | 结论 | 复现记录 |
+| -- | -- | -- |
+| `docker-mock-20260810-002427` | HCS/WSL 系统资源分配阻塞；重启后已恢复，但本 run 仍为 Blocked | [WSL 资源阻塞](docs/reproduction/2026-08-10-docker-mock-20260810-002427-wsl-resource-blocked.md) |
+| `docker-mock-20260810-015646` | 完整构建通过；不可重复执行的 Bootstrap 被 Compose 重放，runner 未启动 | [Bootstrap 重放阻塞](docs/reproduction/2026-08-10-docker-mock-20260810-015646-bootstrap-replay-blocked.md) |
+| `docker-mock-20260810-024419` | Gate 1 通过；Gate 2 暴露 forged source 的 400/401 预期差异 | [Forged contract 失败](docs/reproduction/2026-08-10-docker-mock-20260810-024419-forged-contract-failed.md) |
+| `docker-mock-20260810-030443` | Gate 1 通过；Gate 2 暴露 B session 未初始化，并推断 C 需要同类前置条件 | [Session 前置条件失败](docs/reproduction/2026-08-10-docker-mock-20260810-030443-session-precondition-failed.md) |
+| `docker-mock-20260810-033636` | 两级 Gate、Hub 只读业务探针与 Docker Claude headless 通过；TUI 等待用户确认 | [无付费运行通过](docs/reproduction/2026-08-10-docker-mock-20260810-033636-no-paid-runtime-passed.md) |
+
+1. 由用户确认保留 project `mem-it-20260810-033636` 中 Docker Claude agent-a 的交互式 TUI；不得用 parse-only 占位值执行 `up` 或重建服务。
 2. 再验证 Windows 10 原生 Claude 与隔离 Docker Linux Claude 经 MemoryProxy 的身份隔离、共享读取和写入治理。
-3. 仅在用户提供工作区外的新 secret 文件且真实 Gate 通过后，显式加载 real profile 验证 DeepSeek；Codex、WSL、Win11 和 LAN 验证后置；public fork 的可复现通用修复独立提交，不混入私有编排。
+3. 仅在用户提供工作区外的新 secret 文件且真实 Gate 通过后，显式加载 real profile 验证 DeepSeek；Codex、WSL Claude、Win11、LAN、备份恢复与故障注入后置；public fork 的可复现通用修复独立提交，不混入私有编排。
 
 现有企业改造计划先作为需求清单，不在原样复现前执行。尤其不能直接使用其中不存在的 `services/*`、`packages/*` 路径。
 

@@ -1,5 +1,65 @@
 import http from 'node:http';
 
+const FETCH_BLOCKED_PORTS = new Set([
+  0, 1, 7, 9, 11, 13, 15, 17, 19, 20, 21, 22, 23, 25, 37, 42, 43, 53, 69, 77,
+  79, 87, 95, 101, 102, 103, 104, 109, 110, 111, 113, 115, 117, 119, 123, 135,
+  137, 139, 143, 161, 179, 389, 427, 465, 512, 513, 514, 515, 526, 530, 531, 532,
+  540, 548, 554, 556, 563, 587, 601, 636, 989, 990, 993, 995, 1719, 1720, 1723,
+  2049, 3659, 4045, 4190, 5060, 5061, 6000, 6566, 6665, 6666, 6667, 6668, 6669,
+  6679, 6697, 10080,
+]);
+
+export function isFetchBlockedPort(port) {
+  return FETCH_BLOCKED_PORTS.has(port);
+}
+
+function listenOnDynamicPort(server, host) {
+  return new Promise((resolve, reject) => {
+    const onError = (error) => {
+      server.off('error', onError);
+      reject(error);
+    };
+    server.once('error', onError);
+    try {
+      server.listen(0, host, () => {
+        server.off('error', onError);
+        resolve();
+      });
+    } catch (error) {
+      server.off('error', onError);
+      reject(error);
+    }
+  });
+}
+
+function closeServer(server) {
+  return new Promise((resolve, reject) => {
+    try {
+      server.close((error) => error ? reject(error) : resolve());
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+export async function ensureFetchSafeServer(server, host = '127.0.0.1', maxAttempts = 100) {
+  if (!server || typeof server.address !== 'function' || typeof server.close !== 'function'
+    || typeof server.listen !== 'function' || typeof server.once !== 'function' || typeof server.off !== 'function'
+    || typeof server.listening !== 'boolean' || typeof host !== 'string' || host.length === 0
+    || !Number.isInteger(maxAttempts) || maxAttempts < 1) throw new Error('invalid fetch-safe listener');
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    if (!server.listening) await listenOnDynamicPort(server, host);
+    const address = server.address();
+    if (!address || typeof address === 'string' || !Number.isInteger(address.port) || address.port < 0 || address.port > 65535) {
+      if (server.listening) await closeServer(server);
+      throw new Error('invalid listener address');
+    }
+    if (!isFetchBlockedPort(address.port)) return server;
+    await closeServer(server);
+  }
+  throw new Error('unable to allocate fetch-safe listener');
+}
+
 export async function fakeCore({ initAdmin, failure, gatewayToken, bindingMutation } = {}) {
   const requests = [];
   const keys = Object.fromEntries(['admin', 'agent-a', 'agent-b', 'agent-c'].map((name, index) => [name, `sk-mem-${String.fromCharCode(65 + index).repeat(32)}`]));
@@ -69,6 +129,6 @@ export async function fakeCore({ initAdmin, failure, gatewayToken, bindingMutati
     }
     response.writeHead(404).end();
   });
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  await ensureFetchSafeServer(server);
   return { baseUrl: `http://127.0.0.1:${server.address().port}`, requests, keys, bindings, assets, close: () => new Promise((resolve) => server.close(resolve)) };
 }

@@ -6,19 +6,37 @@
 
 > **Gate**：真实模型或宿主配置操作前必须通过的安全检查；任一检查失败就拒绝执行。
 
+> **Secret**：需要避免进入源码、日志和普通配置的敏感凭证，例如 DeepSeek API key。
+
 > **Attestation**：host 检查后交给容器复核的短期记录，不是带签名的加密证明。它信任宿主账户、Compose 启动环境和实验证据目录，只防误配置、字段不一致与过期复用，不防能同时改写记录和环境变量的本地操作者。
 
 > **Static Passed**：文件、渲染器、Gate 与 Compose 展开结果通过自动检查；不代表镜像或服务已经运行。
 
-> **Engine Accessible**：本轮已确认 Docker client 与 engine 均为 29.6.2、Docker Desktop 为 4.85.0、context 为 `desktop-linux`，并可执行 Compose 5.3.1 命令。
+> **Engine Accessible（预检时）**：本轮预检曾确认 Docker client 与 engine 均为 29.6.2、Docker Desktop 为 4.85.0、context 为 `desktop-linux`，并可执行 Compose 5.3.1 命令；这项历史通过不表示故障后 engine 仍可用。
+
+> **WSL**：Windows Subsystem for Linux，Windows 上运行 Linux 环境的系统组件；Docker Desktop 的 Linux 容器后端依赖它。
+
+> **HCS**：Host Compute Service，Windows 用来创建和管理虚拟机及容器计算实例的系统服务。
+
+> **Runtime Blocked**：运行已开始准备，但被宿主或基础设施故障阻断，尚未取得容器业务结果；它既不是 Passed，也不是项目功能 Failed。
 
 > **Runtime Not Run**：尚未执行 `up`、业务探针、Claude TUI 或真实模型请求。
+
+> **Runtime Passed（受限范围）**：列明的真实容器和业务请求已通过；不能外推到未列出的协议、客户端或故障场景。
 
 > **Static Integrated**：独立复审通过的 public fork 精确 SHA 已写入根 gitlink、镜像标签和静态测试；不代表镜像、服务或业务流已经运行。
 
 > **Agent bundle**：只放在单个客户端私有 home 中的 `0600` JSON 文件，把该客户端的 Memory 用户 key 与身份作为一个整体原子切换，避免更新中途出现“新 key 配旧身份”。
 
-本目录保存可重复的 Docker 实验编排。当前状态为 Static Passed、Engine Accessible；单独的 Proxy 镜像已构建成功并通过 `better-sqlite3=ok cost-guard=passthrough-stub` 运行时自检。完整 Compose build、Mock 业务 Gate、Claude TUI 与 DeepSeek 仍为 Not Run，因此不能据此声称服务已启动或记忆业务已通过。
+> **One-shot**：只应运行一次并在完成后退出的容器任务，例如 `config-init`、`bootstrap`、runner 或 agent config 生成器。
+
+> **Data plane**：实际承载客户端请求、记忆写入和读取的服务路径；默认实验中的 data plane 是 Proxy、Core 与 Mock。
+
+> **L0 / L1**：L0 是 Core 的原始对话层，L1 是从对话提炼出的原子记忆层；runner 直接查询两层，不用模型回答猜测是否记住。
+
+> **Headless / 只读业务探针**：Headless 是不进入交互界面的命令行验证；只读业务探针会调用真实业务 API 但不修改业务状态，容器健康状态不能替代它。
+
+本目录保存可重复的 Docker 实验编排。Windows 重启后 Docker Desktop 已恢复；所选完整镜像构建、默认无付费 `mock-contract`（11 项）、`standalone-memory`（12 项）、Hub health 与 Panel/Knowledge 只读业务探针、Docker Claude config precheck 和 `2.1.207` headless version 均已 **Runtime Passed**。这个结论只覆盖 Mock/Standalone/Hub 只读/headless 范围；Docker Claude TUI 为 **Awaiting User Confirmation**，Windows Claude、真实 DeepSeek、stream/tool/thinking、故障恢复与 LAN 仍为 Not Run。
 
 > **Mock**：返回固定结果的模拟模型服务。它不访问真实模型，适合默认测试协议、失败和恢复路径。
 
@@ -33,7 +51,7 @@
 | `compose.real.yaml` | 显式 `real-claude` profile、Gate 和 DeepSeek server secret | 有，必须另行批准并满足 Gate |
 | `compose.windows.yaml` | 按需为 Windows Claude agent-a 生成项目专用 settings；与 base+hardened 叠加 | 无 |
 
-基础层的 Proxy 故意不挂持久 data volume，用来记录“容器强制重建后 session 丢失”的原始基线；hardened 和 real 层才挂 `proxy-data`。Proxy 没有到 Hub 的运行时依赖，Hub 停止时 Proxy/Core 数据面仍应能独立重启；该行为尚待 Task 5 运行验证。
+基础层的 Proxy 故意不挂持久 data volume，用来记录“容器强制重建后 session 丢失”的原始基线；hardened 和 real 层才挂 `proxy-data`。Proxy 没有到 Hub 的运行时依赖；本轮证明 Hub 可在已运行的 Proxy/Core data plane 后单独启动，但尚未验证 Hub 停止、Proxy/Core 独立重启或强制重建后的行为。
 
 ## 1. 静态验证
 
@@ -103,7 +121,40 @@ try {
 
 Host preflight 必须先成功，并把 attestation 写入本次 canonical evidence 目录；容器 Gate 随后核对同一组 host path 字符串和实际挂载 secret。`REAL_LLM_MAX_BUDGET_USD` 与 `REAL_LLM_MAX_TURNS` 只是声明性审批输入，对 Claude、Proxy、Core 和 Knowledge 都不是硬性上限。
 
-## 2. Mock 数据面与两级 Gate（待镜像构建网络恢复后运行）
+### 历史故障（重启后已恢复）：Windows 10 `HCS/0x800705aa`
+
+> **Committed memory**：Windows 已承诺给进程使用的内存总量；它可以高于物理内存，但不能超过物理内存与分页文件共同提供的上限。
+
+Run `docker-mock-20260810-002427` 的 version/context/Compose/`hello-world` 预检和基础镜像拉取曾通过；单独 Proxy image 也已通过构建与运行时自检。首次完整 Compose build 尚未进入项目 Dockerfile，Docker Desktop 即无法创建 `docker-desktop` WSL 虚拟机，并报告：
+
+```text
+Wsl/Service/CreateInstance/CreateVm/HCS/0x800705aa
+系统资源不足，无法完成请求的服务。
+```
+
+随后出现的 `vpnkit-bridge handshake failed` / `bad magic string` 仍夹带同一条“系统资源不足”，应视为后端启动失败的下游症状。故障时宿主约有 `15.87 GB` 物理内存、`4.82 GB` 可用内存、`21.26 / 30.87 GB` Windows committed memory 和 `15 GB` 分页文件；该快照尚未达到 commit 上限，也不能证明物理内存或 commit 空间耗尽。磁盘空间充足，`.wslconfig` 为空，`docker-desktop` 与 `Ubuntu` 均为 stopped。完整历史见 [2026-08-10 WSL 资源阻塞报告](../../docs/reproduction/2026-08-10-docker-mock-20260810-002427-wsl-resource-blocked.md)。
+
+**后续 Verified Fact：** Windows 重启后，Docker client/server、`desktop-linux`、Compose 与 `hello-world` 恢复通过；随后完整所选镜像构建和无付费业务 run 完成，见[最终通过报告](../../docs/reproduction/2026-08-10-docker-mock-20260810-033636-no-paid-runtime-passed.md)。历史 run `docker-mock-20260810-002427` 仍保持 Blocked，不能被后续证据改写。
+
+若该错误再次出现，安全恢复顺序为：
+
+1. 保存其他工作并重启 Windows；不要只反复重启 Docker Desktop。
+2. 登录后启动 Docker Desktop，等待界面明确显示 engine 已就绪。
+3. 重新执行本节开头定位 `$dockerCli` 的代码，再运行以下无付费预检：
+
+```powershell
+& $dockerCli version
+& $dockerCli context show
+& $dockerCli compose version
+& $dockerCli run --rm hello-world
+```
+
+4. 任一命令失败就停止，不执行 Compose build。若 `0x800705aa` 复现，先记录新的内存、分页文件、WSL 状态和 Docker Desktop 诊断报告，再单独排查宿主资源。
+5. 全部通过后创建新的 run ID、Compose project 和没有目录重定向的普通证据目录；不要复用 `docker-mock-20260810-002427`。
+
+本故障不授权修改分页文件、`.wslconfig`、Docker Desktop 配额或系统服务。需要这类系统级变更时，先依据重启后的新诊断单独评估；不要加载 `compose.real.yaml` 或任何 DeepSeek secret 来验证恢复。
+
+## 2. Mock 数据面与两级 Gate
 
 每次实验使用唯一 project、run ID 与 host evidence 目录，避免复用旧 bootstrap 状态。原始脱敏 JSON 直接写入忽略目录 `.runtime/runs/<run-id>/`：
 
@@ -120,6 +171,44 @@ $env:EVIDENCE_DIR = Join-Path (Resolve-Path -LiteralPath .).Path ".runtime\runs\
   up -d --build mock-llm config-init memory-core memory-proxy bootstrap
 ```
 
+在运行任何 `--no-deps` one-shot 前，等待同一个 Compose project 的显式准备完成；这不是独立的快捷方式。`bootstrap` 或 `config-init` 任一非 0 会立即失败，其他未就绪状态会在超时后失败：
+
+```powershell
+$deadline = (Get-Date).AddMinutes(2)
+$ready = $false
+do {
+  $entries = @(& $dockerCli compose `
+    --profile tools `
+    -f tests/integration/compose.yaml `
+    ps --all --format json | ConvertFrom-Json)
+  if ($LASTEXITCODE -ne 0) { throw 'Compose readiness status query failed' }
+  $byContainer = @{}
+  foreach ($entry in $entries) { $byContainer[$entry.Name] = $entry }
+
+  $oneShotsReady = $true
+  foreach ($service in @('config-init', 'bootstrap')) {
+    $containerName = "$env:COMPOSE_PROJECT_NAME-$service-1"
+    $entry = $byContainer[$containerName]
+    if ($null -eq $entry) { $oneShotsReady = $false; continue }
+    if ($entry.State -eq 'exited' -and [int]$entry.ExitCode -ne 0) { throw "Compose one-shot failed: $service" }
+    if ($entry.State -ne 'exited' -or [int]$entry.ExitCode -ne 0) { $oneShotsReady = $false }
+  }
+
+  $servicesHealthy = $true
+  foreach ($service in @('mock-llm', 'memory-core', 'memory-proxy')) {
+    $containerName = "$env:COMPOSE_PROJECT_NAME-$service-1"
+    $entry = $byContainer[$containerName]
+    if ($null -eq $entry) { $servicesHealthy = $false; continue }
+    if ($entry.State -eq 'exited' -and [int]$entry.ExitCode -ne 0) { throw "Compose service failed: $service" }
+    if (-not ($entry.State -eq 'running' -and $entry.Health -eq 'healthy')) { $servicesHealthy = $false }
+  }
+
+  if ($oneShotsReady -and $servicesHealthy) { $ready = $true; break }
+  Start-Sleep -Seconds 2
+} while ((Get-Date) -lt $deadline)
+if (-not $ready) { throw 'Compose readiness timed out' }
+```
+
 第一级只验证 Mock 协议，不宣称记忆业务通过：
 
 ```powershell
@@ -127,22 +216,39 @@ $env:TEST_SCENARIO = 'mock-contract'
 & $dockerCli compose `
   --profile tools `
   -f tests/integration/compose.yaml `
-  run --rm test-runner
+  run --rm --no-deps test-runner
 if ($LASTEXITCODE -ne 0) { throw 'Mock contract failed' }
 ```
 
-第二级 `standalone-memory` 使用真实 Core/Proxy API 验证 A 写入、Core L0/L1 oracle、B 显式共享、C 隔离、身份冲突和模型上游 header 脱敏。Public fork `69fd8b31e3fd4362af6c65407b92b26dfabebd0c` 已写入根 gitlink，三个服务镜像统一标记 `fork-69fd8b`；当前状态是 **Static Integrated / Runtime Not Run**，只有完整镜像构建和本命令实际 exit 0 后才允许转为业务 Passed：
+第二级 `standalone-memory` 使用真实 Core/Proxy API 验证 A 写入、Core L0/L1 oracle、B 显式共享、C 隔离、身份冲突和模型上游 header 脱敏。Public fork `69fd8b31e3fd4362af6c65407b92b26dfabebd0c` 已写入根 gitlink，三个服务镜像统一标记 `fork-69fd8b`。Run `docker-mock-20260810-033636` 中本命令 exit 0，12 项业务断言通过；新的 run 仍必须独立执行，不能复用这次证据：
 
 ```powershell
 $env:TEST_SCENARIO = 'standalone-memory'
 & $dockerCli compose `
   --profile tools `
   -f tests/integration/compose.yaml `
-  run --rm test-runner
+  run --rm --no-deps test-runner
 if ($LASTEXITCODE -ne 0) { throw 'Standalone memory gate failed' }
 ```
 
-两个 Gate 都 exit 0 且 `$env:EVIDENCE_DIR` 内的 JSON 通过脱敏检查后，才进入 Claude headless 与 TUI。Runner 不保存 key hash、前缀或长度。Mock 只保存三个列明的布尔结果：`sensitive_value_seen` 检查 header/body 的值和名称中的非凭证诱饵，`unexpected_credential_seen` 要求 OpenAI/Anthropic 使用各自固定的 `mock-key`，`memory_user_credential_seen` 检查任意模型 header/body 是否出现 Memory 用户 key 形态；敏感名称只保存固定占位符，原值、稳定派生值和长度均不保存。每次 bridge 请求还必须携带 `x-tdai-agent-source: claude-code`；它与 `x-claude-code-session-id`、`x-vertex-ai-session-id`、gateway service token、team/agent/task/conversation headers 都不得到达模型上游。
+两个 Gate 都 exit 0 且 `$env:EVIDENCE_DIR` 内的 JSON 通过脱敏检查后，先只准备一次 agent-a，随后才进入 Windows Claude、Docker Claude headless 与 TUI：
+
+```powershell
+& $dockerCli compose `
+  --profile claude `
+  -f tests/integration/compose.yaml `
+  up --no-deps agent-config-a
+if ($LASTEXITCODE -ne 0) { throw 'Agent-a config preparation failed' }
+```
+
+当前无付费运行链路的不可变记录为：
+
+1. [`docker-mock-20260810-015646`](../../docs/reproduction/2026-08-10-docker-mock-20260810-015646-bootstrap-replay-blocked.md)：完整所选镜像构建 Passed，但旧 runner 命令重放 Bootstrap；lifecycle TDD 与独立复审后改用 readiness + `--no-deps`。
+2. [`docker-mock-20260810-024419`](../../docs/reproduction/2026-08-10-docker-mock-20260810-024419-forged-contract-failed.md)：Gate 1 Passed；Gate 2 暴露 forged source 的 HTTP 400/401 预期差异。
+3. [`docker-mock-20260810-030443`](../../docs/reproduction/2026-08-10-docker-mock-20260810-030443-session-precondition-failed.md)：Gate 1 Passed；Gate 2 越过 forged contract 后安全定位到 B session 尚未初始化。
+4. [`docker-mock-20260810-033636`](../../docs/reproduction/2026-08-10-docker-mock-20260810-033636-no-paid-runtime-passed.md)：Gate 1 的 11 项与 Gate 2 的 12 项均 Passed；A 写入、B 显式共享、C 隔离、身份负测和上游 hygiene 均有脱敏证据。
+
+Runner 不保存 key hash、前缀或长度。Mock 只保存三个列明的布尔结果：`sensitive_value_seen` 检查 header/body 的值和名称中的非凭证诱饵，`unexpected_credential_seen` 要求 OpenAI/Anthropic 使用各自固定的 `mock-key`，`memory_user_credential_seen` 检查任意模型 header/body 是否出现 Memory 用户 key 形态；敏感名称只保存固定占位符，原值、稳定派生值和长度均不保存。每次 bridge 请求还必须携带 `x-tdai-agent-source: claude-code`；它与 `x-claude-code-session-id`、`x-vertex-ai-session-id`、gateway service token、team/agent/task/conversation headers 都不得到达模型上游。
 
 证据 writer 在容器内拒绝符号链接/硬链接，并用同目录临时文件原子发布；这不等于验证了宿主 bind source。Docker 会先解析宿主的 `$env:EVIDENCE_DIR`，因此基础 Mock 实验仍把本地账户和该目录视为受信任边界。运行前需确认它是本次 run 的真实普通目录而非 junction/symlink；不要把容器内 no-follow 测试写成宿主防护已通过。
 
@@ -190,7 +296,7 @@ try {
     -f tests/integration/compose.yaml `
     -f tests/integration/compose.hardened.yaml `
     -f tests/integration/compose.windows.yaml `
-    run --rm windows-config-init
+    run --rm --no-deps windows-config-init
   if ($LASTEXITCODE -ne 0) { throw 'Windows config init failed' }
 } finally {
   Remove-Item -LiteralPath $windowsGateDir -Recurse -Force
@@ -225,25 +331,33 @@ Remove-Item Env:MEMORY_PROXY_CONFIG -ErrorAction SilentlyContinue
 
 Bootstrap 成功后，受信任的 `agent-config-a/b/c` 各自生成一个只含当前客户端 key 与 identity 的 `agent-bundle.json`，以同目录临时文件加单次 rename 原子发布；Claude 本身不挂共享 bootstrap volume。Identity 含 service/team/user/agent/task/session/display name，但只有 team/agent/task/session 转成 Proxy headers。A/B/C 的 home 与 workspace 是六个互不共享的 named volumes，用作自动化隔离 fixture；首轮人工 Docker Claude 交互只启动 agent-a。
 
-Headless 版本检查：
+Headless 版本检查已在 run `docker-mock-20260810-033636` 通过，entrypoint config precheck 为 `status=ok target=docker`，版本为 `2.1.207 (Claude Code)`：
 
 ```powershell
 & $dockerCli compose `
   --profile claude `
   -f tests/integration/compose.yaml `
-  run --rm claude-agent-a --version
+  run --rm --no-deps claude-agent-a --version
 ```
 
-交互式启动，供用户确认 TUI：
+交互式 TUI 尚需用户确认。保留 project 当前仍在运行；在新的 PowerShell 中恢复精确 run/project/space 和绝对 evidence 路径：
 
 ```powershell
+Set-Location 'D:\workspace\refine-memory\.worktrees\docker-memory-lab'
+$dockerCli = Join-Path $env:LOCALAPPDATA 'Programs\DockerDesktop\resources\bin\docker.exe'
+$env:RUN_ID = 'docker-mock-20260810-033636'
+$env:COMPOSE_PROJECT_NAME = 'mem-it-20260810-033636'
+$env:MEMORY_SPACE_ID = 'default'
+$env:EVIDENCE_DIR = 'D:\workspace\refine-memory\.worktrees\docker-memory-lab\.runtime\runs\docker-mock-20260810-033636'
+$env:MEMORY_CORE_GATEWAY_API_KEY = 'compose-parse-only-' + [guid]::NewGuid().ToString('N')
+
 & $dockerCli compose `
   --profile claude `
   -f tests/integration/compose.yaml `
-  run --rm claude-agent-a --interactive
+  run --rm --no-deps claude-agent-a --interactive
 ```
 
-`--interactive` 只由镜像入口消费，随后以无额外参数的 `claude` 启动。当前未完成镜像构建和 TUI 人工确认，因此这两条命令仍是 **Not Run**。
+`--interactive` 只由镜像入口消费，随后以无额外参数的 `claude` 启动。`compose-parse-only-<guid>` 仅用于上面这条交互命令的 YAML 解析；**不得**用它执行 `up`、`create`、`recreate`、省略 `--no-deps` 的 run 或任何会重建既有服务的命令。TUI 当前为 **Awaiting User Confirmation**。
 
 ## 6. 真实 DeepSeek（Blocked / Not Run）
 
@@ -265,11 +379,9 @@ Headless 版本检查：
 
 ## 当前已知限制
 
-- **Static Passed**：57/57 Node 测试，以及 base、hardened、real 和可选 Windows override 四组 `docker compose config --quiet` 已通过提交前复验。
-- **Engine Accessible / Full Compose Build Not Run**：当前 Docker engine 可访问。单独的 Proxy 镜像已构建成功并通过 `better-sqlite3=ok cost-guard=passthrough-stub` 运行时自检；完整 Compose build 仍等待 controller 执行，较早的 Hub/Claude build 曾在拉取 Docker Hub token 时网络超时。
-- **Runtime Not Run**：未执行 `up`、业务探针、故障恢复或 Claude TUI。
-- **Static Integrated / Runtime Not Run**：B shared bridge 依赖的 ACL/envelope/session 修复已锁定到 public fork `69fd8b31e3fd4362af6c65407b92b26dfabebd0c`、根 gitlink 与 `fork-69fd8b` 镜像标签；真实 B shared/C isolation 仍必须由容器业务 Gate 证明。
-- **Static Integrated / Runtime Not Run**：Proxy auth、session、injection、extraction 与 tdai L0/L1 实现及模板已锁定到 final fork；真实行为仍等待容器业务 Gate。
-- **Static Integrated / Runtime Not Run**：settings renderer 分别固定 Docker `http://memory-proxy:8096` 与 Windows `http://127.0.0.1:8096` 的 `TDAI_MEMORY_PROXY_BASE_URL`，public fork 工具注入只在客户端运行时读取该变量；Windows memory tool 仍需真实 TUI/bridge 验证。
-- MemoryPanel 的 deny-by-default `.dockerignore` 已在 public fork 通过 4/4 语义测试及 backend/web build；单独的 Proxy image build/runtime self-check 已通过，根完整 Compose build 仍是 Not Run。
+- **Static Passed**：当前根 Node suite 为 58/58；base、tools 和 Claude profile 的 `docker compose config --quiet` 在运行前通过。
+- **Runtime Passed（受限范围）**：Windows 重启后 Docker 恢复；所选完整镜像 build Passed。最终 run 的 Mock 11 项、Standalone 12 项、A 写/B 共享/C 隔离、安全负测与上游 hygiene、Hub health、Panel team/get、Knowledge wiki/list 和 Docker Claude `2.1.207` headless 均 Passed。
+- **Evidence**：最终 run 的 evidence 目录只有两个已脱敏 ordinary JSON 文件；DeepSeek 为 0 个已选 profile/service 请求且 internal network 生效，但这不是 packet capture。
+- **Awaiting User Confirmation**：Docker Claude TUI 尚未人工确认；当前 project 的 4 个长期服务健康、3 个 one-shot exit 0、6 个 named volumes 与 internal network 保持运行。
+- **Not Run**：Windows Claude、真实 DeepSeek Anthropic/OpenAI 协议、stream/tool/thinking、Redis、Proxy/Core/Hub stop/restart/recreate、备份恢复、恶意记忆、key 撤销、Win11、WSL Claude 与 LAN。
 - **Local-only SHA**：public fork `69fd8b31e3fd4362af6c65407b92b26dfabebd0c` 尚未 push；从首个本地修复 `c75ef58` 起至当前修复，共 27 个本地 public commit。当前工作区可用；新 clone 在用户授权 push 前不能取得根 gitlink 目标。

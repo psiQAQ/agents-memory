@@ -109,8 +109,13 @@ async function jsonRequest(url, { method = 'POST', headers = {}, body, timeoutMs
 
 async function record(assertions, name, action) {
   const started = performance.now();
-  const result = await action();
-  assertions.push({ name, status: result.status, count: result.count, latency_ms: Math.round(performance.now() - started) });
+  const assertion = typeof name === 'string' && /^[a-z0-9-]{1,64}$/.test(name) ? name : 'unknown';
+  try {
+    const result = await action();
+    assertions.push({ name: assertion, status: result.status, count: result.count, latency_ms: Math.round(performance.now() - started) });
+  } catch {
+    throw new Error(`standalone memory contract failed assertion=${assertion}`);
+  }
 }
 
 function ownerFields(manifest, client) {
@@ -226,9 +231,28 @@ export async function runStandaloneMemory({ manifestPath, proxyUrl, coreUrl, moc
     return { status: response.status, count: matched.length };
   });
 
+  const initializeSession = async (client, name) => record(assertions, name, async () => {
+    const before = await mockRequests();
+    const body = { ...anthropicBody, messages: [{ role: 'user', content: 'Initialize this standalone test session.' }] };
+    const { response, data } = await jsonRequest(proxyEndpoint, { headers: proxyHeaders(client), body });
+    const after = await mockRequests();
+    const modelFetches = after.modelFetchCount - before.modelFetchCount;
+    const newAnthropic = after.requests.filter((request) => request?.path === '/anthropic/v1/messages').slice(before.modelFetchCount);
+    if (!response.ok || data?.type !== 'message' || modelFetches !== 1 || newAnthropic.length !== 1 || newAnthropic.some(unsafeObservation)) throw new Error('standalone memory contract failed');
+    return { status: response.status, count: modelFetches };
+  });
+
   const bridge = async (client, { agentSource = 'claude-code' } = {}) => jsonRequest(new URL('/memory-bridge/v3/atomic/query', proxyUrl), {
     headers: { authorization: `Bearer ${keys[client]}`, 'content-type': 'application/json', 'x-tdai-service-id': manifest.service_id, 'x-conversation-id': manifest.clients[client].session_id, ...(agentSource === null ? {} : { 'x-tdai-agent-source': agentSource }) },
     body: { agent_id: manifest.clients[source].agent_id, limit: 100, offset: 0 },
+  });
+  await record(assertions, 'identity-conflict', async () => {
+    const before = await mockRequests();
+    const { response } = await jsonRequest(proxyEndpoint, { headers: proxyHeaders(source, { 'x-agent-id': manifest.clients[consumer].agent_id }), body: anthropicBody });
+    const after = await mockRequests();
+    const modelFetches = after.allModelFetchCount - before.allModelFetchCount;
+    if (response.status !== 409 || modelFetches !== 0) throw new Error('standalone memory contract failed');
+    return { status: response.status, count: modelFetches };
   });
   await record(assertions, 'bridge-agent-source-missing', async () => {
     const before = await mockRequests();
@@ -243,9 +267,10 @@ export async function runStandaloneMemory({ manifestPath, proxyUrl, coreUrl, moc
     const { response } = await bridge(consumer, { agentSource: 'forged-client' });
     const after = await mockRequests();
     const modelFetches = after.allModelFetchCount - before.allModelFetchCount;
-    if (response.status !== 400 || modelFetches !== 0) throw new Error('standalone memory contract failed');
+    if (response.status !== 401 || modelFetches !== 0) throw new Error('standalone memory contract failed');
     return { status: response.status, count: modelFetches };
   });
+  await initializeSession(consumer, 'consumer-session-init');
   await record(assertions, 'consumer-shared-bridge', async () => {
     const { response, data } = await bridge(consumer);
     const items = Array.isArray(data?.data?.items) ? data.data.items : [];
@@ -253,20 +278,13 @@ export async function runStandaloneMemory({ manifestPath, proxyUrl, coreUrl, moc
     if (!response.ok || data?.code !== 0 || matched.length === 0) throw new Error('standalone memory contract failed');
     return { status: response.status, count: matched.length };
   });
+  await initializeSession(excluded, 'excluded-session-init');
   await record(assertions, 'excluded-client-isolation', async () => {
     const { response, data } = await bridge(excluded);
     const items = Array.isArray(data?.data?.items) ? data.data.items : [];
     const matched = items.filter((item) => typeof item?.content === 'string' && item.content.includes(nonce));
     if (!response.ok || data?.code !== 0 || matched.length !== 0) throw new Error('standalone memory contract failed');
     return { status: response.status, count: matched.length };
-  });
-  await record(assertions, 'identity-conflict', async () => {
-    const before = await mockRequests();
-    const { response } = await jsonRequest(proxyEndpoint, { headers: proxyHeaders(source, { 'x-agent-id': manifest.clients[consumer].agent_id }), body: anthropicBody });
-    const after = await mockRequests();
-    const modelFetches = after.allModelFetchCount - before.allModelFetchCount;
-    if (response.status !== 409 || modelFetches !== 0) throw new Error('standalone memory contract failed');
-    return { status: response.status, count: modelFetches };
   });
   await record(assertions, 'mock-upstream-header-hygiene', async () => {
     const { status, requests } = await mockRequests();

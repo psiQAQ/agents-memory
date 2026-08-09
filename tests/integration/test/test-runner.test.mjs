@@ -7,20 +7,23 @@ import { fileURLToPath } from 'node:url';
 import http from 'node:http';
 import test from 'node:test';
 import { createMockServer } from '../tools/mock-llm.mjs';
+import { ensureFetchSafeServer } from './helpers.mjs';
 
 async function mock() {
   const server = createMockServer({ timeoutMs: 80 });
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  await ensureFetchSafeServer(server);
   return { baseUrl: `http://127.0.0.1:${server.address().port}`, close: () => new Promise((resolve) => server.close(resolve)) };
 }
 
-async function standaloneTopology(keys, gatewayToken, { leakSentinel = false, positiveLeakOnly = false, truncatedObservations = false, unexpectedCredential = false, memoryCredential = false, omitObservationFlags = false, wrongSharedOwner = false, vertexSessionHeader = false, claudeSessionHeader = false, l1BusinessErrorWithItems = false, proxySkipsAnthropicForward = false, authNegativeCoreSideEffect = false, authNegativeCountTokensSideEffect = false, identityConflictCoreSideEffect = false, bridgeMissingCoreSideEffect = false, bridgeForgedCoreSideEffect = false } = {}) {
+async function standaloneTopology(keys, gatewayToken, { leakSentinel = false, positiveLeakOnly = false, truncatedObservations = false, unexpectedCredential = false, memoryCredential = false, omitObservationFlags = false, wrongSharedOwner = false, vertexSessionHeader = false, claudeSessionHeader = false, l1BusinessErrorWithItems = false, proxySkipsAnthropicForward = false, authNegativeCoreSideEffect = false, authNegativeCountTokensSideEffect = false, identityConflictCoreSideEffect = false, bridgeMissingCoreSideEffect = false, bridgeForgedCoreSideEffect = false, sessionInitDelayedCoreSideEffect = false } = {}) {
   const requests = [];
   let nonce;
   let atomicCalls = 0;
   let modelFetchCount = 0;
   let coreModelFetchCount = 0;
   let countTokensFetchCount = 0;
+  let delayedCoreObservation = 0;
+  const initializedSessions = [];
   const byKey = Object.fromEntries(Object.entries(keys).map(([client, key]) => [key, client]));
   const ids = Object.fromEntries(Object.keys(keys).map((client) => [client, {
     user_id: `user-${client}`, agent_id: `id-${client}`, session_id: `session-${client}`,
@@ -42,7 +45,12 @@ async function standaloneTopology(keys, gatewayToken, { leakSentinel = false, po
         ...Array.from({ length: coreModelFetchCount }, cleanOpenAi),
         ...Array.from({ length: countTokensFetchCount }, () => ({ path: '/anthropic/v1/messages/count_tokens', header_names: ['content-type', 'x-api-key'], ...(omitObservationFlags ? {} : { sensitive_value_seen: false, unexpected_credential_seen: false, memory_user_credential_seen: false }) })),
       ];
-      return json(response, 200, { requests });
+      json(response, 200, { requests });
+      if (delayedCoreObservation === 1) {
+        coreModelFetchCount += 1;
+        delayedCoreObservation = 0;
+      } else if (delayedCoreObservation > 1) delayedCoreObservation -= 1;
+      return;
     }
 
     if (path === '/claude-code/default/v1/messages') {
@@ -59,9 +67,12 @@ async function standaloneTopology(keys, gatewayToken, { leakSentinel = false, po
         return json(response, 409, { type: 'error', error: { type: 'identity_conflict' } });
       }
       if (request.headers['x-team-id'] !== 'team-1' || request.headers['x-agent-id'] !== expected.agent_id || request.headers['x-task-id'] !== 'task-1' || request.headers['x-conversation-id'] !== expected.session_id) return json(response, 400, { type: 'error' });
-      nonce = JSON.stringify(body).match(/MEMORY_NONCE_[A-Z0-9_-]+/)?.[0];
+      const memoryNonce = JSON.stringify(body).match(/MEMORY_NONCE_[A-Z0-9_-]+/)?.[0];
+      if (memoryNonce) nonce = memoryNonce;
       if (proxySkipsAnthropicForward) coreModelFetchCount = 1;
       else modelFetchCount += 1;
+      if (sessionInitDelayedCoreSideEffect && !memoryNonce) delayedCoreObservation = 2;
+      initializedSessions.push({ client, user_id: expected.user_id, agent_id: expected.agent_id, source: 'claude-code', session_id: expected.session_id });
       return json(response, 200, { id: 'msg-mock', type: 'message', role: 'assistant', model: 'mock-model', content: [{ type: 'text', text: 'stored' }], stop_reason: 'end_turn', usage: { input_tokens: 1, output_tokens: 1 } });
     }
 
@@ -69,11 +80,16 @@ async function standaloneTopology(keys, gatewayToken, { leakSentinel = false, po
       const key = authorization?.replace(/^Bearer /, '');
       const client = byKey[key];
       if (!client || request.headers['x-conversation-id'] !== ids[client].session_id) return json(response, 401, { code: 401, data: null });
-      if (request.headers['x-tdai-agent-source'] !== 'claude-code') {
-        if (request.headers['x-tdai-agent-source'] === undefined && bridgeMissingCoreSideEffect) coreModelFetchCount += 1;
-        if (request.headers['x-tdai-agent-source'] !== undefined && bridgeForgedCoreSideEffect) coreModelFetchCount += 1;
+      const agentSource = request.headers['x-tdai-agent-source'];
+      if (agentSource === undefined || !/^[a-z0-9-]+$/.test(agentSource)) {
+        if (agentSource === undefined && bridgeMissingCoreSideEffect) coreModelFetchCount += 1;
         return json(response, 400, { code: 400, data: null });
       }
+      if (agentSource !== 'claude-code') {
+        if (bridgeForgedCoreSideEffect) coreModelFetchCount += 1;
+        return json(response, 401, { code: 401, data: null });
+      }
+      if (!initializedSessions.some((session) => session.client === client && session.user_id === ids[client].user_id && session.source === agentSource && session.session_id === ids[client].session_id)) return json(response, 401, { code: 401, data: null });
       const shared = client === 'agent-b' && body.agent_id === ids['agent-a'].agent_id;
       const content = shared ? `shared ${nonce}` : `isolated-${client}`;
       const owner = shared ? ids['agent-a'] : ids[client];
@@ -89,8 +105,8 @@ async function standaloneTopology(keys, gatewayToken, { leakSentinel = false, po
     }
     return json(response, 404, { code: 404 });
   });
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-  return { baseUrl: `http://127.0.0.1:${server.address().port}`, requests, ids, get atomicCalls() { return atomicCalls; }, close: () => new Promise((resolve) => server.close(resolve)) };
+  await ensureFetchSafeServer(server);
+  return { baseUrl: `http://127.0.0.1:${server.address().port}`, requests, ids, initializedSessions, get atomicCalls() { return atomicCalls; }, close: () => new Promise((resolve) => server.close(resolve)) };
 }
 
 test('runner writes both evidence files through a protected no-follow atomic writer', async () => {
@@ -185,7 +201,7 @@ test('standalone runner proves auth, owner oracles, B sharing, C isolation, conf
   const directory = await mkdtemp(join(tmpdir(), 'memory-runner-standalone-'));
   const keys = Object.fromEntries(['agent-a', 'agent-b', 'agent-c'].map((client, index) => [client, `sk-mem-${String.fromCharCode(65 + index).repeat(32)}`]));
   const gatewayToken = 'runner-gateway-token';
-  const topology = await standaloneTopology(keys, gatewayToken);
+  const topology = await standaloneTopology(keys, gatewayToken, { sessionInitDelayedCoreSideEffect: true });
   try {
     const credentials = join(directory, 'credentials');
     await mkdir(credentials);
@@ -211,12 +227,51 @@ test('standalone runner proves auth, owner oracles, B sharing, C isolation, conf
     assert.ok(topology.atomicCalls >= 2);
     assert.equal(result.assertions.find((entry) => entry.name === 'proxy-auth-negative').count, 0);
     assert.equal(result.assertions.find((entry) => entry.name === 'identity-conflict').count, 0);
+    assert.deepEqual(result.assertions.filter((entry) => ['consumer-session-init', 'excluded-session-init'].includes(entry.name)).map(({ name, status, count }) => ({ name, status, count })), [
+      { name: 'consumer-session-init', status: 200, count: 1 },
+      { name: 'excluded-session-init', status: 200, count: 1 },
+    ]);
     assert.equal(result.assertions.find((entry) => entry.name === 'bridge-agent-source-missing').status, 400);
-    assert.equal(result.assertions.find((entry) => entry.name === 'bridge-agent-source-forged').status, 400);
+    assert.equal(result.assertions.find((entry) => entry.name === 'bridge-agent-source-missing').count, 0);
+    assert.equal(result.assertions.find((entry) => entry.name === 'bridge-agent-source-forged').status, 401);
+    assert.equal(result.assertions.find((entry) => entry.name === 'bridge-agent-source-forged').count, 0);
     assert.ok(topology.requests.some((request) => request.path === '/claude-code/default/v1/messages' && request.authorization === `Bearer sk-mem-${'Z'.repeat(32)}`));
     const validProxyRequest = topology.requests.find((request) => request.path === '/claude-code/default/v1/messages' && request.authorization === `Bearer ${keys['agent-a']}` && request.headers['x-agent-id'] === topology.ids['agent-a'].agent_id);
     assert.match(validProxyRequest?.headers['x-claude-code-session-id'] ?? '', /^MEMORY_IDENTITY_LEAK_SENTINEL_/);
     assert.match(validProxyRequest?.headers['x-vertex-ai-session-id'] ?? '', /^MEMORY_IDENTITY_LEAK_SENTINEL_/);
+    for (const client of ['agent-b', 'agent-c']) {
+      const initRequest = topology.requests.find((request) => request.path === '/claude-code/default/v1/messages' && request.authorization === `Bearer ${keys[client]}`);
+      assert.ok(initRequest);
+      assert.equal(initRequest.headers['anthropic-version'], '2023-06-01');
+      assert.equal(initRequest.headers['x-team-id'], 'team-1');
+      assert.equal(initRequest.headers['x-agent-id'], topology.ids[client].agent_id);
+      assert.equal(initRequest.headers['x-task-id'], 'task-1');
+      assert.equal(initRequest.headers['x-conversation-id'], topology.ids[client].session_id);
+      assert.match(initRequest.headers['x-claude-code-session-id'] ?? '', /^MEMORY_IDENTITY_LEAK_SENTINEL_/);
+      assert.match(initRequest.headers['x-vertex-ai-session-id'] ?? '', /^MEMORY_IDENTITY_LEAK_SENTINEL_/);
+      assert.match(initRequest.headers['x-wecom-id'] ?? '', /^MEMORY_LEAK_SENTINEL_/);
+      assert.match(initRequest.headers['x-tdai-service-token'] ?? '', /^MEMORY_GATEWAY_LEAK_SENTINEL_/);
+      assert.doesNotMatch(JSON.stringify(initRequest.body), /MEMORY_/);
+    }
+    assert.deepEqual(topology.initializedSessions, [
+      { client: 'agent-a', user_id: 'user-agent-a', agent_id: 'id-agent-a', source: 'claude-code', session_id: 'session-agent-a' },
+      { client: 'agent-b', user_id: 'user-agent-b', agent_id: 'id-agent-b', source: 'claude-code', session_id: 'session-agent-b' },
+      { client: 'agent-c', user_id: 'user-agent-c', agent_id: 'id-agent-c', source: 'claude-code', session_id: 'session-agent-c' },
+    ]);
+    const requestIndex = (predicate) => topology.requests.findIndex(predicate);
+    const lastRequestIndex = (predicate) => topology.requests.reduce((found, request, index) => predicate(request) ? index : found, -1);
+    const orderedRequests = [
+      lastRequestIndex((request) => request.path === '/v3/atomic/query'),
+      requestIndex((request) => request.path === '/claude-code/default/v1/messages' && request.authorization === `Bearer ${keys['agent-a']}` && request.headers['x-agent-id'] === topology.ids['agent-b'].agent_id),
+      requestIndex((request) => request.path === '/memory-bridge/v3/atomic/query' && request.headers['x-tdai-agent-source'] === undefined),
+      requestIndex((request) => request.path === '/memory-bridge/v3/atomic/query' && request.headers['x-tdai-agent-source'] === 'forged-client'),
+      requestIndex((request) => request.path === '/claude-code/default/v1/messages' && request.authorization === `Bearer ${keys['agent-b']}`),
+      requestIndex((request) => request.path === '/memory-bridge/v3/atomic/query' && request.authorization === `Bearer ${keys['agent-b']}` && request.headers['x-tdai-agent-source'] === 'claude-code'),
+      requestIndex((request) => request.path === '/claude-code/default/v1/messages' && request.authorization === `Bearer ${keys['agent-c']}`),
+      requestIndex((request) => request.path === '/memory-bridge/v3/atomic/query' && request.authorization === `Bearer ${keys['agent-c']}` && request.headers['x-tdai-agent-source'] === 'claude-code'),
+      lastRequestIndex((request) => request.path === '/__mock/requests'),
+    ];
+    assert.ok(orderedRequests.every((index, position) => index >= 0 && (position === 0 || index > orderedRequests[position - 1])));
     assert.ok(topology.requests.some((request) => request.path === '/memory-bridge/v3/atomic/query' && request.authorization === `Bearer ${keys['agent-b']}`));
     const bridgeRequests = topology.requests.filter((request) => request.path === '/memory-bridge/v3/atomic/query');
     assert.ok(bridgeRequests.some((request) => request.headers['x-tdai-agent-source'] === undefined));
@@ -247,7 +302,15 @@ test('standalone runner rejects a sensitive value, internal header, or invalid o
       const gatewayTokenFile = join(directory, 'gateway.token');
       await writeFile(gatewayTokenFile, `${gatewayToken}\n`);
       const outputDir = join(directory, 'evidence');
-      await assert.rejects(runStandaloneMemory({ manifestPath, proxyUrl: topology.baseUrl, coreUrl: topology.baseUrl, mockUrl: topology.baseUrl, gatewayTokenFile, outputDir, pollAttempts: 3, pollIntervalMs: 1 }), /standalone memory contract failed/);
+      let failure;
+      try {
+        await runStandaloneMemory({ manifestPath, proxyUrl: topology.baseUrl, coreUrl: topology.baseUrl, mockUrl: topology.baseUrl, gatewayTokenFile, outputDir, pollAttempts: 3, pollIntervalMs: 1 });
+      } catch (error) { failure = error; }
+      assert.ok(failure instanceof Error);
+      if (options.wrongSharedOwner) {
+        assert.equal(failure.message, 'standalone memory contract failed assertion=consumer-shared-bridge');
+        assert.doesNotMatch(failure.message, /sk-mem-|runner-gateway-token|MEMORY_|team-1|task-1|(?:user|id|session)-agent-|authorization|\/(?:memory-bridge|claude-code|v3)\//i);
+      } else assert.match(failure.message, /standalone memory contract failed/);
       await assert.rejects(readFile(join(outputDir, 'standalone-memory.json'), 'utf8'), { code: 'ENOENT' });
     } finally { await topology.close(); await rm(directory, { recursive: true, force: true }); }
   }

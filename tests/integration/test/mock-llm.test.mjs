@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
 import test from 'node:test';
+import { ensureFetchSafeServer, isFetchBlockedPort } from './helpers.mjs';
 
 async function withMock(run) {
   const { createMockServer } = await import('../tools/mock-llm.mjs');
   const server = createMockServer({ timeoutMs: 80 });
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  await ensureFetchSafeServer(server);
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
   try {
     await run(baseUrl);
@@ -225,9 +227,71 @@ test('mock returns deterministic Core L1 extraction JSON with the real message i
   });
 });
 
-test('mock CLI listener can bind the container interface and configured port', async () => {
+test('fetch-safe listeners retry blocked dynamic ports and mock CLI binds the container interface', async () => {
+  const blockedPorts = [
+    0, 1, 7, 9, 11, 13, 15, 17, 19, 20, 21, 22, 23, 25, 37, 42, 43, 53, 69, 77,
+    79, 87, 95, 101, 102, 103, 104, 109, 110, 111, 113, 115, 117, 119, 123, 135,
+    137, 139, 143, 161, 179, 389, 427, 465, 512, 513, 514, 515, 526, 530, 531, 532,
+    540, 548, 554, 556, 563, 587, 601, 636, 989, 990, 993, 995, 1719, 1720, 1723,
+    2049, 3659, 4045, 4190, 5060, 5061, 6000, 6566, 6665, 6666, 6667, 6668, 6669,
+    6679, 6697, 10080,
+  ];
+  assert.deepEqual(Array.from({ length: 65536 }, (_, port) => port).filter(isFetchBlockedPort), blockedPorts);
+  assert.equal(isFetchBlockedPort(4190), true);
+  assert.equal(isFetchBlockedPort(6679), true);
+  assert.equal(isFetchBlockedPort(10080), true);
+  assert.equal(isFetchBlockedPort(15001), false);
+
+  const fakeListener = (ports, initialPort) => {
+    const server = new EventEmitter();
+    const calls = { close: 0, listen: 0 };
+    let currentPort = initialPort;
+    server.listening = initialPort !== undefined;
+    server.address = () => server.listening ? { address: '127.0.0.1', family: 'IPv4', port: currentPort } : null;
+    server.close = (callback) => {
+      calls.close += 1;
+      server.listening = false;
+      queueMicrotask(callback);
+      return server;
+    };
+    server.listen = (port, host, callback) => {
+      assert.equal(port, 0);
+      assert.equal(host, '127.0.0.1');
+      currentPort = ports[calls.listen];
+      calls.listen += 1;
+      server.listening = true;
+      queueMicrotask(callback);
+      return server;
+    };
+    return { calls, server };
+  };
+
+  const retried = fakeListener([6000, 15001]);
+  assert.equal(await ensureFetchSafeServer(retried.server), retried.server);
+  assert.deepEqual(retried.calls, { close: 1, listen: 2 });
+  assert.equal(retried.server.address().port, 15001);
+
+  const alreadyListening = fakeListener([15001], 6000);
+  assert.equal(await ensureFetchSafeServer(alreadyListening.server), alreadyListening.server);
+  assert.deepEqual(alreadyListening.calls, { close: 1, listen: 1 });
+  assert.equal(alreadyListening.server.address().port, 15001);
+
+  const exhausted = fakeListener([6000]);
+  await assert.rejects(ensureFetchSafeServer(exhausted.server, '127.0.0.1', 1), /fetch-safe listener/);
+  assert.deepEqual(exhausted.calls, { close: 1, listen: 1 });
+  assert.equal(exhausted.server.listening, false);
+
+  const invalid = fakeListener([15001]);
+  invalid.server.address = () => null;
+  await assert.rejects(ensureFetchSafeServer(invalid.server), /invalid listener address/);
+  assert.deepEqual(invalid.calls, { close: 1, listen: 1 });
+  assert.equal(invalid.server.listening, false);
+
   const { listenMockServer } = await import('../tools/mock-llm.mjs');
-  const server = await listenMockServer({ host: '0.0.0.0', port: 0, timeoutMs: 80 });
+  const server = await ensureFetchSafeServer(
+    await listenMockServer({ host: '0.0.0.0', port: 0, timeoutMs: 80 }),
+    '0.0.0.0',
+  );
   try {
     assert.equal(server.address().address, '0.0.0.0');
     assert.equal((await fetch(`http://127.0.0.1:${server.address().port}/healthz`)).status, 200);
