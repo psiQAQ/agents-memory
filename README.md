@@ -88,7 +88,7 @@ git submodule update --init submodules/TencentDB-Agent-Memory
 
 ## 当前执行顺序
 
-当前主入口是[企业智能体记忆系统评估](docs/enterprise-memory-system-evaluation.md)，其中集中记录证据状态、风险、评分门槛和下一步；本轮 Docker-first 约束见[规格](docs/specs/2026-08-09-docker-memory-lab.md)。Standalone 业务 Gate 的身份、共享与证据边界见[决策记录](docs/decisions/2026-08-09-standalone-memory-gate.md)，根 Gate 静态实现见[复现记录](docs/reproduction/2026-08-09-standalone-memory-static-contract.md)；public fork 集成边界见[决策记录](docs/decisions/2026-08-10-public-fork-integration.md)。
+当前主入口是[企业智能体记忆系统评估](docs/enterprise-memory-system-evaluation.md)，其中集中记录证据状态、风险、评分门槛和下一步；本轮 Docker-first 约束见[规格](docs/specs/2026-08-09-docker-memory-lab.md)。Standalone 业务 Gate 的身份、共享与证据边界见[决策记录](docs/decisions/2026-08-09-standalone-memory-gate.md)，根 Gate 静态实现见[复现记录](docs/reproduction/2026-08-09-standalone-memory-static-contract.md)；public fork 集成边界见[决策记录](docs/decisions/2026-08-10-public-fork-integration.md)与[集成记录](docs/reproduction/2026-08-10-public-fork-integration-static.md)。
 
 1. 先以默认 Mock 的 Docker Compose 验证 Core、Hub、Proxy 与隔离客户端的业务探针，不调用真实 DeepSeek。
 2. 再验证 Windows 10 原生 Claude 与隔离 Docker Linux Claude 经 MemoryProxy 的身份隔离、共享读取和写入治理。
