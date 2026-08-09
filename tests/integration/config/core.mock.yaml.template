@@ -1,0 +1,54 @@
+deployMode: standalone
+stateBackend: "local"
+
+server:
+  host: "0.0.0.0"
+  port: 8420
+
+data:
+  baseDir: "/data/tdai-memory"
+
+llm:
+  baseUrl: "http://mock-llm:8080/openai/v1"
+  apiKey: "mock-key"
+  model: "mock-model"
+  maxTokens: 4096
+  timeoutMs: 120000
+
+memory:
+  capture:
+    enabled: true
+  extraction:
+    enabled: true
+    enableDedup: true
+    maxMemoriesPerSession: 20
+  pipeline:
+    everyNConversations: 5
+    enableWarmup: true
+  recall:
+    enabled: true
+    maxResults: 5
+    strategy: "hybrid"
+  storeBackend: "sqlite"
+  embedding:
+    provider: "none"
+  bm25:
+    enabled: true
+    language: "zh"
+
+skill:
+  enabled: true
+  extraction:
+    enabled: true
+    queue:
+      backend: "local"
+
+observability:
+  otel:
+    enabled: false
+  clickhouse:
+    enabled: false
+  kafka:
+    enabled: false
+  langfuse:
+    enabled: false

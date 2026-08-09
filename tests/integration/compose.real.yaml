@@ -1,0 +1,123 @@
+services:
+  paid-gate:
+    image: refine-memory-integration-tools:local
+    build:
+      context: .
+      dockerfile: images/tools/Dockerfile
+    profiles: ["real-claude"]
+    command: ["tools/paid-gate.mjs"]
+    environment:
+      RUN_PAID_LLM: ${RUN_PAID_LLM:?set RUN_PAID_LLM=1}
+      DEEPSEEK_SECRET_FILE: /run/secrets/deepseek_key
+      REAL_LLM_MAX_BUDGET_USD: ${REAL_LLM_MAX_BUDGET_USD:?set a positive budget}
+      REAL_LLM_MAX_TURNS: ${REAL_LLM_MAX_TURNS:?set a positive turn limit}
+      RUN_ID: ${RUN_ID:?set a run id}
+      EVIDENCE_DIR: /evidence/${RUN_ID:?set a run id}
+      PROJECT_ROOT: /lab
+    secrets:
+      - deepseek_key
+    volumes:
+      - type: bind
+        source: ${EVIDENCE_DIR:?set an existing host evidence directory}
+        target: /evidence/${RUN_ID:?set a run id}
+    restart: "no"
+
+  real-config-init:
+    image: refine-memory-integration-tools:local
+    build:
+      context: .
+      dockerfile: images/tools/Dockerfile
+    profiles: ["real-claude"]
+    depends_on:
+      paid-gate:
+        condition: service_completed_successfully
+    command: ["config/render-real-config.mjs", "--out", "/out"]
+    environment:
+      MEMORY_CORE_GATEWAY_API_KEY: ${MEMORY_CORE_GATEWAY_API_KEY:?set a disposable non-LLM gateway key}
+    volumes:
+      - real-runtime-config:/out
+    restart: "no"
+
+  memory-core:
+    profiles: ["real-claude"]
+    depends_on:
+      paid-gate:
+        condition: service_completed_successfully
+      real-config-init:
+        condition: service_completed_successfully
+    entrypoint: ["/bin/sh", "/opt/memory-lab/run-with-deepseek.sh"]
+    command: ["core"]
+    volumes:
+      - real-runtime-config:/runtime-config:ro
+      - core-data:/data/tdai-memory
+      - ./runtime/run-with-deepseek.sh:/opt/memory-lab/run-with-deepseek.sh:ro
+    secrets:
+      - deepseek_key
+
+  memory-hub:
+    profiles: ["real-claude"]
+    depends_on:
+      paid-gate:
+        condition: service_completed_successfully
+      real-config-init:
+        condition: service_completed_successfully
+    entrypoint: ["/bin/sh", "/opt/memory-lab/run-with-deepseek.sh"]
+    command: ["hub"]
+    environment:
+      LLM_MODE: custom
+      LLM_PROTOCOL: openai
+      LLM_PROVIDER: custom
+      LLM_BASE_URL: https://api.deepseek.com
+      LLM_API_KEY: ""
+      LLM_MODEL: deepseek-v4-flash
+    volumes:
+      - hub-data:/data/knowledge
+      - ./runtime/run-with-deepseek.sh:/opt/memory-lab/run-with-deepseek.sh:ro
+    secrets:
+      - deepseek_key
+
+  memory-proxy:
+    profiles: ["real-claude"]
+    depends_on:
+      paid-gate:
+        condition: service_completed_successfully
+      real-config-init:
+        condition: service_completed_successfully
+    entrypoint: ["/bin/sh", "/opt/memory-lab/run-with-deepseek.sh"]
+    command: ["proxy"]
+    volumes:
+      - real-runtime-config:/runtime-config:ro
+      - proxy-data:/data/tdai-memory-proxy
+      - ./runtime/run-with-deepseek.sh:/opt/memory-lab/run-with-deepseek.sh:ro
+    secrets:
+      - deepseek_key
+
+  bootstrap:
+    profiles: !override ["real-claude"]
+    depends_on:
+      memory-core:
+        condition: service_healthy
+    volumes:
+      - real-runtime-config:/runtime-config:ro
+      - bootstrap-state:/state
+
+  claude-agent-a:
+    profiles: !override ["real-claude"]
+
+  claude-agent-b:
+    profiles: !override ["real-claude"]
+
+  claude-agent-c:
+    profiles: !override ["real-claude"]
+
+networks:
+  default:
+    internal: false
+
+volumes:
+  real-runtime-config: {}
+  proxy-data: {}
+
+secrets:
+  deepseek_key:
+    file: ${DEEPSEEK_SECRET_FILE:?set an absolute secret file outside the workspace}

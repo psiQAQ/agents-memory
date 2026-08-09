@@ -1,0 +1,11 @@
+*
+!package.json
+!tools/
+!tools/**
+!config/
+!config/**
+!claude/
+!claude/settings.template.json
+!images/
+!images/tools/
+!images/tools/Dockerfile

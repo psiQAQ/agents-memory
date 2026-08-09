@@ -121,3 +121,14 @@ test('mock OpenAI stream supplies a tool call then resolves after a tool result'
     assert.match(await afterTool.text(), /mock text/);
   });
 });
+
+test('mock CLI listener can bind the container interface and configured port', async () => {
+  const { listenMockServer } = await import('../tools/mock-llm.mjs');
+  const server = await listenMockServer({ host: '0.0.0.0', port: 0, timeoutMs: 80 });
+  try {
+    assert.equal(server.address().address, '0.0.0.0');
+    assert.equal((await fetch(`http://127.0.0.1:${server.address().port}/healthz`)).status, 200);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});

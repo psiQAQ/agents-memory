@@ -1,10 +1,14 @@
 # Keep repository-owned cross-platform configuration and documentation portable.
 .gitattributes text eol=lf
 .gitignore text eol=lf
+.dockerignore text eol=lf
 *.sh text eol=lf
 *.env text eol=lf
 *.env.* text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
+*.yaml.template text eol=lf
 *.json text eol=lf
 *.md text eol=lf
+*.mjs text eol=lf
+Dockerfile* text eol=lf

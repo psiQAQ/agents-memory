@@ -1,0 +1,218 @@
+x-tools-service: &tools-service
+  image: refine-memory-integration-tools:local
+  build:
+    context: .
+    dockerfile: images/tools/Dockerfile
+
+x-claude-service: &claude-service
+  image: refine-memory-claude-code:2.1.207
+  build:
+    context: images/claude
+    dockerfile: Dockerfile
+    additional_contexts:
+      integration: .
+    args:
+      NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmmirror.com}
+  profiles: ["claude"]
+  init: true
+  stdin_open: true
+  tty: true
+  user: "10001:10001"
+  depends_on:
+    bootstrap:
+      condition: service_completed_successfully
+    memory-proxy:
+      condition: service_healthy
+  environment:
+    CLAUDE_CONFIG_DIR: /home/claude/.claude
+    MEMORY_SPACE_ID: ${MEMORY_SPACE_ID:-default}
+  command: ["--version"]
+
+services:
+  mock-llm:
+    <<: *tools-service
+    command: ["tools/mock-llm.mjs"]
+    environment:
+      MOCK_HOST: 0.0.0.0
+      MOCK_PORT: "8080"
+    expose: ["8080"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+      start_period: 2s
+
+  config-init:
+    <<: *tools-service
+    command: ["config/render-config.mjs", "--out", "/out", "--mode", "mock"]
+    environment:
+      MEMORY_CORE_GATEWAY_API_KEY: ${MEMORY_CORE_GATEWAY_API_KEY:?set a disposable non-LLM gateway key}
+    volumes:
+      - runtime-config:/out
+    restart: "no"
+
+  memory-core:
+    image: refine-memory-core:fork-c75ef58
+    build:
+      context: ../../submodules/TencentDB-Agent-Memory/MemoryCore
+      dockerfile: Dockerfile
+    depends_on:
+      config-init:
+        condition: service_completed_successfully
+      mock-llm:
+        condition: service_healthy
+    environment:
+      TDAI_GATEWAY_API_KEY: ${MEMORY_CORE_GATEWAY_API_KEY:?set a disposable non-LLM gateway key}
+      TDAI_GATEWAY_CONFIG: /runtime-config/core/tdai-gateway.yaml
+    volumes:
+      - runtime-config:/runtime-config:ro
+      - core-data:/data/tdai-memory
+    expose: ["8420"]
+
+  memory-hub:
+    image: refine-memory-hub:fork-c75ef58
+    build:
+      context: images/hub
+      dockerfile: Dockerfile
+      additional_contexts:
+        panel: ../../submodules/TencentDB-Agent-Memory/MemoryPanel
+        knowledge: ../../submodules/TencentDB-Agent-Memory/MemoryKnowledge
+        hub_runtime: ../../submodules/TencentDB-Agent-Memory/deploy/panel-knowledge-combined
+    depends_on:
+      memory-core:
+        condition: service_healthy
+      mock-llm:
+        condition: service_healthy
+    environment:
+      REMOTE_INSTANCE_ID: ${MEMORY_SPACE_ID:-default}
+      REMOTE_INSTANCE_NAME: ${MEMORY_SPACE_ID:-default}
+      REMOTE_INSTANCE_URL: http://memory-core:8420
+      REMOTE_INSTANCE_KEY: ${MEMORY_CORE_GATEWAY_API_KEY:?set a disposable non-LLM gateway key}
+      REMOTE_INSTANCE_PROXY_URL: http://memory-proxy:8096
+      KNOWLEDGE_PUBLIC_BASE_URL: http://memory-hub:8424/v3
+      KNOWLEDGE_LLM_PROXY_BASE_URL: ""
+      LLM_MODE: custom
+      LLM_PROTOCOL: openai
+      LLM_PROVIDER: custom
+      LLM_BASE_URL: http://mock-llm:8080/openai/v1
+      LLM_API_KEY: mock-key
+      LLM_MODEL: mock-model
+    volumes:
+      - hub-data:/data/knowledge
+    expose: ["8125", "8424"]
+
+  memory-proxy:
+    image: refine-memory-proxy:fork-c75ef58
+    build:
+      context: ../../submodules/TencentDB-Agent-Memory/MemoryProxy
+      dockerfile: Dockerfile
+    depends_on:
+      config-init:
+        condition: service_completed_successfully
+      memory-core:
+        condition: service_healthy
+      mock-llm:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "/opt/memory-lab/run-proxy.sh"]
+    command: []
+    environment:
+      MEMORY_PROXY_CONFIG: ${MEMORY_PROXY_CONFIG:-config.yaml}
+    volumes:
+      - runtime-config:/runtime-config:ro
+      - ./runtime/run-proxy.sh:/opt/memory-lab/run-proxy.sh:ro
+    expose: ["8096"]
+
+  bootstrap:
+    <<: *tools-service
+    profiles: ["tools", "claude"]
+    depends_on:
+      memory-core:
+        condition: service_healthy
+    environment:
+      MEMORY_CORE_SERVICE_TOKEN_FILE: /runtime-config/gateway.token
+    command:
+      - tools/bootstrap.mjs
+      - --core-url
+      - http://memory-core:8420
+      - --service-id
+      - ${MEMORY_SPACE_ID:-default}
+      - --run-id
+      - ${RUN_ID:-manual-run}
+      - --output-dir
+      - /state
+      - --clients
+      - agent-a,agent-b,agent-c
+    volumes:
+      - runtime-config:/runtime-config:ro
+      - bootstrap-state:/state
+    restart: "no"
+
+  test-runner:
+    <<: *tools-service
+    profiles: ["tools"]
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+      mock-llm:
+        condition: service_healthy
+    environment:
+      MOCK_BASE_URL: http://mock-llm:8080
+    command: ["tools/test-runner.mjs", "--manifest", "/state/run-manifest.json", "--scenario", "mock-contract"]
+    volumes:
+      - bootstrap-state:/state
+    restart: "no"
+
+  claude-agent-a:
+    <<: *claude-service
+    environment:
+      CLAUDE_CONFIG_DIR: /home/claude/.claude
+      MEMORY_AGENT_ID: agent-a
+      MEMORY_SPACE_ID: ${MEMORY_SPACE_ID:-default}
+    volumes:
+      - claude-home-a:/home/claude
+      - claude-workspace-a:/workspace
+      - bootstrap-state:/state:ro
+
+  claude-agent-b:
+    <<: *claude-service
+    environment:
+      CLAUDE_CONFIG_DIR: /home/claude/.claude
+      MEMORY_AGENT_ID: agent-b
+      MEMORY_SPACE_ID: ${MEMORY_SPACE_ID:-default}
+    volumes:
+      - claude-home-b:/home/claude
+      - claude-workspace-b:/workspace
+      - bootstrap-state:/state:ro
+
+  claude-agent-c:
+    <<: *claude-service
+    environment:
+      CLAUDE_CONFIG_DIR: /home/claude/.claude
+      MEMORY_AGENT_ID: agent-c
+      MEMORY_SPACE_ID: ${MEMORY_SPACE_ID:-default}
+    volumes:
+      - claude-home-c:/home/claude
+      - claude-workspace-c:/workspace
+      - bootstrap-state:/state:ro
+
+  redis:
+    image: redis:7-alpine
+    profiles: ["redis"]
+    expose: ["6379"]
+
+networks:
+  default:
+    internal: true
+
+volumes:
+  runtime-config: {}
+  core-data: {}
+  hub-data: {}
+  bootstrap-state: {}
+  claude-home-a: {}
+  claude-workspace-a: {}
+  claude-home-b: {}
+  claude-workspace-b: {}
+  claude-home-c: {}
+  claude-workspace-c: {}

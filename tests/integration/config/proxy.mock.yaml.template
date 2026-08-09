@@ -1,0 +1,58 @@
+server:
+  host: "0.0.0.0"
+  port: 8096
+  forwardTimeoutMs: 600000
+
+upstream:
+  url: "http://mock-llm:8080/anthropic/v1"
+  apiKey: "mock-key"
+  agents: {}
+
+log:
+  file: "/app/logs"
+  verbose: false
+  level: "info"
+  backend: "console"
+
+redis:
+  enabled: false
+
+storage:
+  enabled: true
+  backend: "sqlite"
+  sqlite:
+    dbPath: "/data/tdai-memory-proxy/proxy.db"
+
+# Task 4 must fix Proxy auth-to-Core service bearer before these are enabled.
+auth:
+  enabled: false
+  url: "http://memory-core:8420"
+  timeoutMs: 5000
+
+sessionInit:
+  enabled: false
+
+injection:
+  enabled: false
+  injectors: []
+
+extraction:
+  enabled: false
+  extractors: []
+
+tdai:
+  enabled: false
+  endpoint: "http://memory-core:8420"
+  apiKey: "__MEMORY_CORE_GATEWAY_API_KEY__"
+  serviceId: "context-proxy"
+
+skill:
+  endpoint: "http://memory-core:8420"
+  serviceToken: "__MEMORY_CORE_GATEWAY_API_KEY__"
+  serviceId: "context-proxy"
+
+knowledge:
+  enabled: false
+  endpoint: "http://memory-core:8420"
+  serviceToken: "__MEMORY_CORE_GATEWAY_API_KEY__"
+  serviceId: "context-proxy"

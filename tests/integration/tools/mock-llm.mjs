@@ -126,7 +126,26 @@ export function createMockServer({ timeoutMs = Number(process.env.MOCK_TIMEOUT_M
   });
 }
 
+export async function listenMockServer({
+  host = process.env.MOCK_HOST ?? '127.0.0.1',
+  port = Number(process.env.MOCK_PORT ?? 18080),
+  timeoutMs,
+} = {}) {
+  if (!['127.0.0.1', '0.0.0.0'].includes(host) || !Number.isInteger(port) || port < 0 || port > 65535) throw new Error('invalid listener');
+  const server = createMockServer({ timeoutMs });
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(port, host, resolve);
+  });
+  return server;
+}
+
 if (isMain(import.meta)) {
-  const port = Number(process.env.MOCK_PORT ?? 18080);
-  createMockServer().listen(port, '127.0.0.1', () => process.stdout.write(JSON.stringify({ status: 'ready', port }) + '\n'));
+  try {
+    const server = await listenMockServer();
+    process.stdout.write(JSON.stringify({ status: 'ready', port: server.address().port }) + '\n');
+  } catch {
+    process.stderr.write('mock listener failed\n');
+    process.exitCode = 1;
+  }
 }
