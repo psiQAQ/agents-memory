@@ -20,7 +20,7 @@ memory:
     enabled: true
   extraction:
     enabled: true
-    enableDedup: true
+    enableDedup: false
     maxMemoriesPerSession: 20
   pipeline:
     everyNConversations: 5

@@ -9,7 +9,7 @@ node /opt/memory-lab/tools/render-settings.mjs \
   --target docker \
   --template /opt/memory-lab/settings.template.json \
   --config-dir "$CLAUDE_CONFIG_DIR" \
-  --memory-user-key-file "/home/claude/.memory/user-key" \
+  --agent-bundle-file "/home/claude/.memory/agent-bundle.json" \
   --space-id "$MEMORY_SPACE_ID"
 
 if [[ "${1:-}" == "--interactive" ]]; then

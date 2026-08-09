@@ -86,7 +86,7 @@ git submodule update --init submodules/TencentDB-Agent-Memory
 
 ## 当前执行顺序
 
-当前主入口是[企业智能体记忆系统评估](docs/enterprise-memory-system-evaluation.md)，其中集中记录证据状态、风险、评分门槛和下一步；本轮 Docker-first 约束见[规格](docs/specs/2026-08-09-docker-memory-lab.md)。
+当前主入口是[企业智能体记忆系统评估](docs/enterprise-memory-system-evaluation.md)，其中集中记录证据状态、风险、评分门槛和下一步；本轮 Docker-first 约束见[规格](docs/specs/2026-08-09-docker-memory-lab.md)。Standalone 业务 Gate 的身份、共享与证据边界见[决策记录](docs/decisions/2026-08-09-standalone-memory-gate.md)，本次静态实现证据见[复现记录](docs/reproduction/2026-08-09-standalone-memory-static-contract.md)。
 
 1. 先以默认 Mock 的 Docker Compose 验证 Core、Hub、Proxy 与隔离客户端的业务探针，不调用真实 DeepSeek。
 2. 再验证 Windows 10 原生 Claude 与隔离 Docker Linux Claude 经 MemoryProxy 的身份隔离、共享读取和写入治理。
@@ -96,8 +96,8 @@ git submodule update --init submodules/TencentDB-Agent-Memory
 
 ## 注意事项
 
-- 根仓库没有构建与测试命令；源码构建、测试和依赖均位于 TencentDB submodule 内。
-- `.claude/settings.template.json` 是唯一受跟踪的 Claude settings 模板；本地 settings、Claude home、secret、运行证据和原始日志均不提交。
+- 根仓库的 Docker 实验静态测试位于 `tests/integration/`，执行 `node --test tests/integration/test/*.test.mjs`；TencentDB 服务源码的构建、测试和依赖仍位于 submodule 内。
+- `.claude/settings.template.json` 是根目录的权威 Claude settings 模板；集成镜像上下文保留一份由自动测试锁步校验的同步副本。本地 settings、Claude home、secret、运行证据和原始日志均不提交。
 - 厂商自报基准(Mem0/Zep 等)与独立评测差异可达 ±15-19 个百分点,引用数字时优先采用非利益相关方来源。
 - 调研报告中已明确标注未找到可靠来源的点(如 cmem 隐私争议、memory ROI 公开数字),引用时勿当作已证实结论。
 - 修改或推翻负责人方案基本思想前,须先向负责人确认(见 `docs/repo-author-comment/comment.md`)。

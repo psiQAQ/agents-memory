@@ -1,5 +1,5 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { isAbsolute, join } from 'node:path';
+import { lstat, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { basename, dirname, isAbsolute, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { isMain } from './runtime-lib.mjs';
 
@@ -30,12 +30,42 @@ function requireId(data, name) {
   return data[name];
 }
 
+function requireItems(data) {
+  if (!Array.isArray(data?.items)) throw new Error('invalid core response');
+  return data.items;
+}
+
+function bindingInput(binding) {
+  const result = {
+    asset_id: requireId(binding, 'asset_id'),
+    asset_type: requireId(binding, 'asset_type'),
+    created_by: requireId(binding, 'created_by'),
+  };
+  if (typeof binding.injection_mode === 'string' && binding.injection_mode) result.injection_mode = binding.injection_mode;
+  if (Number.isInteger(binding.priority)) result.priority = binding.priority;
+  return result;
+}
+
 async function secureWrite(file, value) {
   await writeFile(file, value, { encoding: 'utf8', mode: 0o600 });
 }
 
-export async function bootstrap({ coreUrl, serviceId, runId, outputDir, clients, timeoutMs = 10000 }) {
-  if (!/^https?:\/\//.test(coreUrl ?? '') || !serviceId || !validRunId(runId) || !isAbsolute(outputDir) || !Array.isArray(clients) || clients.length === 0 || new Set(clients).size !== clients.length || clients.some((client) => !/^[a-z][a-z0-9-]*$/.test(client)) || !Number.isInteger(timeoutMs) || timeoutMs <= 0) throw new Error('invalid bootstrap arguments');
+async function publishManifest(file, value, writeFileImpl, renameFileImpl) {
+  const temporary = join(dirname(file), `.${basename(file)}.${process.pid}.${randomUUID()}.tmp`);
+  try {
+    await writeFileImpl(temporary, `${JSON.stringify(value, null, 2)}\n`, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+    const metadata = await lstat(temporary);
+    if (metadata.isSymbolicLink() || !metadata.isFile() || metadata.nlink !== 1) throw new Error();
+    await renameFileImpl(temporary, file);
+  } catch {
+    await unlink(temporary).catch(() => {});
+    await unlink(file).catch(() => {});
+    throw new Error('cannot publish run manifest');
+  }
+}
+
+export async function bootstrap({ coreUrl, serviceId, runId, outputDir, clients, timeoutMs = 10000, manifestWriteFile = writeFile, manifestRenameFile = rename }) {
+  if (!/^https?:\/\//.test(coreUrl ?? '') || !serviceId || !validRunId(runId) || !isAbsolute(outputDir) || !Array.isArray(clients) || clients.length < 3 || new Set(clients).size !== clients.length || clients.some((client) => !/^[a-z][a-z0-9-]*$/.test(client)) || !Number.isInteger(timeoutMs) || timeoutMs <= 0) throw new Error('invalid bootstrap arguments');
   let serviceToken;
   if (process.env.MEMORY_CORE_SERVICE_TOKEN_FILE) {
     try { serviceToken = (await readFile(process.env.MEMORY_CORE_SERVICE_TOKEN_FILE, 'utf8')).trim(); } catch { throw new Error('invalid MEMORY_CORE_SERVICE_TOKEN_FILE'); }
@@ -68,6 +98,37 @@ export async function bootstrap({ coreUrl, serviceId, runId, outputDir, clients,
   }
   const task = await call(coreUrl, serviceId, '/v3/meta/task/create', { team_id: teamId, creator_user_id: owner.user_id, title: `task-${runId}`, linked_agents: clients.map((client) => ({ agent_id: users[client].agent_id })) }, owner.user_key, serviceToken);
   const taskId = requireId(task, 'task_id');
+
+  const source = clients[0];
+  const consumers = clients.slice(1, 2);
+  const excluded = clients.slice(2);
+  const listBindings = async (client) => requireItems(await call(coreUrl, serviceId, '/v3/meta/agent-fixed-asset/list', { agent_id: users[client].agent_id, limit: 100, offset: 0 }, users[client].user_key, serviceToken));
+  const sourceBindings = await listBindings(source);
+  const sourceMemoryBindings = sourceBindings.filter((binding) => binding?.asset_type === 'chat_memory');
+  if (sourceMemoryBindings.length !== 1) throw new Error('invalid core response');
+  const sourceAssetId = requireId(sourceMemoryBindings[0], 'asset_id');
+  const sourceAsset = await call(coreUrl, serviceId, '/v3/meta/asset/get', { asset_id: sourceAssetId }, users[source].user_key, serviceToken);
+  if (sourceAsset.asset_id !== sourceAssetId || sourceAsset.asset_type !== 'chat_memory' || sourceAsset.team_id !== teamId || sourceAsset.owner_user_id !== users[source].user_id) throw new Error('invalid core response');
+  const sharedAsset = await call(coreUrl, serviceId, '/v3/meta/asset/update', { asset_id: sourceAssetId, visibility: 'team' }, users[source].user_key, serviceToken);
+  if (sharedAsset.asset_id !== sourceAssetId || sharedAsset.visibility !== 'team') throw new Error('invalid core response');
+
+  for (const consumer of consumers) {
+    const existing = await listBindings(consumer);
+    const existingInputs = existing.map(bindingInput);
+    const bindings = existingInputs.some((binding) => binding.asset_id === sourceAssetId)
+      ? existingInputs
+      : [...existingInputs, { asset_id: sourceAssetId, asset_type: 'chat_memory', injection_mode: 'summary', priority: 0, created_by: users[consumer].user_id }];
+    await call(coreUrl, serviceId, '/v3/meta/agent-fixed-asset/set', { agent_id: users[consumer].agent_id, bindings }, users[consumer].user_key, serviceToken);
+    const verified = await listBindings(consumer);
+    let verifiedInputs;
+    try { verifiedInputs = verified.map(bindingInput); } catch { throw new Error('invalid core response'); }
+    const verifiedById = new Map(verifiedInputs.map((binding) => [binding.asset_id, binding]));
+    if (!verifiedById.has(sourceAssetId) || existingInputs.some((binding) => JSON.stringify(verifiedById.get(binding.asset_id)) !== JSON.stringify(binding))) throw new Error('invalid core response');
+  }
+  for (const client of excluded) {
+    if ((await listBindings(client)).some((binding) => binding?.asset_id === sourceAssetId)) throw new Error('invalid core response');
+  }
+
   const manifestClients = {};
   for (const client of clients) {
     const credentialFile = `credentials/${client}.user-key`;
@@ -75,8 +136,15 @@ export async function bootstrap({ coreUrl, serviceId, runId, outputDir, clients,
     manifestClients[client] = { user_id: users[client].user_id, agent_id: users[client].agent_id, session_id: randomUUID(), credential_file: credentialFile, display_name: client };
   }
   await secureWrite(join(outputDir, 'bootstrap.private.json'), JSON.stringify({ admin_user_key: adminKey, user_keys: Object.fromEntries(clients.map((client) => [client, users[client].user_key])) }, null, 2));
-  const manifest = { run_id: runId, service_id: serviceId, team_id: teamId, task_id: taskId, clients: manifestClients };
-  await writeFile(join(outputDir, 'run-manifest.json'), JSON.stringify(manifest, null, 2), 'utf8');
+  const manifest = {
+    run_id: runId,
+    service_id: serviceId,
+    team_id: teamId,
+    task_id: taskId,
+    clients: manifestClients,
+    shared_memory: { asset_ids: [sourceAssetId], source, consumers, excluded },
+  };
+  await publishManifest(join(outputDir, 'run-manifest.json'), manifest, manifestWriteFile, manifestRenameFile);
   return manifest;
 }
 

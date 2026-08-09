@@ -22,8 +22,8 @@ services:
       - /lab/claude/settings.template.json
       - --config-dir
       - /windows-config
-      - --memory-user-key-file
-      - /agent-home/.memory/user-key
+      - --agent-bundle-file
+      - /agent-home/.memory/agent-bundle.json
       - --space-id
       - ${MEMORY_SPACE_ID:-default}
     volumes:

@@ -10,11 +10,15 @@
 
 > **Static Passed**：文件、渲染器、Gate 与 Compose 展开结果通过自动检查；不代表镜像或服务已经运行。
 
-> **Build Failed**：镜像构建曾在获取 Docker Hub OAuth token 时超时，尚未执行到项目 Dockerfile 的关键构建步骤。
+> **Current agent context: Engine Inaccessible**：本轮 Codex 执行环境能运行 Docker client，但无法访问 engine；这不代表用户会话中的 Docker Desktop 一定无法启动。
 
 > **Runtime Not Run**：尚未执行 `up`、业务探针、Claude TUI 或真实模型请求。
 
-本目录保存可重复的 Docker 实验编排。当前状态为 Static Passed、Build Failed、Runtime Not Run，因此不能据此声称服务已启动或记忆业务已通过。
+> **Expected Blocked**：测试契约已定义，但依赖的 public fork 修复尚未更新到根仓库 gitlink；当前不得执行后宣称通过。
+
+> **Agent bundle**：只放在单个客户端私有 home 中的 `0600` JSON 文件，把该客户端的 Memory 用户 key 与身份作为一个整体原子切换，避免更新中途出现“新 key 配旧身份”。
+
+本目录保存可重复的 Docker 实验编排。当前状态为 Static Passed、Current agent context: Engine Inaccessible、本轮 Build Not Run、Runtime Not Run；最近一次有证据的 Build 在 registry network 阶段 Failed。因此不能据此声称服务已启动或记忆业务已通过。
 
 > **Mock**：返回固定结果的模拟模型服务。它不访问真实模型，适合默认测试协议、失败和恢复路径。
 
@@ -99,19 +103,50 @@ try {
 
 Host preflight 必须先成功，并把 attestation 写入本次 canonical evidence 目录；容器 Gate 随后核对同一组 host path 字符串和实际挂载 secret。`REAL_LLM_MAX_BUDGET_USD` 与 `REAL_LLM_MAX_TURNS` 只是声明性审批输入，对 Claude、Proxy、Core 和 Knowledge 都不是硬性上限。
 
-## 2. Mock 开发栈（待镜像构建网络恢复后运行）
+## 2. Mock 数据面与两级 Gate（待镜像构建网络恢复后运行）
 
-每次实验使用唯一 project 与 run ID，避免复用旧 bootstrap 状态：
+每次实验使用唯一 project、run ID 与 host evidence 目录，避免复用旧 bootstrap 状态。原始脱敏 JSON 直接写入忽略目录 `.runtime/runs/<run-id>/`：
 
 ```powershell
 $env:RUN_ID = 'mock-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
 $env:COMPOSE_PROJECT_NAME = "mem-it-$env:RUN_ID"
 $env:MEMORY_SPACE_ID = 'default'
+$env:EVIDENCE_DIR = Join-Path (Resolve-Path -LiteralPath .).Path ".runtime\runs\$env:RUN_ID"
+[IO.Directory]::CreateDirectory($env:EVIDENCE_DIR) | Out-Null
 
 & $dockerCli compose `
+  --profile tools `
   -f tests/integration/compose.yaml `
-  up --build
+  up -d --build mock-llm config-init memory-core memory-proxy bootstrap
 ```
+
+第一级只验证 Mock 协议，不宣称记忆业务通过：
+
+```powershell
+$env:TEST_SCENARIO = 'mock-contract'
+& $dockerCli compose `
+  --profile tools `
+  -f tests/integration/compose.yaml `
+  run --rm test-runner
+if ($LASTEXITCODE -ne 0) { throw 'Mock contract failed' }
+```
+
+第二级 `standalone-memory` 使用真实 Core/Proxy API 验证 A 写入、Core L0/L1 oracle、B 显式共享、C 隔离、身份冲突和模型上游 header 脱敏。当前 public fork 最终 ACL/envelope 修复尚未更新到根仓库 gitlink，因此 B shared bridge 的状态是 **Expected Blocked / Not Run**；只有 Task 4 最终 SHA、镜像标签和 gitlink 集成后才执行并允许转为 Passed：
+
+```powershell
+$env:TEST_SCENARIO = 'standalone-memory'
+& $dockerCli compose `
+  --profile tools `
+  -f tests/integration/compose.yaml `
+  run --rm test-runner
+if ($LASTEXITCODE -ne 0) { throw 'Standalone memory gate failed' }
+```
+
+两个 Gate 都 exit 0 且 `$env:EVIDENCE_DIR` 内的 JSON 通过脱敏检查后，才进入 Claude headless 与 TUI。Runner 不保存 key hash、前缀或长度。Mock 只保存三个列明的布尔结果：`sensitive_value_seen` 检查 header 或 body 中的非凭证诱饵，`unexpected_credential_seen` 检查模型认证 header 是否偏离协议固定的 `mock-key`，`memory_user_credential_seen` 检查任意模型 header 或 body 是否出现 Memory 用户 key 的形态；原值、稳定派生值和长度均不保存。每次 bridge 请求还必须携带 `x-tdai-agent-source: claude-code`；它与 `x-vertex-ai-session-id`、gateway service token、team/agent/task/conversation headers 都不得到达模型上游。
+
+证据 writer 在容器内拒绝符号链接/硬链接，并用同目录临时文件原子发布；这不等于验证了宿主 bind source。Docker 会先解析宿主的 `$env:EVIDENCE_DIR`，因此基础 Mock 实验仍把本地账户和该目录视为受信任边界。运行前需确认它是本次 run 的真实普通目录而非 junction/symlink；不要把容器内 no-follow 测试写成宿主防护已通过。
+
+> **Sensitive named volume**：Docker 管理并跨普通 `down` 保留的数据卷；只要其中有 key、token、业务记忆、源码或用户工作文件，就要按仍持有敏感数据的存储管理。
 
 停止开发栈时默认保留 named volumes：
 
@@ -119,7 +154,7 @@ $env:MEMORY_SPACE_ID = 'default'
 & $dockerCli compose -f tests/integration/compose.yaml down
 ```
 
-只有证据已归档且明确要销毁该唯一实验项目时，才对该 project 使用 `down -v --remove-orphans`；禁止全局 prune。
+`down` 不删除任何 named volume，也不删除 host evidence 目录。凭证卷包括 `runtime-config`/`real-core-config` 中的 gateway token、`bootstrap-state` 中的 admin/user keys、`claude-home-a/b/c` 中的 agent bundle 与渲染 settings，以及 real 层的 `proxy-private-config` DeepSeek key。`core-data`、`hub-data`、`proxy-data` 保存业务或会话数据，`claude-workspace-a/b/c` 可能保存源码与用户文件；这些也都是 sensitive named volumes。只有 `.runtime/runs/<run-id>/` 已脱敏归档、对应 reproduction report 已写入且明确要销毁该唯一实验项目时，才对该精确 `COMPOSE_PROJECT_NAME` 使用 `down -v --remove-orphans`；禁止全局 prune。
 
 ## 3. Hardened Windows 入口
 
@@ -165,7 +200,7 @@ $env:CLAUDE_CONFIG_DIR = $env:WINDOWS_CLAUDE_CONFIG_DIR
 claude
 ```
 
-Host gate 会把真实 worktree root 与 canonical Windows config 目录写入短期 attestation；config 目录必须是仓库外的绝对真实路径，不能使用相对路径、junction 或仓库内 `.runtime`。`windows-config-init` 先核对 attestation，再读取 agent-a 私有 home 中的 Memory 用户 key；它不挂共享 bootstrap state 或 DeepSeek secret。上述启动与 TUI 仍为 Runtime Not Run。
+Host gate 会把真实 worktree root 与 canonical Windows config 目录写入短期 attestation；config 目录必须是仓库外的绝对真实路径，不能使用相对路径、junction 或仓库内 `.runtime`。`windows-config-init` 先核对 attestation，再一次读取 agent-a 私有 home 的 `agent-bundle.json`；它不挂共享 bootstrap state 或 DeepSeek secret。Settings 只把 bundle 中的 key 写入 `ANTHROPIC_AUTH_TOKEN`，生成 team/agent/task/conversation 四行身份 headers，并固定写入 `TDAI_MEMORY_PROXY_BASE_URL=http://127.0.0.1:8096`，保留 Claude 自带的 session header。上述启动与 TUI 仍为 Runtime Not Run。
 
 ## 4. Redis profile
 
@@ -188,7 +223,7 @@ Remove-Item Env:MEMORY_PROXY_CONFIG -ErrorAction SilentlyContinue
 
 ## 5. Docker Claude Code
 
-Bootstrap 成功后，受信任的 `agent-config-a/b/c` 只把对应 Memory 用户 key 放进对应私有 home；Claude 本身不挂共享 bootstrap volume。A/B/C 的 home 与 workspace 是六个互不共享的 named volumes，用作自动化隔离 fixture；首轮人工 Docker Claude 交互只启动 agent-a。
+Bootstrap 成功后，受信任的 `agent-config-a/b/c` 各自生成一个只含当前客户端 key 与 identity 的 `agent-bundle.json`，以同目录临时文件加单次 rename 原子发布；Claude 本身不挂共享 bootstrap volume。Identity 含 service/team/user/agent/task/session/display name，但只有 team/agent/task/session 转成 Proxy headers。A/B/C 的 home 与 workspace 是六个互不共享的 named volumes，用作自动化隔离 fixture；首轮人工 Docker Claude 交互只启动 agent-a。
 
 Headless 版本检查：
 
@@ -212,15 +247,28 @@ Headless 版本检查：
 
 ## 6. 真实 DeepSeek（Blocked / Not Run）
 
-只有旧 key 已撤销、新 key 位于工作区外、用户明确批准真实测试后，才可以加载 `compose.real.yaml` 和 `real-claude` profile。客户端容器不会挂载 DeepSeek secret；它们只使用 bootstrap 生成的 Memory 用户 key。
+只有旧 key 已撤销、新 key 位于工作区外、用户明确批准真实测试后，才可以加载 `compose.real.yaml` 和 `real-claude` profile。客户端容器不会挂载 DeepSeek secret；它们只使用 bootstrap 生成的 Memory 用户 key。Real Compose 的默认网络仍为 `internal`；只有 Core、Hub、Proxy 同时接入独立 `egress-net`。Claude、bootstrap、runner、paid-gate 和 config init 没有外网出口。长期运行服务中，DeepSeek key 仅由 Core/Hub 的 Compose secret 和 Proxy 私有配置使用；受信任的一次性 `paid-gate` 与 `real-config-init` 会在启动前短暂读取 secret。内嵌 Proxy key 的 `proxy-private-config` 只挂给 `real-config-init` 与 Proxy，bootstrap/runner/Claude 均不可达。
+
+`proxy-private-config` 是上述 sensitive named volumes 之一。轮换或删除宿主 secret 文件不会清除卷内已渲染的 Proxy key，普通 `docker compose down` 也会保留全部凭证与数据卷。每次真实 run 必须先设置唯一 `COMPOSE_PROJECT_NAME=mem-real-<run-id>`；证据完成脱敏归档后，才能对该精确项目执行以下统一清理：
+
+```powershell
+& $dockerCli compose `
+  --profile real-claude `
+  -f tests/integration/compose.yaml `
+  -f tests/integration/compose.real.yaml `
+  down -v --remove-orphans
+```
+
+如果尚未归档或不准备销毁，就保留该项目并把卷视为仍持有效 key；禁止用全局 volume/system prune 代替精确清理。
 
 真实 Gate 的 `REAL_LLM_MAX_BUDGET_USD` 和 `REAL_LLM_MAX_TURNS` 仅是声明性审批输入，不能对 Claude、Proxy、Core 或 Knowledge 提供统一硬限制。首轮必须一次只运行一个场景，并记录 Proxy、Core、Knowledge 的请求数与 usage。
 
 ## 当前已知限制
 
-- **Static Passed**：45 项 Node 测试，以及 base、hardened、real 和可选 Windows override 四组 `docker compose config --quiet` 已通过。
-- **Build Failed**：Hub/Claude 构建在拉取 `docker/dockerfile:1` 的 Docker Hub OAuth token 时网络超时；named-context `COPY` 尚未得到实际构建证明。
+- **Static Passed**：57/57 Node 测试，以及 base、hardened、real 和可选 Windows override 四组 `docker compose config --quiet` 已通过提交前复验。
+- **本轮 Build Not Run**：当前 agent context 无法访问 Docker engine；最近一次有证据的 Hub/Claude Build 在拉取 Docker Hub token 时网络超时，named-context `COPY` 尚未得到实际构建证明。
 - **Runtime Not Run**：未执行 `up`、业务探针、故障恢复或 Claude TUI。
-- **Design Only / Runtime Not Run**：ACL、权限隔离、文件所有权和恢复语义尚未得到真实容器与服务行为证明。
-- Proxy auth/session/injection 暂时显式关闭，等待 public fork 的 Task 4 service bearer 修复后再启用。
+- **Expected Blocked / Runtime Not Run**：B shared bridge 的 runner 契约已定义，但 ACL/envelope 修复的最终 public fork SHA、镜像标签和根 gitlink 尚未集成；不得误报通过。
+- **Static config only**：Proxy auth、session、injection、extraction 与 tdai L0/L1 模板已启用，真实行为仍等待 public fork 集成与容器业务 Gate。
+- **Expected Blocked / Runtime Not Run**：settings renderer 已分别固定 Docker `http://memory-proxy:8096` 与 Windows `http://127.0.0.1:8096` 的 `TDAI_MEMORY_PROXY_BASE_URL`，但 public fork 消费该字段的最终 commit 尚未更新根 gitlink；不能据此宣称 Windows memory tool 已可用。
 - MemoryPanel 构建上下文缺少收窄用 `.dockerignore`；该 Medium 项留到下一次 Task 4 public fork commit，本轮不修改 submodule。

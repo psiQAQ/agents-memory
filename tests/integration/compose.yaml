@@ -46,6 +46,7 @@ services:
     command: ["config/render-config.mjs", "--out", "/out", "--mode", "mock"]
     environment:
       MEMORY_CORE_GATEWAY_API_KEY: ${MEMORY_CORE_GATEWAY_API_KEY:?set a disposable non-LLM gateway key}
+      MEMORY_SPACE_ID: ${MEMORY_SPACE_ID:-default}
     volumes:
       - runtime-config:/out
     restart: "no"
@@ -152,13 +153,32 @@ services:
     depends_on:
       bootstrap:
         condition: service_completed_successfully
+      memory-core:
+        condition: service_healthy
+      memory-proxy:
+        condition: service_healthy
       mock-llm:
         condition: service_healthy
     environment:
       MOCK_BASE_URL: http://mock-llm:8080
-    command: ["tools/test-runner.mjs", "--manifest", "/state/run/run-manifest.json", "--scenario", "mock-contract"]
+      CORE_BASE_URL: http://memory-core:8420
+      PROXY_BASE_URL: http://memory-proxy:8096
+    command:
+      - tools/test-runner.mjs
+      - --manifest
+      - /state/run/run-manifest.json
+      - --scenario
+      - ${TEST_SCENARIO:-standalone-memory}
+      - --gateway-token-file
+      - /runtime-config/gateway.token
+      - --output-dir
+      - /evidence
     volumes:
-      - bootstrap-state:/state
+      - bootstrap-state:/state:ro
+      - runtime-config:/runtime-config:ro
+      - type: bind
+        source: ${EVIDENCE_DIR:-../../.runtime/runs/manual-run}
+        target: /evidence
     restart: "no"
 
   agent-config-a:
@@ -168,7 +188,7 @@ services:
     depends_on:
       bootstrap:
         condition: service_completed_successfully
-    command: ["tools/prepare-agent.mjs", "--agent", "agent-a", "--state-dir", "/state/run", "--home-dir", "/agent-home"]
+    command: ["tools/prepare-agent.mjs", "--agent", "agent-a", "--state-dir", "/state/run", "--home-dir", "/agent-home", "--space-id", "${MEMORY_SPACE_ID:-default}"]
     volumes:
       - bootstrap-state:/state:ro
       - claude-home-a:/agent-home
@@ -181,7 +201,7 @@ services:
     depends_on:
       bootstrap:
         condition: service_completed_successfully
-    command: ["tools/prepare-agent.mjs", "--agent", "agent-b", "--state-dir", "/state/run", "--home-dir", "/agent-home"]
+    command: ["tools/prepare-agent.mjs", "--agent", "agent-b", "--state-dir", "/state/run", "--home-dir", "/agent-home", "--space-id", "${MEMORY_SPACE_ID:-default}"]
     volumes:
       - bootstrap-state:/state:ro
       - claude-home-b:/agent-home
@@ -194,7 +214,7 @@ services:
     depends_on:
       bootstrap:
         condition: service_completed_successfully
-    command: ["tools/prepare-agent.mjs", "--agent", "agent-c", "--state-dir", "/state/run", "--home-dir", "/agent-home"]
+    command: ["tools/prepare-agent.mjs", "--agent", "agent-c", "--state-dir", "/state/run", "--home-dir", "/agent-home", "--space-id", "${MEMORY_SPACE_ID:-default}"]
     volumes:
       - bootstrap-state:/state:ro
       - claude-home-c:/agent-home

@@ -38,11 +38,13 @@ services:
     depends_on:
       paid-gate:
         condition: service_completed_successfully
-    command: ["config/render-real-config.mjs", "--out", "/out", "--secret-file", "/run/secrets/deepseek_key"]
+    command: ["config/render-real-config.mjs", "--out", "/out/shared", "--proxy-out", "/out/proxy-private", "--secret-file", "/run/secrets/deepseek_key"]
     environment:
       MEMORY_CORE_GATEWAY_API_KEY: ${MEMORY_CORE_GATEWAY_API_KEY:?set a disposable non-LLM gateway key}
+      MEMORY_SPACE_ID: ${MEMORY_SPACE_ID:-default}
     volumes:
-      - real-runtime-config:/out
+      - real-core-config:/out/shared
+      - proxy-private-config:/out/proxy-private
     secrets:
       - deepseek_key
     restart: "no"
@@ -57,11 +59,12 @@ services:
     entrypoint: ["/bin/sh", "/opt/memory-lab/run-with-deepseek.sh"]
     command: ["core"]
     volumes:
-      - real-runtime-config:/runtime-config:ro
+      - real-core-config:/runtime-config:ro
       - core-data:/data/tdai-memory
       - ./runtime/run-with-deepseek.sh:/opt/memory-lab/run-with-deepseek.sh:ro
     secrets:
       - deepseek_key
+    networks: [default, egress-net]
 
   memory-hub:
     profiles: ["real-claude"]
@@ -86,6 +89,7 @@ services:
       - ./runtime/run-with-deepseek.sh:/opt/memory-lab/run-with-deepseek.sh:ro
     secrets:
       - deepseek_key
+    networks: [default, egress-net]
 
   memory-proxy:
     profiles: ["real-claude"]
@@ -99,9 +103,10 @@ services:
     entrypoint: ["/bin/sh", "/opt/memory-lab/run-with-deepseek.sh"]
     command: ["proxy"]
     volumes:
-      - real-runtime-config:/runtime-config:ro
+      - proxy-private-config:/runtime-config:ro
       - proxy-data:/data/tdai-memory-proxy
       - ./runtime/run-with-deepseek.sh:/opt/memory-lab/run-with-deepseek.sh:ro
+    networks: [default, egress-net]
 
   bootstrap:
     profiles: !override ["real-claude"]
@@ -109,7 +114,7 @@ services:
       memory-core:
         condition: service_healthy
     volumes:
-      - real-runtime-config:/runtime-config:ro
+      - real-core-config:/runtime-config:ro
       - bootstrap-state:/state
 
   agent-config-a:
@@ -138,10 +143,13 @@ services:
 
 networks:
   default:
+    internal: true
+  egress-net:
     internal: false
 
 volumes:
-  real-runtime-config: {}
+  real-core-config: {}
+  proxy-private-config: {}
   proxy-data: {}
 
 secrets:

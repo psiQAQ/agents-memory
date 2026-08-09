@@ -75,6 +75,7 @@ test('base Compose parses as a Mock-only private topology with isolated Claude a
 
   assert.equal(parsed.services['memory-hub'].environment.LLM_BASE_URL, 'http://mock-llm:8080/openai/v1');
   assert.equal(parsed.services['memory-hub'].environment.KNOWLEDGE_PUBLIC_BASE_URL, 'http://memory-hub:8424/v3');
+  assert.equal(parsed.services['config-init'].environment.MEMORY_SPACE_ID, 'default');
   assert.equal(parsed.services['memory-proxy'].depends_on['memory-hub'], undefined);
   assert.equal(parsed.services['memory-proxy'].volumes.some((volume) => volume.target === '/data/tdai-memory-proxy'), false);
   assert.deepEqual(parsed.services.redis.profiles, ['redis']);
@@ -101,12 +102,29 @@ test('base Compose parses as a Mock-only private topology with isolated Claude a
     assert.ok(agentConfig.volumes.some((volume) => volume.source === `claude-home-${id}` && volume.target === '/agent-home'));
     assert.deepEqual(agentConfig.profiles, id === 'a' ? ['claude', 'windows'] : ['claude']);
     assert.match(JSON.stringify(agentConfig.command), new RegExp(`prepare-agent\\.mjs.*agent-${id}`));
+    assert.match(JSON.stringify(agentConfig.command), /--space-id/);
     assert.doesNotMatch(JSON.stringify(agent), /bootstrap\.private|credentials\/|\/state/);
     assert.doesNotMatch(JSON.stringify(agent), /docker\.sock|\\Users\\/);
   }
   assert.equal(agentState.size, 6);
   assert.ok(parsed.services.bootstrap.command.includes('/state/run'));
-  assert.ok(parsed.services['test-runner'].command.includes('/state/run/run-manifest.json'));
+  const runner = parsed.services['test-runner'];
+  assert.ok(runner.command.includes('/state/run/run-manifest.json'));
+  assert.ok(runner.command.includes('standalone-memory'));
+  assert.ok(runner.command.includes('/runtime-config/gateway.token'));
+  assert.ok(runner.command.includes('/evidence'));
+  for (const dependency of ['bootstrap', 'memory-core', 'memory-proxy', 'mock-llm']) assert.ok(runner.depends_on[dependency]);
+  assert.equal(runner.depends_on['memory-hub'], undefined);
+  assert.equal(runner.environment.CORE_BASE_URL, 'http://memory-core:8420');
+  assert.equal(runner.environment.PROXY_BASE_URL, 'http://memory-proxy:8096');
+  assert.equal(runner.environment.MOCK_BASE_URL, 'http://mock-llm:8080');
+  const runnerVolumes = Object.fromEntries(runner.volumes.map((volume) => [volume.target, volume]));
+  assert.equal(runnerVolumes['/state'].read_only, true);
+  assert.equal(runnerVolumes['/runtime-config'].read_only, true);
+  assert.equal(runnerVolumes['/evidence'].type, 'bind');
+  assert.match(runnerVolumes['/evidence'].source.replaceAll('\\', '/'), /\/\.runtime\/runs\/manual-run$/);
+  assert.equal(runnerVolumes['/evidence'].read_only, undefined);
+  assert.doesNotMatch(JSON.stringify(runner), /claude-home|bootstrap\.private|docker\.sock/);
 });
 
 test('Windows override is opt-in, requires a canonical host config bind, and exposes only agent-a private home', async () => {
@@ -143,7 +161,7 @@ test('Windows override is opt-in, requires a canonical host config bind, and exp
     assert.equal(volumes['/state'], undefined);
     assert.equal(service.environment.HOST_PROJECT_ROOT, repositoryRoot);
     assert.equal(service.environment.HOST_WINDOWS_CLAUDE_CONFIG_DIR, configDir);
-    assert.match(JSON.stringify(service.command), /prepare-windows-config\.mjs.*--attestation.*windows-config-attestation.*\/agent-home\/\.memory\/user-key/);
+    assert.match(JSON.stringify(service.command), /prepare-windows-config\.mjs.*--attestation.*windows-config-attestation.*--agent-bundle-file.*\/agent-home\/\.memory\/agent-bundle\.json/);
   } finally {
     await rm(configDir, { recursive: true, force: true });
     await rm(gateDir, { recursive: true, force: true });
@@ -195,12 +213,33 @@ test('real override requires the explicit profile and keeps the dummy secret out
     assert.equal(parsed.services['paid-gate'].environment.DEEPSEEK_SECRET_FILE, '/run/secrets/deepseek_key');
     assert.equal(parsed.services['paid-gate'].environment.EVIDENCE_DIR, `/evidence/${runId}`);
     assert.equal(parsed.services['real-config-init'].depends_on['paid-gate'].condition, 'service_completed_successfully');
+    assert.equal(parsed.networks.default.internal, true);
+    assert.equal(parsed.networks['egress-net'].internal ?? false, false);
+    const egressServices = new Set(['memory-core', 'memory-hub', 'memory-proxy']);
+    for (const [name, service] of Object.entries(parsed.services)) {
+      const networks = Object.keys(service.networks ?? {}).sort();
+      assert.equal(networks.includes('egress-net'), egressServices.has(name), `${name} egress membership`);
+      assert.ok(networks.includes('default'), `${name} must remain on the private default network`);
+      assert.notEqual(service.network_mode, 'host');
+      assert.equal((service.volumes ?? []).some((volume) => String(volume.source ?? '').includes('docker.sock') || String(volume.target ?? '').includes('docker.sock')), false);
+    }
     for (const name of ['memory-core', 'memory-hub']) {
       assert.equal(parsed.services[name].depends_on['paid-gate'].condition, 'service_completed_successfully');
       assert.ok(parsed.services[name].secrets.some((secret) => secret.source === 'deepseek_key'));
     }
     assert.equal(parsed.services['memory-proxy'].secrets, undefined);
     assert.ok(parsed.services['real-config-init'].secrets.some((secret) => secret.source === 'deepseek_key'));
+    const volumeAt = (service, target) => (parsed.services[service].volumes ?? []).find((volume) => volume.target === target);
+    assert.equal(volumeAt('real-config-init', '/out/shared').source, 'real-core-config');
+    assert.equal(volumeAt('real-config-init', '/out/proxy-private').source, 'proxy-private-config');
+    assert.match(JSON.stringify(parsed.services['real-config-init'].command), /--out.*\/out\/shared.*--proxy-out.*\/out\/proxy-private/);
+    assert.equal(volumeAt('memory-core', '/runtime-config').source, 'real-core-config');
+    assert.equal(volumeAt('bootstrap', '/runtime-config').source, 'real-core-config');
+    assert.equal(volumeAt('memory-proxy', '/runtime-config').source, 'proxy-private-config');
+    for (const [name, service] of Object.entries(parsed.services)) {
+      const hasProxyPrivateConfig = (service.volumes ?? []).some((volume) => volume.source === 'proxy-private-config');
+      assert.equal(hasProxyPrivateConfig, ['real-config-init', 'memory-proxy'].includes(name), `${name} private Proxy config reachability`);
+    }
     for (const name of ['memory-core', 'memory-hub', 'memory-proxy']) {
       assert.equal(parsed.services[name].depends_on['config-init'], undefined);
       assert.equal(parsed.services[name].depends_on['mock-llm'], undefined);

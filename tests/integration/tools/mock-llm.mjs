@@ -4,6 +4,12 @@ import { isMain } from './runtime-lib.mjs';
 const fixtures = new Set(['text', 'tool', 'thinking', 'thinking-missing', 'http-400', 'http-429', 'http-500', 'timeout']);
 const errorStatus = { 'http-400': 400, 'http-429': 429, 'http-500': 500 };
 const maxBodyBytes = 1024 * 1024;
+const leakPattern = /MEMORY_(?:(?:GATEWAY|IDENTITY)_)?LEAK_SENTINEL_[A-Z0-9_-]+/i;
+const memoryCredentialPattern = /sk-mem-[A-Za-z0-9_-]{32}/i;
+
+function sanitizeObservedNames(names) {
+  return names.map((name) => leakPattern.test(name) || memoryCredentialPattern.test(name) ? '[redacted-sensitive-name]' : name).sort();
+}
 
 function sendJson(response, status, value) {
   response.writeHead(status, { 'content-type': 'application/json; charset=utf-8' });
@@ -27,14 +33,45 @@ function readJson(request) {
 }
 
 function observe(observations, request, body, fixture) {
+  const path = new URL(request.url, 'http://mock').pathname;
+  const authorization = request.headers.authorization;
+  const apiKey = request.headers['x-api-key'];
+  const unexpectedCredentialSeen = path.startsWith('/openai/')
+    ? apiKey !== undefined || authorization !== 'Bearer mock-key'
+    : authorization !== undefined || apiKey !== 'mock-key';
+  const observedValues = [
+    ...Object.keys(request.headers),
+    ...Object.values(request.headers).flatMap((value) => Array.isArray(value) ? value : [value]),
+    JSON.stringify(body),
+  ];
+  const sensitiveValueSeen = observedValues.some((entry) => typeof entry === 'string' && leakPattern.test(entry));
+  const memoryUserCredentialSeen = observedValues.some((entry) => typeof entry === 'string' && memoryCredentialPattern.test(entry));
   observations.push({
     method: request.method,
-    path: new URL(request.url, 'http://mock').pathname,
+    path,
     fixture,
-    header_names: Object.keys(request.headers).sort(),
-    body_shape: body && typeof body === 'object' && !Array.isArray(body) ? Object.keys(body).sort() : [],
+    header_names: sanitizeObservedNames(Object.keys(request.headers)),
+    body_shape: body && typeof body === 'object' && !Array.isArray(body) ? sanitizeObservedNames(Object.keys(body)) : [],
+    sensitive_value_seen: sensitiveValueSeen,
+    unexpected_credential_seen: unexpectedCredentialSeen,
+    memory_user_credential_seen: memoryUserCredentialSeen,
   });
   if (observations.length > 100) observations.shift();
+}
+
+function coreExtraction(body) {
+  const messages = Array.isArray(body?.messages) ? body.messages : [];
+  const text = messages.map((message) => typeof message?.content === 'string' ? message.content : '').join('\n');
+  if (!/(?:情境切分与记忆提取专家|工作情境切分与团队共享记忆提取专家)/.test(text)) return undefined;
+  const entries = [...text.matchAll(/\[([^\]\r\n]{1,128})\]\s+\[(user|assistant)\]\s+\[[^\]]+\]:\s*([^\r\n]+)/g)];
+  const ids = entries.map((entry) => entry[1]);
+  const source = entries.find((entry) => entry[2] === 'user' && /MEMORY_NONCE_[A-Za-z0-9_-]{1,128}/.test(entry[3]));
+  const nonce = source?.[3].match(/MEMORY_NONCE_[A-Za-z0-9_-]{1,128}/)?.[0];
+  return JSON.stringify([{
+    scene_name: 'Mock deterministic memory extraction',
+    message_ids: ids,
+    memories: nonce ? [{ content: `用户要求 AI 长期记住 ${nonce}`, type: 'instruction', priority: 90, source_message_ids: [source[1]], metadata: {} }] : [],
+  }]);
 }
 
 function openAi(body, fixture) {
@@ -42,7 +79,7 @@ function openAi(body, fixture) {
   const tool = fixture === 'tool' && body.tools?.length && !toolResult;
   return {
     id: 'chatcmpl_mock', object: 'chat.completion', created: 0, model: body.model,
-    choices: [{ index: 0, message: tool ? { role: 'assistant', tool_calls: [{ id: 'call_mock', type: 'function', function: { name: body.tools[0].function?.name ?? 'mock_tool', arguments: '{}' } }] } : { role: 'assistant', content: 'mock text' }, finish_reason: tool ? 'tool_calls' : 'stop' }],
+    choices: [{ index: 0, message: tool ? { role: 'assistant', tool_calls: [{ id: 'call_mock', type: 'function', function: { name: body.tools[0].function?.name ?? 'mock_tool', arguments: '{}' } }] } : { role: 'assistant', content: coreExtraction(body) ?? 'mock text' }, finish_reason: tool ? 'tool_calls' : 'stop' }],
     usage: { prompt_tokens: 11, completion_tokens: 3, total_tokens: 14 },
   };
 }

@@ -11,8 +11,8 @@ function parseArgs(argv) {
   return values;
 }
 
-export async function renderRealConfig({ outDir, gatewayKey, secretFile, uid = 10001, gid = 10001 }) {
-  await renderConfig({ outDir, gatewayKey, mode: 'real', secretFile, proxyUid: uid, proxyGid: gid });
+export async function renderRealConfig({ outDir, proxyOutDir, gatewayKey, spaceId = 'default', secretFile, uid = 10001, gid = 10001 }) {
+  await renderConfig({ outDir, proxyOutDir, gatewayKey, spaceId, mode: 'real', secretFile, proxyUid: uid, proxyGid: gid });
 }
 
 if (isMain(import.meta)) {
@@ -20,7 +20,9 @@ if (isMain(import.meta)) {
     const values = parseArgs(process.argv.slice(2));
     await renderRealConfig({
       outDir: values['--out'],
+      proxyOutDir: values['--proxy-out'],
       gatewayKey: process.env.MEMORY_CORE_GATEWAY_API_KEY,
+      spaceId: process.env.MEMORY_SPACE_ID ?? 'default',
       secretFile: values['--secret-file'] ?? process.env.DEEPSEEK_SECRET_FILE ?? '/run/secrets/deepseek_key',
     });
     process.stdout.write('{"status":"ok","mode":"real"}\n');

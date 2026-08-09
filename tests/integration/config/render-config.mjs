@@ -1,5 +1,5 @@
 import { chmod, chown, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
-import { dirname, isAbsolute, join } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { isMain } from '../tools/runtime-lib.mjs';
@@ -36,15 +36,24 @@ async function atomicWrite(path, content, mode, owner) {
   }
 }
 
-export async function renderConfig({ outDir, gatewayKey, mode = 'mock', secretFile, proxyUid = 10001, proxyGid = 10001 }) {
-  if (!isAbsolute(outDir ?? '') || !gatewayPattern.test(gatewayKey ?? '') || !['mock', 'real'].includes(mode)) throw new Error('invalid config inputs');
+function inside(parent, child) {
+  const path = relative(resolve(parent), resolve(child));
+  return path === '' || (!path.startsWith('..') && !isAbsolute(path));
+}
+
+export async function renderConfig({ outDir, proxyOutDir, gatewayKey, spaceId = 'default', mode = 'mock', secretFile, proxyUid = 10001, proxyGid = 10001 }) {
+  if (!isAbsolute(outDir ?? '') || !gatewayPattern.test(gatewayKey ?? '') || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(spaceId) || spaceId.includes('..') || !['mock', 'real'].includes(mode)) throw new Error('invalid config inputs');
+  const proxyRoot = mode === 'mock' ? outDir : proxyOutDir;
+  if (!isAbsolute(proxyRoot ?? '') || (mode === 'real' && (inside(outDir, proxyRoot) || inside(proxyRoot, outDir)))) throw new Error('invalid config inputs');
   const [core, proxy] = await Promise.all([
     readFile(join(here, `core.${mode}.yaml.template`), 'utf8'),
     readFile(join(here, `proxy.${mode}.yaml.template`), 'utf8'),
   ]);
   const placeholder = '__MEMORY_CORE_GATEWAY_API_KEY__';
-  if ((proxy.match(new RegExp(placeholder, 'g')) ?? []).length !== 3) throw new Error('invalid config template');
-  let renderedProxy = proxy.replaceAll(placeholder, gatewayKey);
+  if ((proxy.match(new RegExp(placeholder, 'g')) ?? []).length !== 4) throw new Error('invalid config template');
+  const spacePlaceholder = '__MEMORY_SPACE_ID__';
+  if ((proxy.match(new RegExp(spacePlaceholder, 'g')) ?? []).length !== 3) throw new Error('invalid config template');
+  let renderedProxy = proxy.replaceAll(placeholder, gatewayKey).replaceAll(spacePlaceholder, spaceId);
   let proxyOwner;
   let proxyMode = 0o644;
   const modelPlaceholder = '__DEEPSEEK_PROXY_API_KEY_JSON__';
@@ -62,12 +71,12 @@ export async function renderConfig({ outDir, gatewayKey, mode = 'mock', secretFi
   if (/__[A-Z0-9_]+__/.test(`${core}${renderedProxy}`)) throw new Error('invalid config template');
   const writes = [
     atomicWrite(join(outDir, 'core', 'tdai-gateway.yaml'), core, 0o644),
-    atomicWrite(join(outDir, 'proxy', 'config.yaml'), renderedProxy, proxyMode, proxyOwner),
+    atomicWrite(join(proxyRoot, 'proxy', 'config.yaml'), renderedProxy, proxyMode, proxyOwner),
     atomicWrite(join(outDir, 'gateway.token'), `${gatewayKey}\n`, 0o600),
   ];
   if (mode === 'mock') {
     const redisProxy = renderedProxy.replace('redis:\n  enabled: false', 'redis:\n  enabled: true\n  host: "redis"\n  port: 6379');
-    writes.push(atomicWrite(join(outDir, 'proxy', 'config.redis.yaml'), redisProxy, 0o644));
+    writes.push(atomicWrite(join(proxyRoot, 'proxy', 'config.redis.yaml'), redisProxy, 0o644));
   }
   await Promise.all(writes);
 }
@@ -77,8 +86,10 @@ if (isMain(import.meta)) {
     const values = parseArgs(process.argv.slice(2));
     await renderConfig({
       outDir: values['--out'],
+      proxyOutDir: values['--proxy-out'],
       mode: values['--mode'] ?? 'mock',
       gatewayKey: process.env.MEMORY_CORE_GATEWAY_API_KEY,
+      spaceId: process.env.MEMORY_SPACE_ID ?? 'default',
       secretFile: values['--secret-file'],
     });
     process.stdout.write(JSON.stringify({ status: 'ok', mode: values['--mode'] ?? 'mock' }) + '\n');

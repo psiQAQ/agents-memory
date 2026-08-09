@@ -48,7 +48,88 @@ test('mock only exposes whitelisted routes and sanitized observations', async ()
     assert.equal(observation.requests.at(-1).path, '/openai/v1/chat/completions');
     assert.deepEqual(observation.requests.at(-1).body_shape, ['messages', 'model']);
     assert.ok(observation.requests.at(-1).header_names.includes('authorization'));
+    assert.equal(observation.requests.at(-1).sensitive_value_seen, false);
+    assert.equal(observation.requests.at(-1).unexpected_credential_seen, true);
+    assert.equal(observation.requests.at(-1).memory_user_credential_seen, true);
     assert.doesNotMatch(JSON.stringify(observation), /sk-mem-|never store this/);
+
+    await fetch(`${baseUrl}/openai/v1/chat/completions`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer mock-key', 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'mock', messages: [] }),
+    });
+    const allowedCredential = await (await fetch(`${baseUrl}/__mock/requests`)).json();
+    assert.equal(allowedCredential.requests.at(-1).unexpected_credential_seen, false);
+    assert.equal(allowedCredential.requests.at(-1).memory_user_credential_seen, false);
+
+    for (const path of ['/openai/v1/chat/completions', '/anthropic/v1/messages']) {
+      await fetch(`${baseUrl}${path}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ model: 'mock', messages: [] }),
+      });
+      const missingCredential = await (await fetch(`${baseUrl}/__mock/requests`)).json();
+      assert.equal(missingCredential.requests.at(-1).unexpected_credential_seen, true);
+    }
+    await fetch(`${baseUrl}/anthropic/v1/messages`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-api-key': 'mock-key' },
+      body: JSON.stringify({ model: 'mock', messages: [] }),
+    });
+    const allowedAnthropicCredential = await (await fetch(`${baseUrl}/__mock/requests`)).json();
+    assert.equal(allowedAnthropicCredential.requests.at(-1).unexpected_credential_seen, false);
+
+    const credentialName = `sk-mem-${'C'.repeat(32)}`;
+    await fetch(`${baseUrl}/openai/v1/chat/completions`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer mock-key', 'content-type': 'application/json', [credentialName]: 'present' },
+      body: JSON.stringify({ model: 'mock', messages: [] }),
+    });
+    const credentialNameObservation = await (await fetch(`${baseUrl}/__mock/requests`)).json();
+    assert.equal(credentialNameObservation.requests.at(-1).memory_user_credential_seen, true);
+    assert.doesNotMatch(JSON.stringify(credentialNameObservation), new RegExp(credentialName, 'i'));
+
+    const sentinelName = 'MEMORY_IDENTITY_LEAK_SENTINEL_PROPERTY789';
+    await fetch(`${baseUrl}/openai/v1/chat/completions`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer mock-key', 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'mock', messages: [], [sentinelName]: true }),
+    });
+    const sentinelNameObservation = await (await fetch(`${baseUrl}/__mock/requests`)).json();
+    assert.equal(sentinelNameObservation.requests.at(-1).sensitive_value_seen, true);
+    assert.doesNotMatch(JSON.stringify(sentinelNameObservation), new RegExp(sentinelName, 'i'));
+
+    const sentinel = 'MEMORY_LEAK_SENTINEL_TEST123';
+    await fetch(`${baseUrl}/openai/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-wecom-id': sentinel },
+      body: JSON.stringify({ model: 'mock', messages: [] }),
+    });
+    const leakedObservation = await (await fetch(`${baseUrl}/__mock/requests`)).json();
+    assert.equal(leakedObservation.requests.at(-1).sensitive_value_seen, true);
+    assert.doesNotMatch(JSON.stringify(leakedObservation), new RegExp(sentinel));
+
+    const gatewaySentinel = 'MEMORY_GATEWAY_LEAK_SENTINEL_TEST456';
+    await fetch(`${baseUrl}/openai/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-tdai-service-token': gatewaySentinel },
+      body: JSON.stringify({ model: 'mock', messages: [] }),
+    });
+    const gatewayObservation = await (await fetch(`${baseUrl}/__mock/requests`)).json();
+    assert.equal(gatewayObservation.requests.at(-1).sensitive_value_seen, true);
+    assert.doesNotMatch(JSON.stringify(gatewayObservation), new RegExp(gatewaySentinel));
+
+    const identitySentinel = 'MEMORY_IDENTITY_LEAK_SENTINEL_TEST789';
+    await fetch(`${baseUrl}/openai/v1/chat/completions`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer mock-key', 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'mock', system: identitySentinel, messages: [{ role: 'user', content: `sk-mem-${'B'.repeat(32)}` }] }),
+    });
+    const bodyLeakObservation = await (await fetch(`${baseUrl}/__mock/requests`)).json();
+    assert.equal(bodyLeakObservation.requests.at(-1).sensitive_value_seen, true);
+    assert.equal(bodyLeakObservation.requests.at(-1).memory_user_credential_seen, true);
+    assert.equal(bodyLeakObservation.requests.at(-1).unexpected_credential_seen, false);
+    assert.doesNotMatch(JSON.stringify(bodyLeakObservation), /MEMORY_IDENTITY_LEAK_SENTINEL|sk-mem-/);
     assert.equal((await fetch(`${baseUrl}/__mock/reset`, { method: 'POST' })).status, 200);
     assert.deepEqual((await (await fetch(`${baseUrl}/__mock/requests`)).json()).requests, []);
   });
@@ -119,6 +200,28 @@ test('mock OpenAI stream supplies a tool call then resolves after a tool result'
     assert.match(await tool.text(), /tool_calls/);
     const afterTool = await request(baseUrl, '/openai/v1/chat/completions', { model: 'mock', messages: [{ role: 'tool', content: '{}' }], stream: true }, 'tool');
     assert.match(await afterTool.text(), /mock text/);
+  });
+});
+
+test('mock returns deterministic Core L1 extraction JSON with the real message id and nonce', async () => {
+  await withMock(async (baseUrl) => {
+    const response = await request(baseUrl, '/openai/v1/chat/completions', {
+      model: 'mock-model',
+      messages: [
+        { role: 'system', content: '你是专业的“情境切分与记忆提取专家”。返回且仅返回一个合法的 JSON 数组。' },
+        { role: 'user', content: '【待提取的新消息】：\n[msg-nonce-1] [user] [2026-08-09T00:00:00.000Z]: 请长期记住 MEMORY_NONCE_ABC123。' },
+      ],
+    });
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    const extracted = JSON.parse(body.choices[0].message.content);
+    assert.deepEqual(extracted[0].message_ids, ['msg-nonce-1']);
+    assert.deepEqual(extracted[0].memories[0].source_message_ids, ['msg-nonce-1']);
+    assert.match(extracted[0].memories[0].content, /MEMORY_NONCE_ABC123/);
+    assert.equal(extracted[0].memories[0].type, 'instruction');
+
+    const ordinary = await (await request(baseUrl, '/openai/v1/chat/completions', { model: 'mock-model', messages: [{ role: 'user', content: 'MEMORY_NONCE_ABC123' }] })).json();
+    assert.equal(ordinary.choices[0].message.content, 'mock text');
   });
 });
 
