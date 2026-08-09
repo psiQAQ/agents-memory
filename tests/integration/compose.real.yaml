@@ -5,7 +5,7 @@ services:
       context: .
       dockerfile: images/tools/Dockerfile
     profiles: ["real-claude"]
-    command: ["tools/paid-gate.mjs"]
+    command: ["tools/paid-gate.mjs", "--verify-attestation", "/gate/paid-gate-attestation.json"]
     environment:
       RUN_PAID_LLM: ${RUN_PAID_LLM:?set RUN_PAID_LLM=1}
       DEEPSEEK_SECRET_FILE: /run/secrets/deepseek_key
@@ -14,12 +14,19 @@ services:
       RUN_ID: ${RUN_ID:?set a run id}
       EVIDENCE_DIR: /evidence/${RUN_ID:?set a run id}
       PROJECT_ROOT: /lab
+      HOST_PROJECT_ROOT: ${PROJECT_ROOT:?set the canonical host project root}
+      HOST_DEEPSEEK_SECRET_FILE: ${DEEPSEEK_SECRET_FILE:?set an absolute secret file outside the workspace}
+      HOST_EVIDENCE_DIR: ${EVIDENCE_DIR:?set an existing host evidence directory}
     secrets:
       - deepseek_key
     volumes:
       - type: bind
         source: ${EVIDENCE_DIR:?set an existing host evidence directory}
         target: /evidence/${RUN_ID:?set a run id}
+      - type: bind
+        source: ${PAID_GATE_ATTESTATION_FILE:?run the host paid-gate preflight first}
+        target: /gate/paid-gate-attestation.json
+        read_only: true
     restart: "no"
 
   real-config-init:
@@ -31,16 +38,18 @@ services:
     depends_on:
       paid-gate:
         condition: service_completed_successfully
-    command: ["config/render-real-config.mjs", "--out", "/out"]
+    command: ["config/render-real-config.mjs", "--out", "/out", "--secret-file", "/run/secrets/deepseek_key"]
     environment:
       MEMORY_CORE_GATEWAY_API_KEY: ${MEMORY_CORE_GATEWAY_API_KEY:?set a disposable non-LLM gateway key}
     volumes:
       - real-runtime-config:/out
+    secrets:
+      - deepseek_key
     restart: "no"
 
   memory-core:
     profiles: ["real-claude"]
-    depends_on:
+    depends_on: !override
       paid-gate:
         condition: service_completed_successfully
       real-config-init:
@@ -56,11 +65,13 @@ services:
 
   memory-hub:
     profiles: ["real-claude"]
-    depends_on:
+    depends_on: !override
       paid-gate:
         condition: service_completed_successfully
       real-config-init:
         condition: service_completed_successfully
+      memory-core:
+        condition: service_healthy
     entrypoint: ["/bin/sh", "/opt/memory-lab/run-with-deepseek.sh"]
     command: ["hub"]
     environment:
@@ -78,19 +89,19 @@ services:
 
   memory-proxy:
     profiles: ["real-claude"]
-    depends_on:
+    depends_on: !override
       paid-gate:
         condition: service_completed_successfully
       real-config-init:
         condition: service_completed_successfully
+      memory-core:
+        condition: service_healthy
     entrypoint: ["/bin/sh", "/opt/memory-lab/run-with-deepseek.sh"]
     command: ["proxy"]
     volumes:
       - real-runtime-config:/runtime-config:ro
       - proxy-data:/data/tdai-memory-proxy
       - ./runtime/run-with-deepseek.sh:/opt/memory-lab/run-with-deepseek.sh:ro
-    secrets:
-      - deepseek_key
 
   bootstrap:
     profiles: !override ["real-claude"]
@@ -101,6 +112,15 @@ services:
       - real-runtime-config:/runtime-config:ro
       - bootstrap-state:/state
 
+  agent-config-a:
+    profiles: !override ["real-claude"]
+
+  agent-config-b:
+    profiles: !override ["real-claude"]
+
+  agent-config-c:
+    profiles: !override ["real-claude"]
+
   claude-agent-a:
     profiles: !override ["real-claude"]
 
@@ -109,6 +129,12 @@ services:
 
   claude-agent-c:
     profiles: !override ["real-claude"]
+
+  mock-llm:
+    profiles: !override ["mock"]
+
+  config-init:
+    profiles: !override ["mock"]
 
 networks:
   default:

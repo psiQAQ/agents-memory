@@ -19,8 +19,6 @@ x-claude-service: &claude-service
   tty: true
   user: "10001:10001"
   depends_on:
-    bootstrap:
-      condition: service_completed_successfully
     memory-proxy:
       condition: service_healthy
   environment:
@@ -125,7 +123,7 @@ services:
 
   bootstrap:
     <<: *tools-service
-    profiles: ["tools", "claude"]
+    profiles: ["tools", "claude", "windows"]
     depends_on:
       memory-core:
         condition: service_healthy
@@ -140,7 +138,7 @@ services:
       - --run-id
       - ${RUN_ID:-manual-run}
       - --output-dir
-      - /state
+      - /state/run
       - --clients
       - agent-a,agent-b,agent-c
     volumes:
@@ -158,13 +156,57 @@ services:
         condition: service_healthy
     environment:
       MOCK_BASE_URL: http://mock-llm:8080
-    command: ["tools/test-runner.mjs", "--manifest", "/state/run-manifest.json", "--scenario", "mock-contract"]
+    command: ["tools/test-runner.mjs", "--manifest", "/state/run/run-manifest.json", "--scenario", "mock-contract"]
     volumes:
       - bootstrap-state:/state
     restart: "no"
 
+  agent-config-a:
+    <<: *tools-service
+    profiles: ["claude", "windows"]
+    user: "0:0"
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+    command: ["tools/prepare-agent.mjs", "--agent", "agent-a", "--state-dir", "/state/run", "--home-dir", "/agent-home"]
+    volumes:
+      - bootstrap-state:/state:ro
+      - claude-home-a:/agent-home
+    restart: "no"
+
+  agent-config-b:
+    <<: *tools-service
+    profiles: ["claude"]
+    user: "0:0"
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+    command: ["tools/prepare-agent.mjs", "--agent", "agent-b", "--state-dir", "/state/run", "--home-dir", "/agent-home"]
+    volumes:
+      - bootstrap-state:/state:ro
+      - claude-home-b:/agent-home
+    restart: "no"
+
+  agent-config-c:
+    <<: *tools-service
+    profiles: ["claude"]
+    user: "0:0"
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+    command: ["tools/prepare-agent.mjs", "--agent", "agent-c", "--state-dir", "/state/run", "--home-dir", "/agent-home"]
+    volumes:
+      - bootstrap-state:/state:ro
+      - claude-home-c:/agent-home
+    restart: "no"
+
   claude-agent-a:
     <<: *claude-service
+    depends_on:
+      agent-config-a:
+        condition: service_completed_successfully
+      memory-proxy:
+        condition: service_healthy
     environment:
       CLAUDE_CONFIG_DIR: /home/claude/.claude
       MEMORY_AGENT_ID: agent-a
@@ -172,10 +214,14 @@ services:
     volumes:
       - claude-home-a:/home/claude
       - claude-workspace-a:/workspace
-      - bootstrap-state:/state:ro
 
   claude-agent-b:
     <<: *claude-service
+    depends_on:
+      agent-config-b:
+        condition: service_completed_successfully
+      memory-proxy:
+        condition: service_healthy
     environment:
       CLAUDE_CONFIG_DIR: /home/claude/.claude
       MEMORY_AGENT_ID: agent-b
@@ -183,10 +229,14 @@ services:
     volumes:
       - claude-home-b:/home/claude
       - claude-workspace-b:/workspace
-      - bootstrap-state:/state:ro
 
   claude-agent-c:
     <<: *claude-service
+    depends_on:
+      agent-config-c:
+        condition: service_completed_successfully
+      memory-proxy:
+        condition: service_healthy
     environment:
       CLAUDE_CONFIG_DIR: /home/claude/.claude
       MEMORY_AGENT_ID: agent-c
@@ -194,7 +244,6 @@ services:
     volumes:
       - claude-home-c:/home/claude
       - claude-workspace-c:/workspace
-      - bootstrap-state:/state:ro
 
   redis:
     image: redis:7-alpine

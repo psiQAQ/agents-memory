@@ -54,6 +54,12 @@ git submodule update --init submodules/TencentDB-Agent-Memory
 
 ## 常用操作
 
+### 决策与实验记录纪律
+
+- 每个新的架构或安全决策新增一份 ADR；不得覆写旧 ADR 来伪装决策从未变化。
+- 每次实验开始、失败、阻塞或完成时，都新增一份 `docs/reproduction/<run-id>.md` 记录；同一 commit 同步更新企业评估主状态。
+- 若工作将在另一个对话继续，必须先把当前阶段写成明确的 `Blocked` 运行记录，包含已完成证据、阻塞原因和安全的恢复入口，避免只依赖聊天上下文。
+
 - 更新 README:遵循用户全局文档规范——记录每次交互原文(按版本)、保持前后一致、减少结构碎片。
 - Docker-first 文档或配置变更与对应实现 commit 必须同步更新：规格、ADR、企业评估的状态矩阵，以及 README 主入口；未运行项明确标为 `Static`、`Not Run` 或 `Blocked`，不得用 health check 声称业务流通过。
 - Claude 配置只跟踪 `.claude/settings.template.json`；不读取、复制或提交本地 settings、Claude home、secret、运行期日志或 `.runtime/` 证据。模板中的 URL 必须是 MemoryProxy 占位符，客户端不得持有 DeepSeek key。

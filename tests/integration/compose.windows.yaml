@@ -1,0 +1,31 @@
+services:
+  windows-config-init:
+    image: refine-memory-integration-tools:local
+    build:
+      context: .
+      dockerfile: images/tools/Dockerfile
+    profiles: ["windows"]
+    user: "0:0"
+    depends_on:
+      agent-config-a:
+        condition: service_completed_successfully
+      memory-proxy:
+        condition: service_healthy
+    command:
+      - tools/render-settings.mjs
+      - --target
+      - windows
+      - --template
+      - /lab/claude/settings.template.json
+      - --config-dir
+      - /windows-config
+      - --memory-user-key-file
+      - /agent-home/.memory/user-key
+      - --space-id
+      - ${MEMORY_SPACE_ID:-default}
+    volumes:
+      - claude-home-a:/agent-home:ro
+      - type: bind
+        source: ${WINDOWS_CLAUDE_CONFIG_DIR:?set a canonical absolute project-specific Windows Claude config directory}
+        target: /windows-config
+    restart: "no"

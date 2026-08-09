@@ -22,6 +22,8 @@ test('Claude entrypoint rebuilds isolated settings before every CLI invocation',
   assert.match(entrypoint, /render-settings\.mjs/);
   assert.match(entrypoint, /--target docker/);
   assert.match(entrypoint, /--memory-user-key-file/);
+  assert.match(entrypoint, /\/home\/claude\/\.memory\/user-key/);
+  assert.doesNotMatch(entrypoint, /\/state|credentials\/|bootstrap\.private/);
   assert.match(entrypoint, /--interactive/);
   assert.match(entrypoint, /exec claude "\$@"/);
   assert.doesNotMatch(entrypoint, /ANTHROPIC_AUTH_TOKEN=/);
@@ -32,6 +34,7 @@ test('integration tools image is pinned and contains only the local harness inpu
   assert.match(dockerfile, /^FROM node:22-bookworm-slim$/m);
   assert.match(dockerfile, /^COPY tools \/lab\/tools$/m);
   assert.match(dockerfile, /^COPY config \/lab\/config$/m);
+  assert.match(dockerfile, /^COPY claude\/settings\.template\.json \/lab\/claude\/settings\.template\.json$/m);
   assert.doesNotMatch(dockerfile, /npm install|curl|latest/);
 });
 
@@ -55,11 +58,12 @@ test('Hub image copies Panel and Knowledge from named live-submodule contexts', 
 test('runtime secret wrapper never prints the key and has explicit service commands', async () => {
   const wrapper = await read('runtime/run-with-deepseek.sh');
   assert.match(wrapper, /TDAI_LLM_API_KEY/);
-  assert.match(wrapper, /DEEPSEEK_RUNTIME_API_KEY/);
+  assert.doesNotMatch(wrapper, /DEEPSEEK_RUNTIME_API_KEY/);
   assert.match(wrapper, /LLM_API_KEY/);
   assert.match(wrapper, /exec \/usr\/bin\/tini/);
   assert.match(wrapper, /exec \/usr\/local\/bin\/start-combined\.sh/);
   assert.doesNotMatch(wrapper, /echo.*(?:\$model_key|\$secret_file)|set -x/i);
+  assert.ok(wrapper.indexOf('proxy)') < wrapper.indexOf('secret_file='));
 });
 
 test('Proxy config selector accepts only the base and Redis generated filenames', async () => {

@@ -24,8 +24,9 @@ function dockerCli() {
   throw new Error('Docker Compose CLI not found; set DOCKER_CLI');
 }
 
-function composeConfig(files, environment = {}) {
-  const args = ['compose', '--project-directory', integrationRoot, '--profile', '*'];
+function composeConfig(files, environment = {}, profiles = ['*']) {
+  const args = ['compose', '--project-directory', integrationRoot];
+  for (const profile of profiles) args.push('--profile', profile);
   for (const file of files) args.push('-f', join(integrationRoot, file));
   args.push('config', '--format', 'json');
   const result = spawnSync(dockerCli(), args, {
@@ -36,6 +37,17 @@ function composeConfig(files, environment = {}) {
   return { parsed: JSON.parse(result.stdout), text: result.stdout };
 }
 
+function composeResult(files, environment = {}, profiles = ['*']) {
+  const args = ['compose', '--project-directory', integrationRoot];
+  for (const profile of profiles) args.push('--profile', profile);
+  for (const file of files) args.push('-f', join(integrationRoot, file));
+  args.push('config', '--format', 'json');
+  return spawnSync(dockerCli(), args, {
+    encoding: 'utf8',
+    env: { ...process.env, ...baseEnvironment, ...environment },
+  });
+}
+
 function serviceNames(config) {
   return Object.keys(config.services).sort();
 }
@@ -43,7 +55,8 @@ function serviceNames(config) {
 test('base Compose parses as a Mock-only private topology with isolated Claude agents', () => {
   const { parsed, text } = composeConfig(['compose.yaml']);
   assert.deepEqual(serviceNames(parsed), [
-    'bootstrap', 'claude-agent-a', 'claude-agent-b', 'claude-agent-c', 'config-init',
+    'agent-config-a', 'agent-config-b', 'agent-config-c', 'bootstrap',
+    'claude-agent-a', 'claude-agent-b', 'claude-agent-c', 'config-init',
     'memory-core', 'memory-hub', 'memory-proxy', 'mock-llm', 'redis', 'test-runner',
   ]);
   assert.doesNotMatch(text, /api\.deepseek\.com|deepseek_key|RUN_PAID_LLM|DEEPSEEK_SECRET_FILE/i);
@@ -67,6 +80,7 @@ test('base Compose parses as a Mock-only private topology with isolated Claude a
   const agentState = new Set();
   for (const id of ['a', 'b', 'c']) {
     const agent = parsed.services[`claude-agent-${id}`];
+    const agentConfig = parsed.services[`agent-config-${id}`];
     assert.equal(agent.init, true);
     assert.equal(agent.stdin_open, true);
     assert.equal(agent.tty, true);
@@ -77,10 +91,48 @@ test('base Compose parses as a Mock-only private topology with isolated Claude a
       assert.equal(volumes[target].type, 'volume');
       agentState.add(volumes[target].source);
     }
-    assert.equal(volumes['/state'].read_only, true);
+    assert.equal(volumes['/state'], undefined);
+    assert.equal(agent.depends_on[`agent-config-${id}`].condition, 'service_completed_successfully');
+    assert.equal(agentConfig.user, '0:0');
+    assert.ok(agentConfig.volumes.some((volume) => volume.source === 'bootstrap-state' && volume.target === '/state' && volume.read_only));
+    assert.ok(agentConfig.volumes.some((volume) => volume.source === `claude-home-${id}` && volume.target === '/agent-home'));
+    assert.deepEqual(agentConfig.profiles, id === 'a' ? ['claude', 'windows'] : ['claude']);
+    assert.match(JSON.stringify(agentConfig.command), new RegExp(`prepare-agent\\.mjs.*agent-${id}`));
+    assert.doesNotMatch(JSON.stringify(agent), /bootstrap\.private|credentials\/|\/state/);
     assert.doesNotMatch(JSON.stringify(agent), /docker\.sock|\\Users\\/);
   }
   assert.equal(agentState.size, 6);
+  assert.ok(parsed.services.bootstrap.command.includes('/state/run'));
+  assert.ok(parsed.services['test-runner'].command.includes('/state/run/run-manifest.json'));
+});
+
+test('Windows override is opt-in, requires a canonical host config bind, and exposes only agent-a private home', async () => {
+  const withoutWindows = composeConfig(['compose.yaml', 'compose.hardened.yaml']);
+  assert.equal(withoutWindows.parsed.services['windows-config-init'], undefined);
+
+  const missing = composeResult(['compose.yaml', 'compose.hardened.yaml', 'compose.windows.yaml'], {}, ['windows']);
+  assert.notEqual(missing.status, 0);
+  assert.match(missing.stderr, /WINDOWS_CLAUDE_CONFIG_DIR/);
+
+  const configDir = await mkdtemp(join(tmpdir(), 'memory-windows-claude-'));
+  try {
+    const { parsed } = composeConfig(['compose.yaml', 'compose.hardened.yaml', 'compose.windows.yaml'], {
+      WINDOWS_CLAUDE_CONFIG_DIR: configDir,
+    }, ['windows']);
+    const service = parsed.services['windows-config-init'];
+    assert.deepEqual(service.profiles, ['windows']);
+    assert.equal(service.user, '0:0');
+    assert.equal(service.depends_on['agent-config-a'].condition, 'service_completed_successfully');
+    assert.equal(service.depends_on['memory-proxy'].condition, 'service_healthy');
+    assert.equal(service.ports, undefined);
+    assert.equal(service.secrets, undefined);
+    const volumes = Object.fromEntries(service.volumes.map((volume) => [volume.target, volume]));
+    assert.equal(normalize(volumes['/windows-config'].source), normalize(configDir));
+    assert.equal(volumes['/agent-home'].source, 'claude-home-a');
+    assert.equal(volumes['/agent-home'].read_only, true);
+    assert.equal(volumes['/state'], undefined);
+    assert.match(JSON.stringify(service.command), /render-settings\.mjs.*--target.*windows.*\/agent-home\/\.memory\/user-key/);
+  } finally { await rm(configDir, { recursive: true, force: true }); }
 });
 
 test('hardened override publishes only Proxy on host loopback and adds durable logs', () => {
@@ -116,19 +168,27 @@ test('real override requires the explicit profile and keeps the dummy secret out
       REAL_LLM_MAX_TURNS: '1',
       RUN_ID: runId,
       EVIDENCE_DIR: evidence,
+      PROJECT_ROOT: integrationRoot,
+      PAID_GATE_ATTESTATION_FILE: join(evidence, 'paid-gate-attestation.json'),
     });
     assert.doesNotMatch(text, new RegExp(marker));
     assert.equal(normalize(parsed.secrets.deepseek_key.file), normalize(secretFile));
     for (const name of ['paid-gate', 'real-config-init', 'memory-core', 'memory-hub', 'memory-proxy', 'bootstrap', 'claude-agent-a', 'claude-agent-b', 'claude-agent-c']) {
       assert.deepEqual(parsed.services[name].profiles, ['real-claude']);
     }
-    assert.equal(parsed.services['paid-gate'].environment.PROJECT_ROOT, '/lab');
+    assert.equal(parsed.services['paid-gate'].environment.HOST_PROJECT_ROOT, integrationRoot);
     assert.equal(parsed.services['paid-gate'].environment.DEEPSEEK_SECRET_FILE, '/run/secrets/deepseek_key');
     assert.equal(parsed.services['paid-gate'].environment.EVIDENCE_DIR, `/evidence/${runId}`);
     assert.equal(parsed.services['real-config-init'].depends_on['paid-gate'].condition, 'service_completed_successfully');
-    for (const name of ['memory-core', 'memory-hub', 'memory-proxy']) {
+    for (const name of ['memory-core', 'memory-hub']) {
       assert.equal(parsed.services[name].depends_on['paid-gate'].condition, 'service_completed_successfully');
       assert.ok(parsed.services[name].secrets.some((secret) => secret.source === 'deepseek_key'));
+    }
+    assert.equal(parsed.services['memory-proxy'].secrets, undefined);
+    assert.ok(parsed.services['real-config-init'].secrets.some((secret) => secret.source === 'deepseek_key'));
+    for (const name of ['memory-core', 'memory-hub', 'memory-proxy']) {
+      assert.equal(parsed.services[name].depends_on['config-init'], undefined);
+      assert.equal(parsed.services[name].depends_on['mock-llm'], undefined);
     }
     for (const name of ['claude-agent-a', 'claude-agent-b', 'claude-agent-c']) {
       assert.equal(parsed.services[name].secrets, undefined);
@@ -136,6 +196,14 @@ test('real override requires the explicit profile and keeps the dummy secret out
     }
     assert.equal(parsed.services['memory-hub'].environment.LLM_BASE_URL, 'https://api.deepseek.com');
     assert.equal(parsed.services['memory-hub'].environment.LLM_MODEL, 'deepseek-v4-flash');
+
+    const active = composeConfig(['compose.yaml', 'compose.real.yaml'], {
+      DEEPSEEK_SECRET_FILE: secretFile, RUN_PAID_LLM: '1', REAL_LLM_MAX_BUDGET_USD: '0.01', REAL_LLM_MAX_TURNS: '1',
+      RUN_ID: runId, EVIDENCE_DIR: evidence, PROJECT_ROOT: integrationRoot,
+      PAID_GATE_ATTESTATION_FILE: join(evidence, 'paid-gate-attestation.json'),
+    }, ['real-claude']).parsed.services;
+    assert.equal(active['mock-llm'], undefined);
+    assert.equal(active['config-init'], undefined);
   } finally {
     await rm(outside, { recursive: true, force: true });
   }

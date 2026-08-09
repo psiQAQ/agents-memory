@@ -5,7 +5,7 @@ server:
 
 upstream:
   url: "https://api.deepseek.com/anthropic/v1"
-  apiKey: "${DEEPSEEK_RUNTIME_API_KEY}"
+  apiKey: __DEEPSEEK_PROXY_API_KEY_JSON__
   agents: {}
 
 log:
