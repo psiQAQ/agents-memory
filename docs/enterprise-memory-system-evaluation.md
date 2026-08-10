@@ -2,7 +2,7 @@
 
 ## 结论
 
-当前 active 目标已切换为四 Docker CLI 共享记忆实验。Task 1 完成后，文档、版本和 gitlink 构成 **Static baseline**；尚无 Docker、Mock、真实 API、TUI 或跨客户端业务流的 Runtime Passed 证据。
+当前 active 目标是四 Docker CLI 共享记忆实验。Task 2 已完成 Core、Proxy、Hub source-build 与无网络 runtime asset Gate；状态是 **Runtime Passed（build/assets only）**。尚无服务健康、Mock、真实 API、TUI 或跨客户端业务流的 Runtime Passed 证据。
 
 旧 Windows 原生 Claude + Docker Claude 证据一律是 **Legacy**：保留原文供追溯，但不用于推断新的四 CLI 架构已通过。
 
@@ -10,7 +10,8 @@
 
 | 项目 | 值 | 证据边界 |
 | --- | --- | --- |
-| Tencent active source | upstream default `feat/server_team@0a568c328ea1aae3f22ed3656e7900da7ea565c1` | 根 gitlink 固定此 SHA；upstream 前移前必须审查 |
+| Tencent upstream base | default `feat/server_team@0a568c328ea1aae3f22ed3656e7900da7ea565c1` | Task 2 的 pristine RED/基线；upstream 前移前必须审查 |
+| Tencent active source | `codex/four-agent-memory-upstream@3db2b7d60a3b6162118cad1090d1872f1410835a` | 根 gitlink；仅含 LF 与 public stub validity 两笔 TDD 最小修复 |
 | Legacy preservation | `codex/legacy-proxy-hardening-69fd8b@69fd8b31e3fd4362af6c65407b92b26dfabebd0c` | local-only、未 push；fresh clone 不可取得，未经授权不得 push；跨 clone 可重建保全仍未完成 |
 | Claude Code | `2.1.226` | 固定版本；Not Run |
 | OpenCode | `1.18.16` | 固定版本；Not Run |
@@ -45,7 +46,7 @@ flowchart LR
 | Gate | 状态 | 说明 |
 | --- | --- | --- |
 | Task 1 历史保全、active docs、gitlink | Static baseline | 本轮文档/指针工作；不是服务运行 |
-| Stage 1 upstream source-build | Not Run | 下一 Gate；不得用 legacy fork 构建结果替代 |
+| Stage 1 upstream source-build | Runtime Passed | Core、Proxy、Hub source-build 与必要 runtime assets Passed；不等于服务/业务 Runtime Passed |
 | Stage 1 Claude/OpenCode/Pi 原生路由 | Not Run | 产品路由与契约尚未实现/验证 |
 | Stage 1 Mock identity/share/isolation/leak | Not Run | 不执行 Docker workload |
 | Stage 1 TUI | Not Run | 仅在 headless Gate 通过后由用户确认 |
@@ -60,9 +61,9 @@ flowchart LR
 | 将 legacy 运行扩大为新架构通过 | active 入口、ADR 与 reproduction 显式标为 Legacy / Not Run |
 | 平台身份伪造或跨客户端泄漏 | 独立 identity/key/home/workspace/evidence；未知或未绑定 source fail closed |
 | 凭证扩散 | 模型 key 只在服务端；不读取/记录 `.env`、settings、secret、home 或 runtime 原文 |
-| 上游 SHA 漂移 | gitlink 精确锁定 `0a568c3`；前移先审查 |
+| 上游 SHA 或修复边界漂移 | upstream base 固定 `0a568c3`，active gitlink 固定 `3db2b7d`；前移先审查，不批量迁移 legacy |
 | 付费或破坏性操作越权 | 未经明确授权不得做真实 API、push、PR、remote 修改、prune 或 `down -v` |
 
 ## 下一 Gate
 
-执行 Task 2：以 `0a568c328ea1aae3f22ed3656e7900da7ea565c1` 分别构建 Core、Proxy、Hub，记录每项 RED/Passed 证据和固定 image ID/digest。若出现阻塞，先写最小复现；产品缺陷在 fork worktree 修复，跨仓库 Compose 缺陷留在根仓库。不可运行 Docker、不可使用真实 API，直至该 Gate 的后续授权。
+完成 Task 2 的最终静态/Git/镜像元数据复核并固定产品修复与根 gitlink 后，进入 Task 3：为 Claude Code、OpenCode、Pi 写原生 source/session/route RED，再实现最小 Stage 1 Messages 路由。当前 source-build Runtime Passed 只覆盖镜像构建与无网络 runtime assets；服务健康、Mock、业务流、真实 API 与 TUI 仍为 Not Run。

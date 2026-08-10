@@ -11,9 +11,9 @@
 | Stage 1 | Claude Code `2.1.226`、OpenCode `1.18.16`、Pi `0.84.1` | 各自原生身份，经 Anthropic Messages；Not Run |
 | Stage 2 | Codex `0.147.0` | 原生身份，经 `/codex/<space>/v1/responses`；Not Run |
 
-**Fact**：根 gitlink 锁定 Tencent upstream default `feat/server_team@0a568c328ea1aae3f22ed3656e7900da7ea565c1`。每个 CLI 使用不同的 user、Agent、Session、user key、home、workspace 和 evidence；仅显式 team-visible memory 可在同一 Team/Task 中共享。
+**Fact**：Task 2 的 upstream base 锁定 `feat/server_team@0a568c328ea1aae3f22ed3656e7900da7ea565c1`；active fork/gitlink 为两笔 TDD 最小修复后的 `3db2b7d60a3b6162118cad1090d1872f1410835a`。每个 CLI 使用不同的 user、Agent、Session、user key、home、workspace 和 evidence；仅显式 team-visible memory 可在同一 Team/Task 中共享。
 
-**Boundary**：本次基线没有执行 Docker workload、Mock、真实模型请求或 TUI。旧 Windows + Claude 方案及其运行记录均归档为 **Legacy**，它们不能证明四 CLI 路线已经通过。
+**Boundary**：Core、Proxy、Hub source-build 与无网络 runtime assets 已 Passed；服务健康、Mock、真实模型请求、TUI 和跨客户端业务流仍为 Not Run。旧 Windows + Claude 方案及其运行记录均归档为 **Legacy**，它们不能证明四 CLI 路线已经通过。
 
 ## 起点
 

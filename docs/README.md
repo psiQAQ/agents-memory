@@ -6,10 +6,17 @@
 
 | 入口 | 用途 | 当前状态 |
 | --- | --- | --- |
-| [企业智能体记忆系统评估](enterprise-memory-system-evaluation.md) | 当前范围、风险、下一 Gate | Task 1 文档基线；Docker/Mock/API/TUI Not Run |
+| [企业智能体记忆系统评估](enterprise-memory-system-evaluation.md) | 当前范围、风险、下一 Gate | Task 2 source-build Runtime Passed；服务/Mock/API/TUI Not Run |
 | [四 Docker CLI 实施计划](superpowers/plans/2026-08-10-four-docker-cli-memory.md) | 任务顺序与验收边界 | 计划，不是运行证据 |
 | [架构 ADR](decisions/2026-08-10-four-docker-cli-baseline.md) | 四 CLI 分阶段与身份隔离决策 | Accepted；runtime Not Run |
 | [baseline reproduction](reproduction/2026-08-10-four-docker-cli-baseline.md) | 固定版本、gitlink 与本轮未运行边界 | Append-only；Static baseline |
+| [Task 2 Core source-build](reproduction/2026-08-10-task2-core-pristine-source-build-passed.md) | 固定 upstream Core 构建与 SQLite/native asset | Runtime Passed（build/assets only）；Proxy/Hub Not Run |
+| [Task 2 Proxy source-build RED](reproduction/2026-08-10-task2-proxy-pristine-source-build-red.md) | 固定 upstream Proxy pristine build 失败 | Failed / Blocked；缺失 cost-guard build-context 文件 |
+| [Task 2 Proxy Windows LF RED](reproduction/2026-08-10-task2-proxy-public-context-windows-lf-red.md) | upstream public-context script 的 Windows checkout 失败 | Failed / Blocked；Bash script 被 checkout 为 CRLF |
+| [Task 2 Proxy runtime fallback RED](reproduction/2026-08-10-task2-proxy-public-context-runtime-red.md) | public context build/native assets 与 stub fallback | Build Passed；stub 被误判 available，Gate Failed |
+| [Task 2 Proxy source-build Passed](reproduction/2026-08-10-task2-proxy-source-build-passed.md) | TDD 修复后的 public context/native assets/fallback | Runtime Passed（build/assets only）；Hub Not Run |
+| [Task 2 Hub recipe-context RED](reproduction/2026-08-10-task2-hub-pristine-context-red.md) | 固定 upstream Hub Dockerfile 的直接 context 失败 | Failed / Blocked；需要 combined Panel/Knowledge context |
+| [Task 2 Hub source-build Passed](reproduction/2026-08-10-task2-hub-source-build-passed.md) | upstream combined context、native SQLite 与 runtime assets | Runtime Passed（build/assets only） |
 | [集成实验 SOP](../tests/integration/README.md) | 后续静态验证与受控运行入口 | Stage 1 前置 Gate 未运行 |
 
 建议阅读顺序：先读 [负责人思想](repo-author-comment/comment.md)，再读当前评估和本轮 ADR/reproduction；需要执行实验时才读 SOP 及相应产品源码/测试。负责人思想与企业设计草案分别位于 `repo-author-comment/` 和 [design/2026-08-06-enterprise-memory-design.md](design/2026-08-06-enterprise-memory-design.md)，不能当作本机运行证明。
