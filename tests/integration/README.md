@@ -24,6 +24,8 @@
 
 > **Runtime Passed（受限范围）**：列明的真实容器和业务请求已通过；不能外推到未列出的协议、客户端或故障场景。
 
+> **User Confirmed**：用户直接观察并确认界面结果；这是人工验收证据，但不能替代消息请求或服务端观察。
+
 > **Static Integrated**：独立复审通过的 public fork 精确 SHA 已写入根 gitlink、镜像标签和静态测试；不代表镜像、服务或业务流已经运行。
 
 > **Agent bundle**：只放在单个客户端私有 home 中的 `0600` JSON 文件，把该客户端的 Memory 用户 key 与身份作为一个整体原子切换，避免更新中途出现“新 key 配旧身份”。
@@ -36,7 +38,7 @@
 
 > **Headless / 只读业务探针**：Headless 是不进入交互界面的命令行验证；只读业务探针会调用真实业务 API 但不修改业务状态，容器健康状态不能替代它。
 
-本目录保存可重复的 Docker 实验编排。Windows 重启后 Docker Desktop 已恢复；所选完整镜像构建、默认无付费 `mock-contract`（11 项）、`standalone-memory`（12 项）、Hub health 与 Panel/Knowledge 只读业务探针、Docker Claude config precheck 和 `2.1.207` headless version 均已 **Runtime Passed**。这个结论只覆盖 Mock/Standalone/Hub 只读/headless 范围；Docker Claude TUI 为 **Awaiting User Confirmation**，Windows Claude、真实 DeepSeek、stream/tool/thinking、故障恢复与 LAN 仍为 Not Run。
+本目录保存可重复的 Docker 实验编排。Windows 重启后 Docker Desktop 已恢复；所选完整镜像构建、默认无付费 `mock-contract`（11 项）、`standalone-memory`（12 项）、Hub health 与 Panel/Knowledge 只读业务探针、Docker Claude config precheck 和 `2.1.207` headless version 均已 **Runtime Passed**。Docker Claude TUI 启动界面已 **User Confirmed**；消息请求、Windows Claude、真实 DeepSeek、stream/tool/thinking、故障恢复与 LAN 仍为 Not Run。
 
 > **Mock**：返回固定结果的模拟模型服务。它不访问真实模型，适合默认测试协议、失败和恢复路径。
 
@@ -248,6 +250,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Agent-a config preparation failed' }
 3. [`docker-mock-20260810-030443`](../../docs/reproduction/2026-08-10-docker-mock-20260810-030443-session-precondition-failed.md)：Gate 1 Passed；Gate 2 越过 forged contract 后安全定位到 B session 尚未初始化。
 4. [`docker-mock-20260810-033636`](../../docs/reproduction/2026-08-10-docker-mock-20260810-033636-no-paid-runtime-passed.md)：Gate 1 的 11 项与 Gate 2 的 12 项均 Passed；A 写入、B 显式共享、C 隔离、身份负测和上游 hygiene 均有脱敏证据。
 
+Docker Claude TUI 的后续人工验收保存在 [TUI 用户确认报告](../../docs/reproduction/2026-08-10-docker-mock-20260810-033636-tui-user-confirmed.md)：用户确认界面正确，但尚未把消息请求记为通过。
+
 Runner 不保存 key hash、前缀或长度。Mock 只保存三个列明的布尔结果：`sensitive_value_seen` 检查 header/body 的值和名称中的非凭证诱饵，`unexpected_credential_seen` 要求 OpenAI/Anthropic 使用各自固定的 `mock-key`，`memory_user_credential_seen` 检查任意模型 header/body 是否出现 Memory 用户 key 形态；敏感名称只保存固定占位符，原值、稳定派生值和长度均不保存。每次 bridge 请求还必须携带 `x-tdai-agent-source: claude-code`；它与 `x-claude-code-session-id`、`x-vertex-ai-session-id`、gateway service token、team/agent/task/conversation headers 都不得到达模型上游。
 
 证据 writer 在容器内拒绝符号链接/硬链接，并用同目录临时文件原子发布；这不等于验证了宿主 bind source。Docker 会先解析宿主的 `$env:EVIDENCE_DIR`，因此基础 Mock 实验仍把本地账户和该目录视为受信任边界。运行前需确认它是本次 run 的真实普通目录而非 junction/symlink；不要把容器内 no-follow 测试写成宿主防护已通过。
@@ -340,7 +344,7 @@ Headless 版本检查已在 run `docker-mock-20260810-033636` 通过，entrypoin
   run --rm --no-deps claude-agent-a --version
 ```
 
-交互式 TUI 尚需用户确认。保留 project 当前仍在运行；在新的 PowerShell 中恢复精确 run/project/space 和绝对 evidence 路径：
+交互式 TUI 已由用户确认界面正确。以下命令继续作为复现和下一项无付费消息探针的入口；在新的 PowerShell 中恢复精确 run/project/space 和绝对 evidence 路径：
 
 ```powershell
 Set-Location 'D:\workspace\refine-memory\.worktrees\docker-memory-lab'
@@ -357,7 +361,7 @@ $env:MEMORY_CORE_GATEWAY_API_KEY = 'compose-parse-only-' + [guid]::NewGuid().ToS
   run --rm --no-deps claude-agent-a --interactive
 ```
 
-`--interactive` 只由镜像入口消费，随后以无额外参数的 `claude` 启动。`compose-parse-only-<guid>` 仅用于上面这条交互命令的 YAML 解析；**不得**用它执行 `up`、`create`、`recreate`、省略 `--no-deps` 的 run 或任何会重建既有服务的命令。TUI 当前为 **Awaiting User Confirmation**。
+`--interactive` 只由镜像入口消费，随后以无额外参数的 `claude` 启动。`compose-parse-only-<guid>` 仅用于上面这条交互命令的 YAML 解析；**不得**用它执行 `up`、`create`、`recreate`、省略 `--no-deps` 的 run 或任何会重建既有服务的命令。TUI 启动界面当前为 **User Confirmed**；消息请求仍为 **Not Run**。
 
 ## 6. 真实 DeepSeek（Blocked / Not Run）
 
@@ -382,6 +386,6 @@ $env:MEMORY_CORE_GATEWAY_API_KEY = 'compose-parse-only-' + [guid]::NewGuid().ToS
 - **Static Passed**：当前根 Node suite 为 58/58；base、tools 和 Claude profile 的 `docker compose config --quiet` 在运行前通过。
 - **Runtime Passed（受限范围）**：Windows 重启后 Docker 恢复；所选完整镜像 build Passed。最终 run 的 Mock 11 项、Standalone 12 项、A 写/B 共享/C 隔离、安全负测与上游 hygiene、Hub health、Panel team/get、Knowledge wiki/list 和 Docker Claude `2.1.207` headless 均 Passed。
 - **Evidence**：最终 run 的 evidence 目录只有两个已脱敏 ordinary JSON 文件；DeepSeek 为 0 个已选 profile/service 请求且 internal network 生效，但这不是 packet capture。
-- **Awaiting User Confirmation**：Docker Claude TUI 尚未人工确认；当前 project 的 4 个长期服务健康、3 个 one-shot exit 0、6 个 named volumes 与 internal network 保持运行。
+- **User Confirmed**：Docker Claude TUI 启动界面已由用户确认正确；确认后的只读 inventory 仍显示 4 个长期服务健康、3 个 one-shot exit 0。消息请求尚未验证，6 个 named volumes 与 internal network 继续保留。
 - **Not Run**：Windows Claude、真实 DeepSeek Anthropic/OpenAI 协议、stream/tool/thinking、Redis、Proxy/Core/Hub stop/restart/recreate、备份恢复、恶意记忆、key 撤销、Win11、WSL Claude 与 LAN。
 - **Local-only SHA**：public fork `69fd8b31e3fd4362af6c65407b92b26dfabebd0c` 尚未 push；从首个本地修复 `c75ef58` 起至当前修复，共 27 个本地 public commit。当前工作区可用；新 clone 在用户授权 push 前不能取得根 gitlink 目标。
