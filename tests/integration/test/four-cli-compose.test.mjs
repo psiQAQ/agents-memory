@@ -134,8 +134,10 @@ test('active mock overlay renders runtime config and waits for healthy services'
 
   const gate = parsed.services['stage1-gate'];
   assert.deepEqual(gate.profiles, ['mock']);
-  assert.equal(gate.user, '10001:10001');
+  assert.equal(gate.user, '0:0');
   assert.equal(gate.read_only, true);
+  assert.deepEqual(gate.cap_drop, ['ALL']);
+  assert.ok(gate.security_opt.includes('no-new-privileges:true'));
   assert.equal(gate.depends_on['memory-hub'].condition, 'service_healthy');
   assert.equal(gate.environment.PANEL_BASE_URL, 'http://memory-hub:8125');
   assert.ok(gate.volumes.some((volume) => volume.source === 'bootstrap-state' && volume.target === '/state' && volume.read_only));

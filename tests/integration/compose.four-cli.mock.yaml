@@ -94,8 +94,12 @@ services:
       context: .
       dockerfile: images/tools/Dockerfile
     profiles: ["mock"]
-    user: "10001:10001"
+    # Bootstrap/runtime-config secrets are root-owned 0600; keep this one-shot
+    # oracle root-only and drop every capability instead of widening file modes.
+    user: "0:0"
     read_only: true
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
     depends_on:
       bootstrap:
         condition: service_completed_successfully
