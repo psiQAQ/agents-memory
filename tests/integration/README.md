@@ -28,7 +28,7 @@
 
 > **Static Integrated**：目标变更已写入当前仓库受跟踪的源码或 Compose，并通过相关静态契约测试；不代表镜像、服务或业务流已经运行。
 
-> **Public fork Static Integrated**：在通用 Static Integrated 条件之外，public fork 的精确 SHA 还必须写入根 gitlink、镜像标签和对应静态测试。
+> **Public fork Static Integrated**：在通用 Static Integrated 条件之外，public fork 的精确 SHA 还必须通过独立复审，并写入根 gitlink、镜像标签和对应静态测试。
 
 > **Loopback Gateway**：只在本机 `127.0.0.1` 接收 TCP 连接，再把字节原样转发到 internal 网络中 MemoryProxy 的轻量容器；它不解析请求，也不保存凭证。
 
@@ -341,7 +341,8 @@ curl.exe --noproxy '*' --fail --silent --show-error http://127.0.0.1:8096/health
 首次批准的 Windows 交互只使用 agent-a。A/B/C 是自动化隔离 fixture，不代表首轮会同时启动三个真实 Claude。以下命令创建项目专用目录，通过受信任的 one-shot 生成 settings，然后令 Windows Claude 使用该目录；命令不会打印或要求手工复制 Memory 用户 key：
 
 ```powershell
-$windowsConfigDir = Join-Path $env:LOCALAPPDATA 'refine-memory\claude-agent-a'
+if ([string]::IsNullOrWhiteSpace($env:RUN_ID)) { throw 'RUN_ID is required' }
+$windowsConfigDir = Join-Path $env:LOCALAPPDATA "refine-memory\runs\$env:RUN_ID\claude-agent-a"
 [IO.Directory]::CreateDirectory($windowsConfigDir) | Out-Null
 $windowsGateDir = Join-Path ([IO.Path]::GetTempPath()) ('refine-memory-windows-gate-' + [guid]::NewGuid().ToString('N'))
 [IO.Directory]::CreateDirectory($windowsGateDir) | Out-Null
@@ -480,9 +481,9 @@ $env:MEMORY_CORE_GATEWAY_API_KEY = 'compose-parse-only-' + [guid]::NewGuid().ToS
 
 ## 当前已知限制
 
-- **Static Passed**：当前根 Node suite 为 64/64；base、tools、Claude、hardened 和 Windows 组合的 Compose contract 在静态测试中通过。
+- **Static Passed**：当前根 Node suite 为 66/66；base、tools、Claude、hardened 和 Windows 组合的 Compose contract 在静态测试中通过。
 - **Runtime Passed（受限范围）**：Windows 重启后 Docker 恢复；所选完整镜像 build Passed。Docker run `docker-mock-20260810-033636` 的 Mock 11 项、Standalone 12 项、A 写/B 共享/C 隔离、安全负测与上游 hygiene、Hub probes、Docker Claude headless/TUI 均 Passed；独立 Windows run `windows-mock-20260810-111850-93778ced` 的最小 stack、Gateway、Windows config/headless 与 Mock/Core oracle 均 Passed。
-- **Evidence**：最终 run 的 evidence 目录只有两个已脱敏 ordinary JSON 文件；DeepSeek 为 0 个已选 profile/service 请求且 internal network 生效，但这不是 packet capture。
+- **Evidence**：Docker run `docker-mock-20260810-033636` 的 evidence 目录只有两个已脱敏 ordinary JSON 文件；DeepSeek 为 0 个已选 profile/service 请求且 internal network 生效，但这不是 packet capture。
 - **Runtime Passed（Docker TUI 文本范围）**：用户看到 `mock text`；相较基线新增 2 个 Anthropic 与 3 个 OpenAI 观察，列明的敏感诱饵、凭证形态和内部 header 泄漏检查均为 0；MemoryCore L0 提示命中 1、owner mismatch 为 0。六个 named volumes 与 internal network 继续保留。
 - **Runtime Passed（Windows TUI 文本范围）**：用户确认界面正常、可输入并收到只表达 `mock text` 的回复；post-confirmation Anthropic 计数为 8，高于 headless baseline 6，四项泄漏布尔均为 false。
 - **Pending / Not Run**：真实 DeepSeek Anthropic/OpenAI 协议、stream/tool/thinking、Redis、Proxy/Core/Hub/Gateway stop/restart/recreate、备份恢复、恶意记忆、key 撤销、Win11、WSL Claude 与 LAN 均未运行。

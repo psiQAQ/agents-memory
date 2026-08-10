@@ -8,6 +8,7 @@ import { ensureFetchSafeServer } from './helpers.mjs';
 import { createTcpForwardServer, listenTcpForwarder } from '../tools/tcp-forward.mjs';
 
 const tool = fileURLToPath(new URL('../tools/tcp-forward.mjs', import.meta.url));
+const toolUrl = new URL('../tools/tcp-forward.mjs', import.meta.url).href;
 const configuration = {
   FORWARD_LISTEN_HOST: '0.0.0.0',
   FORWARD_LISTEN_PORT: '23561',
@@ -61,6 +62,31 @@ function startCli(environment) {
   child.stdout.setEncoding('utf8').on('data', (chunk) => { stdout += chunk; });
   child.stderr.setEncoding('utf8').on('data', (chunk) => { stderr += chunk; });
   return { child, output: () => ({ stdout, stderr }) };
+}
+
+function runCliWithRuntimeServerError(environment, sentinel) {
+  const program = `
+    import net from 'node:net';
+    const createServer = net.createServer;
+    net.createServer = (...args) => {
+      const server = createServer(...args);
+      server.once('listening', () => queueMicrotask(() => server.emit('error', new Error(${JSON.stringify(sentinel)}))));
+      return server;
+    };
+    process.argv[1] = ${JSON.stringify(tool)};
+    await import(${JSON.stringify(toolUrl)});
+  `;
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, ['--input-type=module', '--eval', program], {
+      env: { ...process.env, ...environment },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8').on('data', (chunk) => { stdout += chunk; });
+    child.stderr.setEncoding('utf8').on('data', (chunk) => { stderr += chunk; });
+    child.on('close', (status) => resolve({ status, stdout, stderr }));
+  });
 }
 
 test('listenTcpForwarder accepts only the fixed topology and decimal port range without echoing rejected values', async () => {
@@ -169,6 +195,50 @@ test('forwarder closes the client when the fixed upstream is unavailable', async
     client.destroy();
     await closeServer(gateway);
   }
+});
+
+test('forwarder contains a runtime server error and closes its listener and active connection', async () => {
+  let upstreamSocket;
+  const upstream = net.createServer((socket) => { upstreamSocket = socket; });
+  await ensureFetchSafeServer(upstream);
+  let failure;
+  const gateway = createTcpForwardServer({
+    targetHost: '127.0.0.1',
+    targetPort: upstream.address().port,
+    onRuntimeFailure: (category) => { failure = category; },
+  });
+  await ensureFetchSafeServer(gateway);
+  const upstreamConnected = once(upstream, 'connection');
+  const client = await connectedSocket(gateway.address().port);
+  await upstreamConnected;
+  const clientClosed = waitForClose(client);
+  const upstreamClosed = waitForClose(upstreamSocket);
+  const gatewayClosed = new Promise((resolve) => gateway.once('close', resolve));
+  const sentinel = 'RUNTIME_SERVER_SENTINEL_18a7';
+  try {
+    assert.doesNotThrow(() => gateway.emit('error', new Error(sentinel)));
+    await Promise.all([clientClosed, upstreamClosed, gatewayClosed]);
+    assert.equal(gateway.listening, false);
+    assert.equal(failure, 'runtime failed');
+    assert.doesNotMatch(failure, new RegExp(sentinel));
+  } finally {
+    client.destroy();
+    upstreamSocket?.destroy();
+    if (gateway.listening) await closeServer(gateway);
+    await closeServer(upstream);
+  }
+});
+
+test('CLI reports a runtime server error with only the fixed category and a nonzero exit', async () => {
+  const sentinel = 'RUNTIME_CLI_SENTINEL_29b8';
+  const result = await runCliWithRuntimeServerError(
+    { ...configuration, FORWARD_LISTEN_PORT: String(await unusedPort()) },
+    sentinel,
+  );
+  assert.equal(result.status, 1);
+  assert.equal(result.stdout, '{"status":"ready"}\n');
+  assert.equal(result.stderr, 'runtime failed\n');
+  assert.doesNotMatch(`${result.stdout}${result.stderr}`, new RegExp(sentinel));
 });
 
 test('CLI emits only fixed ready and failure categories without configuration or error leakage', async () => {

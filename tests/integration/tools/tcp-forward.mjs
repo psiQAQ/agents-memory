@@ -10,26 +10,39 @@ function configuration(environment) {
   return { listenPort, targetPort };
 }
 
-export function createTcpForwardServer({ targetHost, targetPort }) {
-  return net.createServer((client) => {
+export function createTcpForwardServer({ targetHost, targetPort, onRuntimeFailure = () => {} }) {
+  const clients = new Set();
+  const server = net.createServer((client) => {
+    clients.add(client);
     const upstream = net.createConnection({ host: targetHost, port: targetPort });
     const closeBoth = () => {
       client.destroy();
       upstream.destroy();
     };
-    client.on('error', closeBoth).on('close', () => upstream.destroy());
+    client.on('error', closeBoth).on('close', () => {
+      clients.delete(client);
+      upstream.destroy();
+    });
     upstream.on('error', closeBoth).on('close', () => client.destroy());
     client.pipe(upstream).pipe(client);
   });
+  server.on('error', () => {
+    if (!server.listening) return;
+    server.close();
+    for (const client of clients) client.destroy();
+    onRuntimeFailure('runtime failed');
+  });
+  return server;
 }
 
-export async function listenTcpForwarder(environment = process.env) {
+export async function listenTcpForwarder(environment = process.env, onRuntimeFailure = () => {}) {
   const { listenPort, targetPort } = configuration(environment);
-  const server = createTcpForwardServer({ targetHost: 'memory-proxy', targetPort });
+  const server = createTcpForwardServer({ targetHost: 'memory-proxy', targetPort, onRuntimeFailure });
   await new Promise((resolve, reject) => {
-    server.once('error', () => reject(new Error('listen failed')));
+    const onListenError = () => reject(new Error('listen failed'));
+    server.once('error', onListenError);
     server.listen(listenPort, '0.0.0.0', () => {
-      server.removeAllListeners('error');
+      server.removeListener('error', onListenError);
       resolve();
     });
   });
@@ -38,7 +51,10 @@ export async function listenTcpForwarder(environment = process.env) {
 
 if (isMain(import.meta)) {
   try {
-    await listenTcpForwarder();
+    await listenTcpForwarder(process.env, (category) => {
+      process.stderr.write(`${category}\n`);
+      process.exitCode = 1;
+    });
     process.stdout.write('{"status":"ready"}\n');
   } catch (error) {
     process.stderr.write(`${error.message === 'listen failed' ? 'listen failed' : 'invalid configuration'}\n`);

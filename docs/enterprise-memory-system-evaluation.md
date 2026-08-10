@@ -54,7 +54,7 @@
 
 > **Static Integrated**：目标变更已写入当前仓库受跟踪的源码或 Compose，并通过相关静态契约测试；不代表镜像、服务或业务流已经运行。
 
-> **Public fork Static Integrated**：在通用 Static Integrated 条件之外，public fork 的精确 SHA 还必须写入根 gitlink、镜像标签和对应静态测试。
+> **Public fork Static Integrated**：在通用 Static Integrated 条件之外，public fork 的精确 SHA 还必须通过独立复审，并写入根 gitlink、镜像标签和对应静态测试。
 
 > **Loopback Gateway**：只在 Windows 本机 `127.0.0.1` 接收 TCP 连接，再把字节原样转发到 internal 网络中 MemoryProxy 的轻量容器。
 
@@ -175,7 +175,7 @@ flowchart LR
 | 评估项 | 状态 | 当前证据 | 不能证明的内容 |
 | -- | -- | -- | -- |
 | 架构与权限模型 | Partial Runtime Passed | A/B/C 身份绑定、冲突身份、缺失/forged source 和共享/隔离已在真实容器 data plane 通过 | 撤销、跨 team、旧库 scrub、生产身份源与完整文件权限 |
-| 默认 Mock 编排 | Runtime Passed（受限范围） | 64/64 Node tests；完整所选镜像 build；Mock 11 项、Standalone 12 项、Hub health、两项只读业务 probe 与 Docker TUI 文本往返 | 故障恢复、Redis、长时并发、生产负载 |
+| 默认 Mock 编排 | Runtime Passed（受限范围） | 66/66 Node tests；完整所选镜像 build；Mock 11 项、Standalone 12 项、Hub health、两项只读业务 probe 与 Docker TUI 文本往返 | 故障恢复、Redis、长时并发、生产负载 |
 | Standalone 业务 Gate | Runtime Passed | A 写、Core L0/L1 oracle、B 显式共享、C 隔离、4 项拒绝负测 zero model side effect 与上游 hygiene | 撤销、恶意记忆、跨 team 和生产数据治理 |
 | Windows 10 原生 Claude + Docker Linux Claude | Partial Runtime Passed | Docker run 的 `2.1.207` headless/TUI Mock 往返 Passed；独立 Windows run 的 Gateway、项目专用 config、`2.1.207` headless、用户确认 TUI Mock 往返与脱敏计数旁证 Passed | 同一业务任务下的双客户端治理、真实模型协议 |
 | Codex / WSL Claude / Win11 / LAN | Deferred / Not Run | 不在当前批准范围；Docker Desktop 使用 WSL 后端不等于 WSL Claude 已测试 | 跨客户端共享、Win11 和局域网行为 |
