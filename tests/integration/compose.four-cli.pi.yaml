@@ -1,0 +1,40 @@
+services:
+  pi-config:
+    image: refine-memory-integration-tools:task4
+    profiles: ["pi"]
+    user: "0:0"
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+    command: ["tools/prepare-agent.mjs", "--agent", "pi", "--state-dir", "/state/run", "--home-dir", "/agent-home", "--space-id", "${MEMORY_SPACE_ID:-default}"]
+    volumes:
+      - bootstrap-state:/state:ro
+      - pi-home:/agent-home
+    restart: "no"
+  pi-client:
+    image: refine-memory-pi:0.84.1
+    build:
+      context: images/clients/pi
+      dockerfile: Dockerfile
+      additional_contexts:
+        integration: .
+    profiles: ["pi"]
+    user: "10001:10001"
+    init: true
+    stdin_open: true
+    tty: true
+    read_only: true
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    depends_on:
+      pi-config:
+        condition: service_completed_successfully
+      memory-proxy:
+        condition: service_started
+    environment:
+      HOME: /home/agent
+      MEMORY_SPACE_ID: ${MEMORY_SPACE_ID:-default}
+    volumes:
+      - pi-home:/home/agent
+      - pi-workspace:/workspace
+    command: ["--version"]

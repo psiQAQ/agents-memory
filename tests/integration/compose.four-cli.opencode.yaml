@@ -1,0 +1,40 @@
+services:
+  opencode-config:
+    image: refine-memory-integration-tools:task4
+    profiles: ["opencode"]
+    user: "0:0"
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+    command: ["tools/prepare-agent.mjs", "--agent", "opencode", "--state-dir", "/state/run", "--home-dir", "/agent-home", "--space-id", "${MEMORY_SPACE_ID:-default}"]
+    volumes:
+      - bootstrap-state:/state:ro
+      - opencode-home:/agent-home
+    restart: "no"
+  opencode-client:
+    image: refine-memory-opencode:1.18.16
+    build:
+      context: images/clients/opencode
+      dockerfile: Dockerfile
+      additional_contexts:
+        integration: .
+    profiles: ["opencode"]
+    user: "10001:10001"
+    init: true
+    stdin_open: true
+    tty: true
+    read_only: true
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    depends_on:
+      opencode-config:
+        condition: service_completed_successfully
+      memory-proxy:
+        condition: service_started
+    environment:
+      HOME: /home/agent
+      MEMORY_SPACE_ID: ${MEMORY_SPACE_ID:-default}
+    volumes:
+      - opencode-home:/home/agent
+      - opencode-workspace:/workspace
+    command: ["--version"]

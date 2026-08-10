@@ -1,0 +1,9 @@
+services:
+  memory-core:
+    profiles: ["real"]
+  memory-proxy:
+    profiles: ["real"]
+  memory-hub:
+    profiles: ["real"]
+  bootstrap:
+    profiles: ["real"]

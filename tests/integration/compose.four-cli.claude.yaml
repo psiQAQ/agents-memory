@@ -1,0 +1,40 @@
+services:
+  claude-config:
+    image: refine-memory-integration-tools:task4
+    profiles: ["claude"]
+    user: "0:0"
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+    command: ["tools/prepare-agent.mjs", "--agent", "claude", "--state-dir", "/state/run", "--home-dir", "/agent-home", "--space-id", "${MEMORY_SPACE_ID:-default}"]
+    volumes:
+      - bootstrap-state:/state:ro
+      - claude-home:/agent-home
+    restart: "no"
+  claude-client:
+    image: refine-memory-claude-code:2.1.226
+    build:
+      context: images/clients/claude
+      dockerfile: Dockerfile
+      additional_contexts:
+        integration: .
+    profiles: ["claude"]
+    user: "10001:10001"
+    init: true
+    stdin_open: true
+    tty: true
+    read_only: true
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    depends_on:
+      claude-config:
+        condition: service_completed_successfully
+      memory-proxy:
+        condition: service_started
+    environment:
+      HOME: /home/agent
+      MEMORY_SPACE_ID: ${MEMORY_SPACE_ID:-default}
+    volumes:
+      - claude-home:/home/agent
+      - claude-workspace:/workspace
+    command: ["--version"]

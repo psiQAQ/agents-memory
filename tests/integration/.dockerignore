@@ -4,6 +4,8 @@
 !tools/**
 !config/
 !config/**
+!clients/
+!clients/**
 !claude/
 !claude/settings.template.json
 !images/

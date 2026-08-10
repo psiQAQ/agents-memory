@@ -45,7 +45,7 @@ if (isMain(import.meta)) {
       client: values['--client'],
       homeDir: values['--home-dir'],
       bundleFile: values['--bundle-file'],
-      spaceId: values['--space-id'],
+      spaceId: values['--space-id'] ?? process.env.MEMORY_SPACE_ID,
       template: values['--template'],
       args: clientArguments,
     });

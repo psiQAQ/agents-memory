@@ -1,0 +1,20 @@
+services:
+  memory-core:
+    profiles: ["mock"]
+  memory-proxy:
+    profiles: ["mock"]
+  memory-hub:
+    profiles: ["mock"]
+  bootstrap:
+    profiles: ["mock"]
+  mock-llm:
+    image: refine-memory-integration-tools:task4
+    build:
+      context: .
+      dockerfile: images/tools/Dockerfile
+    profiles: ["mock"]
+    command: ["tools/mock-llm.mjs"]
+    environment:
+      MOCK_HOST: 0.0.0.0
+      MOCK_PORT: "8080"
+    expose: ["8080"]

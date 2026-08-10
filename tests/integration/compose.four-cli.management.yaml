@@ -1,0 +1,8 @@
+services:
+  memory-hub:
+    profiles: ["management"]
+    ports:
+      - target: 8125
+        published: "8125"
+        host_ip: 127.0.0.1
+        protocol: tcp
