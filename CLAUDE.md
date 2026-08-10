@@ -2,9 +2,11 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+跨 agent 的执行顺序、复用边界、fork worktree 流程和新对话启动检查以根目录 `AGENTS.md` 为准。开始工作前必须先读该文件。
+
 ## 仓库性质
 
-这是一个企业智能体记忆的调研与实验仓库。根仓库没有构建、测试或运行命令；`docs/` 保存调研和设计，`submodules/TencentDB-Agent-Memory` 是指向个人 fork 的独立源码仓库。
+这是一个企业智能体记忆的调研与实验仓库。根仓库不承载产品源码构建；`tests/integration/` 保存跨宿主和双客户端集成实验，`docs/` 保存调研、设计与运行证据，`submodules/TencentDB-Agent-Memory` 是指向个人 fork 的独立源码仓库。
 
 ## 最高优先级约束
 
@@ -41,14 +43,19 @@ git submodule update --init submodules/TencentDB-Agent-Memory
 
 - `origin`: `https://github.com/psiQAQ/TencentDB-Agent-Memory.git`，用于开发分支和推送。
 - `upstream`: `https://github.com/TencentCloud/TencentDB-Agent-Memory.git`，本地添加后仅用于同步和 PR 对照。
-- 修改源码前进入 submodule 创建 feature branch，不在 detached HEAD 上提交。
+- 实现和 Docker 测试优先复用 Tencent 仓库已有的源码、脚本、Dockerfile、配置和测试；根仓库不复制已有能力。
+- 适配修复或新增功能必须在个人 fork 的独立 feature branch 和 Git worktree 中开发验证，不在 detached HEAD 或共享脏工作树中提交。
+- fork 变更先完成复现测试、最小实现和自身验证，再由根仓库更新 gitlink、集成证据与 SOP。达到 PR-ready 后记录 base/head SHA 和验证结果；push、创建 PR 仍需负责人明确授权。
 - 其他 7 个项目在 `.gitmodules` 保留地址，但未登记 gitlink；只保留 `docs/reference/` 分析，不为调研目的下载源码。
 
 ## 当前优先级
 
-1. 先运行默认 Mock 的 Docker Compose 实验，验证业务探针而不调用真实 DeepSeek；规格见 `docs/specs/2026-08-09-docker-memory-lab.md`。
-2. 以隔离配置验证 Windows 10 原生 Claude 与 Docker Linux Claude 经 MemoryProxy 共享同一记忆服务；Codex、WSL、Win11 和 LAN 验证后置。
-3. 仅在工作区外新 secret 文件与真实 Gate 齐备时执行 real profile；再在 fork 中做可复现的最小兼容性修复和针对性测试。
+1. 第一目标是完成并管理 Windows 10 原生 Claude `agent-a` 与 Docker Linux Claude `agent-b` 的同栈记忆共享演示。两端使用不同 Memory 身份，经同一 MemoryProxy/MemoryCore 验证授权共享和隔离；管理优先复用 Tencent Panel/Knowledge 的用户、Team、Agent、Task 与共享资产入口，并交付启动、演示、管理、证据与清理 SOP。
+2. 主对话共用 DeepSeek Pro 上游，记忆提炼使用 DeepSeek Flash 上游。先运行默认 Mock Gate，再执行负责人明确授权的真实调用；Codex、WSL、Win11 和 LAN 验证后置。
+3. 演示中出现的适配性问题排在第二阶段。确认问题属于 Tencent 实现后，在个人 fork 的独立 worktree 分支中按测试先行完成修复和 PR-ready 验证。
+4. 新功能排在第三阶段，只根据实际演示和管理需求增加，同样在个人 fork worktree 中开发验证后准备 PR。
+
+本机短期真实模型演示可在负责人明确授权后复用 Tencent 原生 `deploy/global-images/.env` 的 `PROXY_UPSTREAM_API_KEY` 与 `MEMORY_LLM_API_KEY`。该方式只属于 Local-only Quick Test；不得提交、打印或复制 key，根栈应通过 `--env-file`/Compose secrets 消费，测试完成后清理临时文件并轮换或撤销 key。
 
 `docs/superpowers/plans/2026-08-07-tencentdb-memory-retrofit.md` 是早期需求草案，包含与当前 `fe3230f` 快照不一致的 `services/*`、`packages/*` 路径。完成复现并重新定位源码后才能执行或重写。
 
