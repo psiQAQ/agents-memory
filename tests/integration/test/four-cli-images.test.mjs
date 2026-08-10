@@ -34,3 +34,8 @@ test('Task 4 tools context includes only the tracked manifest needed by bootstra
   assert.match(tools, /^COPY clients \/lab\/clients$/m);
   assert.match(ignore, /^!clients\/\*\*$/m);
 });
+
+test('Task 5 reuses the Hub image healthcheck for both Panel and unpublished Knowledge', async () => {
+  const hub = await readFile(new URL('../images/hub/Dockerfile', import.meta.url), 'utf8');
+  assert.match(hub, /HEALTHCHECK[^\n]*\n\s+CMD curl -fsS http:\/\/127\.0\.0\.1:\$\{PANEL_PORT\}\/health[^\n]*http:\/\/127\.0\.0\.1:\$\{KNOWLEDGE_PORT\}\/health/);
+});

@@ -103,12 +103,15 @@ services:
         condition: service_healthy
       memory-proxy:
         condition: service_healthy
+      memory-hub:
+        condition: service_healthy
       mock-llm:
         condition: service_healthy
     environment:
       MOCK_BASE_URL: http://mock-llm:8080
       CORE_BASE_URL: http://memory-core:8420
       PROXY_BASE_URL: http://memory-proxy:8096
+      PANEL_BASE_URL: http://memory-hub:8125
     command:
       - tools/task5-stage1-runner.mjs
       - --manifest

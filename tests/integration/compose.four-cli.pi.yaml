@@ -55,9 +55,11 @@ services:
       HOME: /home/agent
       MEMORY_SPACE_ID: ${MEMORY_SPACE_ID:-default}
       MOCK_BASE_URL: http://mock-llm:8080
+      STAGE1_CLIENT_SCENARIO: ${STAGE1_CLIENT_SCENARIO:-write}
+      STAGE1_OWNER: ${STAGE1_OWNER:-}
     volumes:
       - pi-home:/home/agent
       - pi-workspace:/workspace
     entrypoint: ["node", "/opt/memory-client/task5-headless-client.mjs"]
-    command: ["--client", "pi", "--scenario", "${STAGE1_CLIENT_SCENARIO:-write}", "--run-id", "${RUN_ID:-task5-static}", "--owner", "${STAGE1_OWNER:-}", "--home-dir", "/home/agent", "--bundle-file", "/home/agent/.memory/agent-bundle.json", "--space-id", "${MEMORY_SPACE_ID:-default}", "--template", "/opt/memory-client/settings.template.json"]
+    command: ["--client", "pi", "--run-id", "${RUN_ID:-task5-static}", "--home-dir", "/home/agent", "--bundle-file", "/home/agent/.memory/agent-bundle.json", "--space-id", "${MEMORY_SPACE_ID:-default}", "--template", "/opt/memory-client/settings.template.json"]
     restart: "no"

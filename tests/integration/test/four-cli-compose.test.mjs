@@ -82,6 +82,10 @@ test('active client containers are non-root and receive only their private home 
       { source: `${client}-home`, target: '/home/agent' },
       { source: `${client}-workspace`, target: '/workspace' },
     ]);
+    assert.equal(headless.environment.STAGE1_CLIENT_SCENARIO, 'write');
+    assert.equal(headless.environment.STAGE1_OWNER, '');
+    assert.equal(headless.command.includes('--scenario'), false);
+    assert.equal(headless.command.includes('--owner'), false);
     assert.doesNotMatch(JSON.stringify(headless), /bootstrap-state|\/state|docker\.sock|DEEPSEEK/i);
   }
   assert.equal(clientVolumes.size, 6);
@@ -132,6 +136,8 @@ test('active mock overlay renders runtime config and waits for healthy services'
   assert.deepEqual(gate.profiles, ['mock']);
   assert.equal(gate.user, '10001:10001');
   assert.equal(gate.read_only, true);
+  assert.equal(gate.depends_on['memory-hub'].condition, 'service_healthy');
+  assert.equal(gate.environment.PANEL_BASE_URL, 'http://memory-hub:8125');
   assert.ok(gate.volumes.some((volume) => volume.source === 'bootstrap-state' && volume.target === '/state' && volume.read_only));
   assert.ok(gate.volumes.some((volume) => volume.target === '/evidence' && volume.type === 'bind'));
   assert.doesNotMatch(JSON.stringify(gate), /docker\.sock|DEEPSEEK|PROXY_UPSTREAM_API_KEY|MEMORY_LLM_API_KEY/i);
