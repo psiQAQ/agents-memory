@@ -1,0 +1,38 @@
+services:
+  windows-config-init:
+    image: refine-memory-integration-tools:local
+    build:
+      context: .
+      dockerfile: images/tools/Dockerfile
+    profiles: ["windows"]
+    user: "0:0"
+    depends_on:
+      agent-config-a:
+        condition: service_completed_successfully
+      loopback-gateway:
+        condition: service_healthy
+    environment:
+      HOST_PROJECT_ROOT: ${PROJECT_ROOT:?set the canonical repository root}
+      HOST_WINDOWS_CLAUDE_CONFIG_DIR: ${WINDOWS_CLAUDE_CONFIG_DIR:?set a canonical absolute project-specific Windows Claude config directory outside the repository}
+    command:
+      - tools/prepare-windows-config.mjs
+      - --attestation
+      - /gate/windows-config-attestation.json
+      - --template
+      - /lab/claude/settings.template.json
+      - --config-dir
+      - /windows-config
+      - --agent-bundle-file
+      - /agent-home/.memory/agent-bundle.json
+      - --space-id
+      - ${MEMORY_SPACE_ID:-default}
+    volumes:
+      - claude-home-a:/agent-home:ro
+      - type: bind
+        source: ${WINDOWS_CLAUDE_CONFIG_DIR:?set a canonical absolute project-specific Windows Claude config directory}
+        target: /windows-config
+      - type: bind
+        source: ${WINDOWS_CONFIG_ATTESTATION_FILE:?run the Windows host config gate first}
+        target: /gate/windows-config-attestation.json
+        read_only: true
+    restart: "no"

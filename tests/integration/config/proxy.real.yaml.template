@@ -1,0 +1,77 @@
+server:
+  host: "0.0.0.0"
+  port: 8096
+  forwardTimeoutMs: 600000
+
+upstream:
+  url: "https://api.deepseek.com/anthropic/v1"
+  apiKey: __DEEPSEEK_PROXY_API_KEY_JSON__
+  agents: {}
+
+log:
+  file: "/app/logs"
+  verbose: false
+  level: "info"
+  backend: "console"
+
+redis:
+  enabled: false
+
+storage:
+  enabled: true
+  backend: "sqlite"
+  sqlite:
+    dbPath: "/data/tdai-memory-proxy/proxy.db"
+
+auth:
+  enabled: true
+  url: "http://memory-core:8420"
+  serviceToken: "__MEMORY_CORE_GATEWAY_API_KEY__"
+  timeoutMs: 5000
+
+sessionInit:
+  enabled: true
+  maxRetries: 3
+  injectAgentContext: true
+  injectTaskContext: true
+  headerAutoSelect:
+    enabled: true
+    teamHeader: "x-team-id"
+    agentHeader: "x-agent-id"
+    taskHeader: "x-task-id"
+    onMismatch: "form"
+
+injection:
+  enabled: true
+  injectors: ["tdai-memory"]
+  externalGatewayUrl: "http://memory-proxy:8096"
+
+extraction:
+  enabled: true
+  extractors: ["tdai-memory"]
+
+tdai:
+  enabled: true
+  endpoint: "http://memory-core:8420"
+  apiKey: "__MEMORY_CORE_GATEWAY_API_KEY__"
+  serviceId: "__MEMORY_SPACE_ID__"
+  memory:
+    enabled: true
+    inject: true
+    writeL0: true
+    recallL1: true
+    injectL2L3: false
+    l1Limit: 5
+    l2Limit: 3
+    timeoutMs: 5000
+
+skill:
+  endpoint: "http://memory-core:8420"
+  serviceToken: "__MEMORY_CORE_GATEWAY_API_KEY__"
+  serviceId: "__MEMORY_SPACE_ID__"
+
+knowledge:
+  enabled: false
+  endpoint: "http://memory-core:8420"
+  serviceToken: "__MEMORY_CORE_GATEWAY_API_KEY__"
+  serviceId: "__MEMORY_SPACE_ID__"
