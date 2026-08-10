@@ -4,9 +4,9 @@
 
 ## 当前边界
 
-**Fact**：Task 2 upstream base 锁定 `feat/server_team@0a568c328ea1aae3f22ed3656e7900da7ea565c1`，active fork/gitlink 为四笔 TDD 最小修复后的 `c400a6f04bf0850583de99194bbe9e506da1cfe6`。Stage 1 是 Claude Code `2.1.226`、OpenCode `1.18.16`、Pi `0.84.1`，Stage 2 是 Codex `0.147.0`。
+**Fact**：upstream base 锁定 `feat/server_team@0a568c328ea1aae3f22ed3656e7900da7ea565c1`，active fork/gitlink 为 Task 3 产品提交 `f97873393ba314db58bcc981ce06cf03233a7061`。Stage 1 是 Claude Code `2.1.226`、OpenCode `1.18.16`、Pi `0.84.1`，Stage 2 是 Codex `0.147.0`。
 
-**Fact**：Task 2 已执行本地 Docker source-build 与 `--network none` runtime asset 检查；Core、Proxy、Hub 为 Runtime Passed（build/assets only）。服务启动、Mock、真实 API、TUI 与端口探针仍为 Not Run。既有 Windows + Claude 命令、Compose 路径和运行证据是 Legacy，不能直接复用到四 CLI 路线。
+**Fact**：Task 3 的三平台 Anthropic handler/route tests、fail-closed source/session、source 保真与新 Proxy source-build/runtime assets 已 Passed。服务启动、Mock、真实 API、TUI 与端口探针仍为 Not Run。既有 Windows + Claude 命令、Compose 路径和运行证据是 Legacy，不能直接复用到四 CLI 路线。
 
 **Fact**：legacy ref `codex/legacy-proxy-hardening-69fd8b@69fd8b31e3fd4362af6c65407b92b26dfabebd0c` 是 local-only、未 push；fresh clone 不可取得，未经授权不得 push。跨 clone 可重建保全需要 push 或外部归档授权，在此之前仍未完成。
 
@@ -32,11 +32,23 @@ node --test tests/integration/test/*.test.mjs
 
 完整 RED→GREEN、image ID/digest、warning 与限制见 [Task 2 reproduction 索引](../../docs/README.md)。Shell Gate 必须动态枚举产品全部 tracked `*.sh`，producer 必须在完整 NUL manifest 写入并成功后才允许主 shell 读取；随后递归验证镜像内全部 `*.sh` 无 CR 且 `bash -n` Passed。不得退回 process substitution 或硬编码脚本清单。旧 Core `sha256:063e247...` 与旧 Proxy `sha256:394101...` 已 supersede。round 2 不改镜像输入，表中的 round 1 IDs 继续有效。这些镜像不能当作服务健康或业务流通过证明；后续任务不得覆盖本轮失败 context 或用浮动 tag 替换固定证据。
 
+## Task 3 原生 Anthropic route 结果
+
+| 平台 | 固定 route | 已验证边界 |
+| --- | --- | --- |
+| Claude Code | `/claude-code/<space>/v1/messages` | literal `claude-code` binding；UUID session 正例 |
+| OpenCode | `/opencode/<space>/v1/messages` | literal `opencode` binding；`ses_*` 正例；session/Core source 保真 |
+| Pi | `/pi/<space>/v1/messages` | literal `pi` binding；`urn:uuid:a:b` 正例；session/Core source 保真 |
+
+unknown/unbound/path-source conflict、缺失 session、非法字符、`..` 与超过 256 字符均必须在 auth、body parse、Core/store/upstream 前拒绝。不得新增 source header，不得把 OpenCode/Pi 映射为 Claude Code，也不得让最终 OpenAI `POST /*` catch-all 接走 unknown Anthropic-style route。
+
+Task 3 固定 Proxy 为 `local/refine-memory-proxy:f978733-task3@sha256:ea1487a338f1cb765ed81f71d81adb93db3b9ae0608ff874bb2d314e07d02667`；official public context、21/21 tests、6 个 runtime shell、SQLite 3.49.2、node-pty、stub fallback 与 UID 10001 Passed。完整证据见 [Task 3 Passed](../../docs/reproduction/2026-08-11-task3-anthropic-platform-routes-passed.md)。该结果仍不授权启动业务栈或真实 API。
+
 ## 后续受控顺序
 
 1. **Task 2（Passed，build/assets only）**：固定 image ID/digest 与不可变 RED→GREEN 已归档；不扩写为服务或业务通过。
-2. **Task 3（下一 Gate）**：先为 Claude Code、OpenCode、Pi 写原生 source/session/route RED 测试，再实现最小 Stage 1 Messages 路由；未知、非法和未绑定 source 必须 fail closed。
-3. **Task 4–5**：创建独立 client home/workspace/identity/evidence，完成 deterministic Mock 下的身份、共享、隔离、泄漏和管理 Gate；headless 通过后才进行用户 TUI 确认。
+2. **Task 3（Passed，handler/route + build/assets only）**：三平台 literal Messages route、source/session fail-closed 与 source 保真已固定；不扩写为服务业务通过。
+3. **Task 4–5（下一 Gate）**：创建独立 client home/workspace/identity/evidence，完成 deterministic Mock 下的身份、共享、隔离、泄漏和管理 Gate；headless 通过后才进行用户 TUI 确认。
 4. **Task 6**：完整 Mock Gate 后且负责人明确授权，才可使用 host-only 双 key 与预算限制做真实 Stage 1。
 5. **Task 7–8**：在 Stage 1 后实现/验证 Codex Responses 与四客户端 binding 上限。
 

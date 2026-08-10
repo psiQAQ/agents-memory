@@ -6,7 +6,7 @@
 
 | 入口 | 用途 | 当前状态 |
 | --- | --- | --- |
-| [企业智能体记忆系统评估](enterprise-memory-system-evaluation.md) | 当前范围、风险、下一 Gate | Task 2 source-build Runtime Passed；服务/Mock/API/TUI Not Run |
+| [企业智能体记忆系统评估](enterprise-memory-system-evaluation.md) | 当前范围、风险、下一 Gate | Task 3 handler/route + source-build assets Passed；服务/Mock/API/TUI Not Run |
 | [四 Docker CLI 实施计划](superpowers/plans/2026-08-10-four-docker-cli-memory.md) | 任务顺序与验收边界 | 计划，不是运行证据 |
 | [架构 ADR](decisions/2026-08-10-four-docker-cli-baseline.md) | 四 CLI 分阶段与身份隔离决策 | Accepted；runtime Not Run |
 | [baseline reproduction](reproduction/2026-08-10-four-docker-cli-baseline.md) | 固定版本、gitlink 与本轮未运行边界 | Append-only；Static baseline |
@@ -20,8 +20,10 @@
 | [Task 2 Shell Gate fix round 1 RED/erratum](reproduction/2026-08-11-task2-shell-assets-fix-round1-red-erratum.md) | 动态枚举全部 tracked shell 与旧镜像遗漏、权限元数据勘误 | Failed / Superseded evidence；旧 Core/Proxy 镜像被替代 |
 | [Task 2 Shell Gate fix round 1 Passed](reproduction/2026-08-11-task2-shell-assets-fix-round1-passed.md) | 全部 shell LF/syntax、新 Core/Proxy 串行重建与 runtime assets | Runtime Passed（build/assets only） |
 | [Task 2 Shell Gate fix round 2](reproduction/2026-08-11-task2-shell-gate-producer-status-round2-passed.md) | partial NUL output 后 producer nonzero 的 fail-closed 回归 | Passed；镜像输入未变，无需重建 |
+| [Task 3 Anthropic platform routes RED](reproduction/2026-08-11-task3-anthropic-platform-routes-red.md) | OpenCode/Pi route、source/session fail-closed 与 privacy 复现 | Failed / Reproduced；修复前不可变证据 |
+| [Task 3 Anthropic platform routes Passed](reproduction/2026-08-11-task3-anthropic-platform-routes-passed.md) | 三平台 literal route、source 保真、session/privacy 与新 Proxy image | Runtime Passed（handler/route + build/assets only） |
 | [Legacy Docker 运行资源精确清理](reproduction/2026-08-10-legacy-docker-resources-cleanup.md) | 旧 Compose projects、容器、网络、卷和镜像的不可恢复清理审计 | Runtime Cleanup Passed；不改变四 CLI 业务 Gate |
-| [集成实验 SOP](../tests/integration/README.md) | 后续静态验证与受控运行入口 | Stage 1 前置 Gate 未运行 |
+| [集成实验 SOP](../tests/integration/README.md) | 后续静态验证与受控运行入口 | Task 3 Passed；Mock/客户端 Gate 未运行 |
 
 建议阅读顺序：先读 [负责人思想](repo-author-comment/comment.md)，再读当前评估和本轮 ADR/reproduction；需要执行实验时才读 SOP 及相应产品源码/测试。负责人思想与企业设计草案分别位于 `repo-author-comment/` 和 [design/2026-08-06-enterprise-memory-design.md](design/2026-08-06-enterprise-memory-design.md)，不能当作本机运行证明。
 

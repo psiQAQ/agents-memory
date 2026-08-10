@@ -8,12 +8,12 @@
 
 | 阶段 | 客户端 | 协议与状态 |
 | --- | --- | --- |
-| Stage 1 | Claude Code `2.1.226`、OpenCode `1.18.16`、Pi `0.84.1` | 各自原生身份，经 Anthropic Messages；Not Run |
+| Stage 1 | Claude Code `2.1.226`、OpenCode `1.18.16`、Pi `0.84.1` | 原生 Anthropic handler/route tests Passed；服务与客户端业务流 Not Run |
 | Stage 2 | Codex `0.147.0` | 原生身份，经 `/codex/<space>/v1/responses`；Not Run |
 
-**Fact**：Task 2 的 upstream base 锁定 `feat/server_team@0a568c328ea1aae3f22ed3656e7900da7ea565c1`；active fork/gitlink 为四笔 TDD 最小修复后的 `c400a6f04bf0850583de99194bbe9e506da1cfe6`。Shell Gate 的 producer 部分输出后 nonzero 现在必须整体失败；该轮不改镜像输入，round 1 的固定 image IDs 继续有效。每个 CLI 使用不同的 user、Agent、Session、user key、home、workspace 和 evidence；仅显式 team-visible memory 可在同一 Team/Task 中共享。
+**Fact**：upstream base 锁定 `feat/server_team@0a568c328ea1aae3f22ed3656e7900da7ea565c1`；active fork/gitlink 为 Task 3 产品提交 `f97873393ba314db58bcc981ce06cf03233a7061`。Claude Code、OpenCode、Pi 的三条 literal Messages route 已通过真实 handler tests；unknown/unbound/conflict/missing/invalid source/session 在副作用前 fail closed，平台 source 保留到 session/Core record。每个 CLI 使用不同的 user、Agent、Session、user key、home、workspace 和 evidence；仅显式 team-visible memory 可在同一 Team/Task 中共享。
 
-**Boundary**：Core、Proxy、Hub source-build 与无网络 runtime assets 已 Passed；fix round 1 的新 Core/Proxy 镜像覆盖全部 runtime shell，旧 Core/Proxy 镜像已 supersede。Core 与 Hub 为 root-default，Proxy UID 10001。服务健康、Mock、真实模型请求、TUI 和跨客户端业务流仍为 Not Run。旧 Windows + Claude 方案及其运行记录均归档为 **Legacy**，它们不能证明四 CLI 路线已经通过。
+**Boundary**：Task 3 Proxy `sha256:ea1487a3...` 已从 official public context 单次构建，handler/route tests、native/runtime assets 与 UID 10001 Passed。Core/Hub 延用 Task 2 固定镜像。服务健康、Mock、真实模型请求、TUI 和跨客户端业务流仍为 Not Run。旧 Windows + Claude 方案及其运行记录均归档为 **Legacy**，它们不能证明四 CLI 路线已经通过。
 
 ## 起点
 

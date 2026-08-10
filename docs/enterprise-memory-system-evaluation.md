@@ -2,7 +2,7 @@
 
 ## 结论
 
-当前 active 目标是四 Docker CLI 共享记忆实验。Task 2 fix round 2 已补齐 tracked-shell producer status fail-closed；该轮不改 Core/Proxy 镜像输入，round 1 固定镜像继续有效，Hub 保持原 Passed 镜像。source-build 与无网络 runtime asset Gate 状态是 **Runtime Passed（build/assets only）**。尚无服务健康、Mock、真实 API、TUI 或跨客户端业务流的 Runtime Passed 证据。
+当前 active 目标是四 Docker CLI 共享记忆实验。Task 3 已完成 Claude Code、OpenCode、Pi 的原生 Anthropic Messages handler/route、source/session fail-closed 与 source 保真，并从 official public context 单次重建 Proxy。状态是 **Runtime Passed（handler/route tests + source-build/runtime assets only）**。尚无服务健康、Mock、真实 API、TUI 或跨客户端业务流的 Runtime Passed 证据。
 
 旧 Windows 原生 Claude + Docker Claude 证据一律是 **Legacy**：保留原文供追溯，但不用于推断新的四 CLI 架构已通过。
 
@@ -13,8 +13,8 @@
 | 项目 | 值 | 证据边界 |
 | --- | --- | --- |
 | Tencent upstream base | default `feat/server_team@0a568c328ea1aae3f22ed3656e7900da7ea565c1` | Task 2 的 pristine RED/基线；upstream 前移前必须审查 |
-| Tencent active source | `codex/four-agent-memory-upstream@c400a6f04bf0850583de99194bbe9e506da1cfe6` | 根 gitlink；仅含 LF、public stub validity、全部 tracked shell regression 与 producer status fail-closed 四笔 TDD 最小修复 |
-| Task 2 fixed images | Core `sha256:fded9d48...`；Proxy `sha256:14acf3c7...`；Hub `sha256:a6037724...` | 旧 Core `sha256:063e247...` 与 Proxy `sha256:394101...` 已 supersede；Hub 本轮未重建 |
+| Tencent active source | `codex/four-agent-memory-upstream@f97873393ba314db58bcc981ce06cf03233a7061` | 根 gitlink；在 Task 2 四笔修复上新增 Task 3 原生平台 route/source/session TDD commit |
+| Fixed images | Core `sha256:fded9d48...`；Task 3 Proxy `sha256:ea1487a3...`；Hub `sha256:a6037724...` | Proxy `sha256:14acf3c7...` 为 Task 2 旧构建证据；Core/Hub 本轮未重建 |
 | Container user metadata | Core/Hub root-default（UID 0）；Proxy `app`（UID 10001） | source-build evidence；本轮不扩大为权限改造 |
 | Legacy preservation | `codex/legacy-proxy-hardening-69fd8b@69fd8b31e3fd4362af6c65407b92b26dfabebd0c` | local-only、未 push；fresh clone 不可取得，未经授权不得 push；跨 clone 可重建保全仍未完成 |
 | Legacy runtime lifecycle | 3 projects / 20 containers / 4 networks / 27 volumes / 6 image candidates absent | 2026-08-10 Runtime Cleanup Passed；旧栈需从 Git 历史重新构建并创建新资源 |
@@ -52,7 +52,7 @@ flowchart LR
 | --- | --- | --- |
 | Task 1 历史保全、active docs、gitlink | Static baseline | 本轮文档/指针工作；不是服务运行 |
 | Stage 1 upstream source-build | Runtime Passed | 全部 tracked/image shell、Core/Proxy 新构建与必要 runtime assets Passed；Hub 保持原 Passed 镜像；不等于服务/业务 Runtime Passed |
-| Stage 1 Claude/OpenCode/Pi 原生路由 | Not Run | 产品路由与契约尚未实现/验证 |
+| Stage 1 Claude/OpenCode/Pi 原生路由 | Runtime Passed | 真实 handler/route tests 21/21 与新镜像内 21/21；不等于服务/客户端业务流 Passed |
 | Stage 1 Mock identity/share/isolation/leak | Not Run | 不执行 Docker workload |
 | Stage 1 TUI | Not Run | 仅在 headless Gate 通过后由用户确认 |
 | Stage 1 真实模型 | Not Run | 需完整 Mock Gate 与明确授权 |
@@ -65,9 +65,9 @@ flowchart LR
 | --- | --- |
 | 将 legacy 运行扩大为新架构通过 | active 入口、ADR 与 reproduction 显式标为 Legacy / Not Run |
 | 清理后误认为旧栈仍可原样复现 | 精确清理记录固定销毁范围；历史可追溯不等于 runtime resources 可恢复 |
-| 平台身份伪造或跨客户端泄漏 | 独立 identity/key/home/workspace/evidence；未知或未绑定 source fail closed |
+| 平台身份伪造或跨客户端泄漏 | literal route-bound source；unknown/unbound/conflict/missing/invalid fail closed；独立 identity/key/home/workspace/evidence |
 | 凭证扩散 | 模型 key 只在服务端；不读取/记录 `.env`、settings、secret、home 或 runtime 原文 |
-| 上游 SHA 或修复边界漂移 | upstream base 固定 `0a568c3`，active gitlink 固定 `c400a6f`；前移先审查，不批量迁移 legacy |
+| 上游 SHA 或修复边界漂移 | upstream base 固定 `0a568c3`，active gitlink 固定 `f978733`；前移先审查，不批量迁移 legacy |
 | Windows EOL 或硬编码 Shell Gate 漏检 runtime asset | 动态枚举全部 tracked `*.sh`，并递归验证镜像内全部 `*.sh` 无 CR 且 `bash -n` Passed |
 | producer 部分输出后 nonzero 被误判完整枚举 | 先写临时 NUL manifest 并显式检查 producer 成功，再由主 shell 读取；失败输出固定且不消费 partial manifest |
 | Core/Hub root-default 扩大权限面 | 当前只如实记录 UID 0；后续权限改造必须另立设计与行为 Gate，不能混入 source-build 证明 |
@@ -75,4 +75,4 @@ flowchart LR
 
 ## 下一 Gate
 
-Task 2 fix round 2 已固定 producer status 回归、产品修复与根 gitlink；该轮镜像输入未变，无需重建。下一 Gate 是 Task 3：为 Claude Code、OpenCode、Pi 写原生 source/session/route RED，再实现最小 Stage 1 Messages 路由。当前 source-build Runtime Passed 只覆盖镜像构建、Gate 与无网络 runtime assets；服务健康、Mock、业务流、真实 API 与 TUI 仍为 Not Run。
+Task 3 已固定产品提交、RED→GREEN 与新 Proxy image。下一 Gate 是 Task 4：创建四个隔离 client home/workspace/identity/evidence 的静态与配置边界，再进入 Task 5 deterministic Mock identity/share/isolation/leak。当前 Runtime Passed 只覆盖 handler/route tests、镜像构建与无网络 runtime assets；服务健康、Mock、业务流、真实 API 与 TUI 仍为 Not Run。
