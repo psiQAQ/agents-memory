@@ -6,7 +6,7 @@
 
 **Fact**：upstream base 锁定 `feat/server_team@0a568c328ea1aae3f22ed3656e7900da7ea565c1`，active fork/gitlink 为 Task 3 review-fix 产品提交 `0bba4d798ce452d97dbce3c6fa1b7a3eccd881a2`。Stage 1 是 Claude Code `2.1.226`、OpenCode `1.18.16`、Pi `0.84.1`，Stage 2 是 Codex `0.147.0`。
 
-**Fact**：Task 3 review fix 的三平台 Anthropic Messages/`count_tokens` handler/route tests、fail-closed source/session、source 保真、顶层 system context、选定共享 console privacy 与新 Proxy source-build/runtime assets 已 Passed。服务启动、Mock、真实 API、TUI 与端口探针仍为 Not Run。既有 Windows + Claude 命令、Compose 路径和运行证据是 Legacy，不能直接复用到四 CLI 路线。
+**Fact**：Task 4 的 active Compose/profile overlays、三客户端 manifest/identity/bootstrap、三 owner team-visible Chat Memory、六条 cross-owner binding、独立 outsider、私有 bundle/config 与三款固定 CLI image 已 Passed。服务启动、Mock prompt/共享/ACL/leak、真实 API、TUI 与端口探针仍为 Not Run。既有 Windows + Claude 命令、Compose 路径和运行证据是 Legacy，不能直接复用到四 CLI 路线。
 
 **Fact**：legacy ref `codex/legacy-proxy-hardening-69fd8b@69fd8b31e3fd4362af6c65407b92b26dfabebd0c` 是 local-only、未 push；fresh clone 不可取得，未经授权不得 push。跨 clone 可重建保全需要 push 或外部归档授权，在此之前仍未完成。
 
@@ -21,6 +21,24 @@ node --test tests/integration/test/*.test.mjs
 ```
 
 本轮文档完成前还应检查 Markdown 相对链接、UTF-8 无 BOM/LF、secret shape、gitlink 和两个 Tencent worktree 状态。检查不得读取任何 secret 内容。
+
+active Compose 静态入口固定为 `compose.four-cli.yaml` 加所需 overlay；旧 `compose.yaml` 只作为 Legacy Node fixture。Task 4 的完整 profile matrix 可用以下只读命令复验：
+
+```powershell
+$base = 'tests/integration/compose.four-cli.yaml'
+$env:MEMORY_CORE_GATEWAY_API_KEY = 'task4-static-gateway-key'
+try {
+  foreach ($profile in @('mock', 'real', 'claude', 'opencode', 'pi', 'management')) {
+    docker compose --profile $profile -f $base `
+      -f "tests/integration/compose.four-cli.$profile.yaml" config --format json | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Compose config failed: $profile" }
+  }
+} finally {
+  Remove-Item Env:MEMORY_CORE_GATEWAY_API_KEY -ErrorAction SilentlyContinue
+}
+```
+
+`task4-static-gateway-key` 只是 Compose config/Mock 的 disposable non-LLM gateway 值，不是模型 key，不得在 Paid Gate 中复用。
 
 ## Task 2 source-build 结果
 
@@ -44,13 +62,28 @@ Messages 的 unknown/unbound/path-source conflict、缺失 session、非法字�
 
 Task 3 review-fix 固定 Proxy 为 `local/refine-memory-proxy:0bba4d7-task3-fix1@sha256:88a350e44c0e04bec0632034a4dfb437904dc4da6471fa9957ebb9dbaa86f66c`；official public context、31/31 tests、privacy focused、6 个 runtime shell、SQLite 3.49.2、node-pty、stub fallback 与 UID 10001 Passed。完整证据见 [review RED/erratum](../../docs/reproduction/2026-08-11-task3-review-fix-round1-erratum.md) 与 [review fix Passed](../../docs/reproduction/2026-08-11-task3-review-fix-round1-passed.md)。选定共享 SessionStore/recovery/capability console 已通过 sentinel Gate；JSONL、ClickHouse、Opik、Langfuse、upstream headers 与 Claude 专用历史状态机留到 Task 5，当前 Not Run。deprecated `/claude-code/v1/messages` 固定 404 的 Minor 已 deferred。该结果仍不授权启动业务栈或真实 API。
 
+## Task 4 三客户端 Compose/bootstrap 结果
+
+tracked manifest 只定义 `claude`、`opencode`、`pi`；`ACTIVE_CLIENTS` 必须无重复、只含 allowlist，且 Task 4 Gate 要求三者齐全。bootstrap 为每位 owner 创建独立 user/Agent/Session/key，并共用一个 Team/Task；三个 owner Chat Memory 都设为 team-visible，每个 Agent 固定绑定另外两位 owner，共六条 cross-owner binding。synthetic outsider 使用独立 Team/Task，不创建 CLI，也不接收 shared binding。
+
+client 容器只挂自己的 home/workspace，不挂 bootstrap-state、模型 key 或 Docker socket。Claude、OpenCode、Pi 分别固定 route `/claude-code/<space>`、`/opencode/<space>/v1`、`/pi/<space>`；不增加 source header。management overlay 只把 Panel `8125` 发布到 `127.0.0.1`，Knowledge `8424` 只在 internal network 暴露。
+
+| Client | 固定 image ID | 已验证边界 |
+| --- | --- | --- |
+| Claude Code `2.1.226` | `sha256:4822ca8d312f3c63cc53afac0c700f0f66611109b20eacdf6cce9794d6dd76fc` | Node base digest、npm wrapper/native integrity、version/help、UID 10001 |
+| OpenCode `1.18.16` | `sha256:02661f09dc296c9676e3e0a4a6437568a02127414f661087b16074854abe5efc` | Node base digest、npm wrapper/native integrity、version/help、UID 10001 |
+| Pi `0.84.1` | `sha256:252d3871ef9662bd6e34fad449b8fb3b1ca0cb461e8211472489136660babab2` | Node base digest、Release SHA-256、version/help、UID 10001 |
+
+独立 review 后，Mock overlay 已补齐 runtime config、只读挂载与 healthy 依赖；renderer 逐级拒绝 config-dir symlink/junction；三镜像固定 `node:22-bookworm-slim@sha256:d649c27...`。`real` overlay 在 Task 4 仍只是 profile/config 静态入口，不含 `.env`/Paid launcher，不可当作 Task 6 运行 SOP。完整 RED 链与命令见 [Task 4 reproduction](../../docs/reproduction/2026-08-11-task4-three-client-compose-bootstrap-passed.md)。这些结果不证明 CLI prompt、服务健康、Mock 共享/ACL/leak、管理 CRUD、TUI 或真实 API。
+
 ## 后续受控顺序
 
 1. **Task 2（Passed，build/assets only）**：固定 image ID/digest 与不可变 RED→GREEN 已归档；不扩写为服务或业务通过。
 2. **Task 3（Passed，handler/route + build/assets only）**：三平台 literal Messages/`count_tokens` route、source/session fail-closed、Anthropic system context 与选定 console privacy 已固定；不扩写为服务业务或 comprehensive leak Gate 通过。
-3. **Task 4–5（下一 Gate）**：创建独立 client home/workspace/identity/evidence，完成 deterministic Mock 下的身份、共享、隔离、泄漏和管理 Gate；headless 通过后才进行用户 TUI 确认。
-4. **Task 6**：完整 Mock Gate 后且负责人明确授权，才可使用 host-only 双 key 与预算限制做真实 Stage 1。
-5. **Task 7–8**：在 Stage 1 后实现/验证 Codex Responses 与四客户端 binding 上限。
+3. **Task 4（Passed，client build/config assets only）**：active Compose、三客户端身份/config/image 已固定；不扩写为服务或业务流通过。
+4. **Task 5（下一 Gate）**：完成 deterministic Mock 下的身份、三写六读、隔离、泄漏和管理 Gate；headless 通过后才进行用户 TUI 确认。
+5. **Task 6**：完整 Mock Gate 后且负责人明确授权，才可使用 host-only 双 key 与预算限制做真实 Stage 1。
+6. **Task 7–8**：在 Stage 1 后实现/验证 Codex Responses 与四客户端 binding 上限。
 
 每次运行使用唯一 run、Compose project 与 evidence 路径。失败项目保留诊断；只有脱敏证据已归档且负责人明确要求销毁该精确项目时，才可精确清理。
 

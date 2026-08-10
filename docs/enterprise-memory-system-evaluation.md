@@ -2,7 +2,7 @@
 
 ## 结论
 
-当前 active 目标是四 Docker CLI 共享记忆实验。Task 3 review fix 已完成 Claude Code、OpenCode、Pi 的原生 Anthropic Messages/`count_tokens` route-bound source、session fail-closed、Anthropic 顶层 system context 与选定共享 console privacy，并从 official public context 单次重建 Proxy。状态是 **Runtime Passed（handler/route tests + source-build/runtime assets only）**。尚无服务健康、Mock、真实 API、TUI 或跨客户端业务流的 Runtime Passed 证据。
+当前 active 目标是四 Docker CLI 共享记忆实验。Task 4 已完成 Stage 1 三客户端的 active Compose/profile overlays、动态身份/bootstrap、私有 bundle/config renderer 与固定 CLI image。状态是 **Runtime Passed（client build/config assets only）**；Task 3 handler/route 证据保持有效。尚无服务健康、Mock、真实 API、TUI 或跨客户端业务流的 Runtime Passed 证据。
 
 旧 Windows 原生 Claude + Docker Claude 证据一律是 **Legacy**：保留原文供追溯，但不用于推断新的四 CLI 架构已通过。
 
@@ -18,9 +18,9 @@
 | Container user metadata | Core/Hub root-default（UID 0）；Proxy `app`（UID 10001） | source-build evidence；本轮不扩大为权限改造 |
 | Legacy preservation | `codex/legacy-proxy-hardening-69fd8b@69fd8b31e3fd4362af6c65407b92b26dfabebd0c` | local-only、未 push；fresh clone 不可取得，未经授权不得 push；跨 clone 可重建保全仍未完成 |
 | Legacy runtime lifecycle | 3 projects / 20 containers / 4 networks / 27 volumes / 6 image candidates absent | 2026-08-10 Runtime Cleanup Passed；旧栈需从 Git 历史重新构建并创建新资源 |
-| Claude Code | `2.1.226` | 固定版本；Not Run |
-| OpenCode | `1.18.16` | 固定版本；Not Run |
-| Pi | `0.84.1` | 固定版本；Not Run |
+| Claude Code | `2.1.226` / image `sha256:4822ca8d312f3c63cc53afac0c700f0f66611109b20eacdf6cce9794d6dd76fc` | base digest + npm integrity、build、version/help、UID 10001 Passed；prompt/TUI Not Run |
+| OpenCode | `1.18.16` / image `sha256:02661f09dc296c9676e3e0a4a6437568a02127414f661087b16074854abe5efc` | base digest + npm integrity、build、version/help、UID 10001 Passed；prompt/TUI Not Run |
+| Pi | `0.84.1` / image `sha256:252d3871ef9662bd6e34fad449b8fb3b1ca0cb461e8211472489136660babab2` | base digest + Release SHA-256、build、version/help、UID 10001 Passed；prompt/TUI Not Run |
 | Codex | `0.147.0` | 固定版本；Not Run |
 
 ## 架构与阶段
@@ -53,6 +53,7 @@ flowchart LR
 | Task 1 历史保全、active docs、gitlink | Static baseline | 本轮文档/指针工作；不是服务运行 |
 | Stage 1 upstream source-build | Runtime Passed | 全部 tracked/image shell、Core/Proxy 新构建与必要 runtime assets Passed；Hub 保持原 Passed 镜像；不等于服务/业务 Runtime Passed |
 | Stage 1 Claude/OpenCode/Pi 原生路由 | Runtime Passed | 真实 handler/route tests 31/31 与新镜像内 31/31；含 session-init-enabled stream/non-stream、count_tokens 与选定 console privacy，不等于服务/客户端业务流 Passed |
+| Stage 1 client Compose/bootstrap/config/images | Runtime Passed | root Node 80/80、Compose matrix、Mock runtime config/healthy 依赖、config no-follow、三 owner+outsider、六 cross-owner binding、三镜像 build/version/help/UID；仅 client build/config assets |
 | Stage 1 Mock identity/share/isolation/leak | Not Run | 不执行 Docker workload |
 | Stage 1 TUI | Not Run | 仅在 headless Gate 通过后由用户确认 |
 | Stage 1 真实模型 | Not Run | 需完整 Mock Gate 与明确授权 |
@@ -76,4 +77,4 @@ flowchart LR
 
 ## 下一 Gate
 
-Task 3 review fix 已固定产品提交、三项独立 RED→GREEN 与新 Proxy image。下一 Gate 是 Task 4：创建四个隔离 client home/workspace/identity/evidence 的静态与配置边界，再进入 Task 5 deterministic Mock identity/share/isolation/leak；Task 5 还必须覆盖 JSONL、ClickHouse、Opik、Langfuse、upstream headers 与 Claude 专用历史状态机。当前 Runtime Passed 只覆盖 handler/route tests、选定 console privacy、镜像构建与无网络 runtime assets；服务健康、Mock、业务流、真实 API 与 TUI 仍为 Not Run。
+Task 4 已固定三客户端 active Compose、身份/config 与 CLI images。下一 Gate 是 Task 5 deterministic Mock identity/share/isolation/leak：三写六读、outsider ACL/注入负测、管理 API、upstream header hygiene，以及 JSONL、ClickHouse、Opik、Langfuse、upstream headers 与 Claude 专用历史状态机。当前 Runtime Passed 只覆盖 handler/route 和 client build/config assets；服务健康、Mock 业务流、真实 API 与 TUI 仍为 Not Run。
