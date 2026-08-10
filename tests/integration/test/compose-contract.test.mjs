@@ -152,7 +152,7 @@ test('Windows override is opt-in, requires a canonical host config bind, and exp
     assert.deepEqual(service.profiles, ['windows']);
     assert.equal(service.user, '0:0');
     assert.equal(service.depends_on['agent-config-a'].condition, 'service_completed_successfully');
-    assert.equal(service.depends_on['memory-proxy'].condition, 'service_healthy');
+    assert.equal(service.depends_on['loopback-gateway'].condition, 'service_healthy');
     assert.equal(service.ports, undefined);
     assert.equal(service.secrets, undefined);
     const volumes = Object.fromEntries(service.volumes.map((volume) => [volume.target, volume]));
@@ -171,14 +171,45 @@ test('Windows override is opt-in, requires a canonical host config bind, and exp
   }
 });
 
-test('hardened override publishes only Proxy on host loopback and adds durable logs', () => {
+test('hardened override publishes Proxy only through the least-privilege loopback gateway', () => {
   const { parsed } = composeConfig(['compose.yaml', 'compose.hardened.yaml']);
   const published = Object.entries(parsed.services).filter(([, service]) => service.ports);
-  assert.deepEqual(published.map(([name]) => name), ['memory-proxy']);
-  assert.equal(parsed.services['memory-proxy'].ports[0].host_ip, '127.0.0.1');
-  assert.equal(parsed.services['memory-proxy'].ports[0].published, '8096');
-  assert.ok(parsed.services['memory-proxy'].volumes.some((volume) => volume.source === 'proxy-data' && volume.target === '/data/tdai-memory-proxy'));
-  assert.ok(parsed.services['memory-proxy'].volumes.some((volume) => volume.source === 'proxy-logs' && volume.target === '/app/logs'));
+  assert.deepEqual(published.map(([name]) => name), ['loopback-gateway']);
+  const proxy = parsed.services['memory-proxy'];
+  const gateway = parsed.services['loopback-gateway'];
+  assert.equal(proxy.ports, undefined);
+  assert.ok(proxy.volumes.some((volume) => volume.source === 'proxy-data' && volume.target === '/data/tdai-memory-proxy'));
+  assert.ok(proxy.volumes.some((volume) => volume.source === 'proxy-logs' && volume.target === '/app/logs'));
+  assert.deepEqual(Object.keys(proxy.networks).sort(), ['default']);
+  assert.equal(parsed.networks.default.internal, true);
+  assert.equal(parsed.networks['loopback-ingress'].internal ?? false, false);
+  assert.deepEqual(Object.keys(gateway.networks).sort(), ['default', 'loopback-ingress']);
+  for (const [name, service] of Object.entries(parsed.services)) {
+    assert.equal(Object.hasOwn(service.networks ?? {}, 'loopback-ingress'), name === 'loopback-gateway', `${name} loopback ingress membership`);
+  }
+
+  assert.equal(gateway.image, 'refine-memory-integration-tools:local');
+  assert.deepEqual(gateway.command, ['tools/tcp-forward.mjs']);
+  assert.deepEqual(gateway.environment, {
+    FORWARD_LISTEN_HOST: '0.0.0.0',
+    FORWARD_LISTEN_PORT: '8096',
+    FORWARD_TARGET_HOST: 'memory-proxy',
+    FORWARD_TARGET_PORT: '8096',
+  });
+  assert.equal(gateway.user, '10001:10001');
+  assert.equal(gateway.init, true);
+  assert.equal(gateway.read_only, true);
+  assert.deepEqual(gateway.cap_drop, ['ALL']);
+  assert.ok(gateway.security_opt.includes('no-new-privileges:true'));
+  assert.equal(gateway.volumes, undefined);
+  assert.equal(gateway.secrets, undefined);
+  assert.equal(gateway.depends_on['memory-proxy'].condition, 'service_healthy');
+  assert.equal(gateway.ports.length, 1);
+  assert.equal(gateway.ports[0].host_ip, '127.0.0.1');
+  assert.equal(gateway.ports[0].published, '8096');
+  assert.equal(gateway.ports[0].target, 8096);
+  assert.match(JSON.stringify(gateway.healthcheck.test), /127\.0\.0\.1/);
+  assert.doesNotMatch(JSON.stringify(gateway.healthcheck.test), /memory-proxy|fetch|https?:/i);
 });
 
 test('Redis profile uses the generated Redis Proxy config only after an explicit allowlisted switch', () => {

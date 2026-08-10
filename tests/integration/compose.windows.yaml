@@ -9,7 +9,7 @@ services:
     depends_on:
       agent-config-a:
         condition: service_completed_successfully
-      memory-proxy:
+      loopback-gateway:
         condition: service_healthy
     environment:
       HOST_PROJECT_ROOT: ${PROJECT_ROOT:?set the canonical repository root}
