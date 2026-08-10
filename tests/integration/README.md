@@ -42,7 +42,7 @@
 
 > **Headless / 只读业务探针**：Headless 是不进入交互界面的命令行验证；只读业务探针会调用真实业务 API 但不修改业务状态，容器健康状态不能替代它。
 
-本目录保存可重复的 Docker 实验编排。Windows 重启后 Docker Desktop 已恢复；所选完整镜像构建、默认无付费 `mock-contract`（11 项）、`standalone-memory`（12 项）、Hub health 与 Panel/Knowledge 只读业务探针、Docker Claude config precheck、`2.1.207` headless 和 TUI Mock 文本往返均已 **Runtime Passed**。Loopback Gateway 已 **Static Integrated**，但旧 Windows run 在直接发布 Proxy 的宿主 loopback 处失败；Gateway 版 Windows runtime 仍为 **Pending**。Windows config/headless/TUI、真实 DeepSeek、stream/tool/thinking、故障恢复与 LAN 仍为 Not Run。
+本目录保存可重复的 Docker 实验编排。Windows 重启后 Docker Desktop 已恢复；所选完整镜像构建、默认无付费 `mock-contract`（11 项）、`standalone-memory`（12 项）、Hub health 与 Panel/Knowledge 只读业务探针、Docker Claude config precheck、`2.1.207` headless 和 TUI Mock 文本往返均已 **Runtime Passed**。独立 Windows run 又证明 Loopback Gateway 宿主 health、项目专用 config、原生 Claude `2.1.207` headless、Mock 增量与 Core owner oracle 均通过；Windows TUI 仍等待用户确认。真实 DeepSeek、stream/tool/thinking、故障恢复、Win11、WSL Claude 与 LAN 仍为 Not Run。
 
 > **Mock**：返回固定结果的模拟模型服务。它不访问真实模型，适合默认测试协议、失败和恢复路径。
 
@@ -254,6 +254,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Agent-a config preparation failed' }
 3. [`docker-mock-20260810-030443`](../../docs/reproduction/2026-08-10-docker-mock-20260810-030443-session-precondition-failed.md)：Gate 1 Passed；Gate 2 越过 forged contract 后安全定位到 B session 尚未初始化。
 4. [`docker-mock-20260810-033636`](../../docs/reproduction/2026-08-10-docker-mock-20260810-033636-no-paid-runtime-passed.md)：Gate 1 的 11 项与 Gate 2 的 12 项均 Passed；A 写入、B 显式共享、C 隔离、身份负测和上游 hygiene 均有脱敏证据。
 5. [`windows-mock-20260810-093140-a664249f`](../../docs/reproduction/2026-08-10-windows-mock-20260810-093140-loopback-blocked.md)：两级 Gate 与 `agent-config-a` Passed；直接从 internal Proxy 发布宿主端口失败，Windows config/headless/TUI 未执行。
+6. [`windows-mock-20260810-111850-93778ced`](../../docs/reproduction/windows-mock-20260810-111850-93778ced-windows-claude-mock-passed.md)：Gateway 宿主 health、Windows 项目专用 config、原生 Claude `2.1.207` headless、Anthropic 增量与 Core owner oracle Passed；TUI Awaiting User Confirmation。
 
 Docker Claude TUI 的人工验收保存在 [TUI 用户确认报告](../../docs/reproduction/2026-08-10-docker-mock-20260810-033636-tui-user-confirmed.md)；随后的[文本往返报告](../../docs/reproduction/2026-08-10-docker-mock-20260810-033636-tui-message-passed.md)记录用户收到 `mock text`、Mock 新增观察中列明的敏感诱饵/凭证/内部 header 泄漏检查结果，以及 MemoryCore L0 owner oracle。
 
@@ -365,7 +366,7 @@ $env:CLAUDE_CONFIG_DIR = $env:WINDOWS_CLAUDE_CONFIG_DIR
 claude
 ```
 
-Host gate 会把真实 worktree root 与 canonical Windows config 目录写入短期 attestation；config 目录必须是仓库外的绝对真实路径，不能使用相对路径、junction 或仓库内 `.runtime`。`windows-config-init` 先核对 attestation，再一次读取 agent-a 私有 home 的 `agent-bundle.json`；它不挂共享 bootstrap state 或 DeepSeek secret。Settings 只把 bundle 中的 key 写入 `ANTHROPIC_AUTH_TOKEN`，生成 team/agent/task/conversation 四行身份 headers，并固定写入 `TDAI_MEMORY_PROXY_BASE_URL=http://127.0.0.1:8096`，保留 Claude 自带的 session header。Gateway 的代码和编排当前仅为 Static Integrated；旧 run 没有越过宿主 loopback，使用新路径的 Windows config、headless 与 TUI 仍为 Pending / Not Run。只有新 run 的宿主 health、Windows headless、服务端观察与人工 TUI 全部通过后才能升级状态。
+Host gate 会把真实 worktree root 与 canonical Windows config 目录写入短期 attestation；config 目录必须是仓库外的绝对真实路径，不能使用相对路径、junction 或仓库内 `.runtime`。`windows-config-init` 先核对 attestation，再一次读取 agent-a 私有 home 的 `agent-bundle.json`；它不挂共享 bootstrap state 或 DeepSeek secret。Settings 只把 bundle 中的 key 写入 `ANTHROPIC_AUTH_TOKEN`，生成 team/agent/task/conversation 四行身份 headers，并固定写入 `TDAI_MEMORY_PROXY_BASE_URL=http://127.0.0.1:8096`，保留 Claude 自带的 session header。Run `windows-mock-20260810-111850-93778ced` 已证明新 Gateway 路径的宿主 health、Windows config/headless 与服务端 Mock/Core 观察；全局 `.claude/settings.json` 的 existence/mtime/size 元数据未改变。Windows TUI 仍为 Awaiting User Confirmation，确认前不能升级 G5 Windows UX。
 
 ## 4. Redis profile
 
@@ -439,8 +440,8 @@ $env:MEMORY_CORE_GATEWAY_API_KEY = 'compose-parse-only-' + [guid]::NewGuid().ToS
 ## 当前已知限制
 
 - **Static Passed**：当前根 Node suite 为 64/64；base、tools、Claude、hardened 和 Windows 组合的 Compose contract 在静态测试中通过。
-- **Runtime Passed（受限范围）**：Windows 重启后 Docker 恢复；所选完整镜像 build Passed。最终 run 的 Mock 11 项、Standalone 12 项、A 写/B 共享/C 隔离、安全负测与上游 hygiene、Hub health、Panel team/get、Knowledge wiki/list 和 Docker Claude `2.1.207` headless 均 Passed。
+- **Runtime Passed（受限范围）**：Windows 重启后 Docker 恢复；所选完整镜像 build Passed。Docker run `docker-mock-20260810-033636` 的 Mock 11 项、Standalone 12 项、A 写/B 共享/C 隔离、安全负测与上游 hygiene、Hub probes、Docker Claude headless/TUI 均 Passed；独立 Windows run `windows-mock-20260810-111850-93778ced` 的最小 stack、Gateway、Windows config/headless 与 Mock/Core oracle 均 Passed。
 - **Evidence**：最终 run 的 evidence 目录只有两个已脱敏 ordinary JSON 文件；DeepSeek 为 0 个已选 profile/service 请求且 internal network 生效，但这不是 packet capture。
 - **Runtime Passed（Docker TUI 文本范围）**：用户看到 `mock text`；相较基线新增 2 个 Anthropic 与 3 个 OpenAI 观察，列明的敏感诱饵、凭证形态和内部 header 泄漏检查均为 0；MemoryCore L0 提示命中 1、owner mismatch 为 0。六个 named volumes 与 internal network 继续保留。
-- **Pending / Not Run**：Loopback Gateway 已 Static Integrated，但新 Windows runtime 尚未执行；Windows config/headless/TUI、真实 DeepSeek Anthropic/OpenAI 协议、stream/tool/thinking、Redis、Proxy/Core/Hub stop/restart/recreate、备份恢复、恶意记忆、key 撤销、Win11、WSL Claude 与 LAN 均未运行。
+- **Pending / Not Run**：Windows TUI 尚待用户确认；真实 DeepSeek Anthropic/OpenAI 协议、stream/tool/thinking、Redis、Proxy/Core/Hub/Gateway stop/restart/recreate、备份恢复、恶意记忆、key 撤销、Win11、WSL Claude 与 LAN 均未运行。
 - **Local-only SHA**：public fork `69fd8b31e3fd4362af6c65407b92b26dfabebd0c` 尚未 push；从首个本地修复 `c75ef58` 起至当前修复，共 27 个本地 public commit。当前工作区可用；新 clone 在用户授权 push 前不能取得根 gitlink 目标。
