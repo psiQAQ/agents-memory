@@ -10,10 +10,10 @@ Stage 1 依次支持 Claude Code、OpenCode、Pi 的 Anthropic Messages 路由�
 
 ## Current baseline
 
-- **Fact**：Task 2 的 Tencent upstream base 固定为 default `feat/server_team@0a568c328ea1aae3f22ed3656e7900da7ea565c1`；active fork/gitlink 为 `codex/four-agent-memory-upstream@3db2b7d60a3b6162118cad1090d1872f1410835a`，只在该 base 上增加 Windows Shell LF 与 public cost-guard stub validity 两笔 TDD 最小修复。upstream 前移时仍须先审查增量，不能静默更新。
+- **Fact**：Task 2 的 Tencent upstream base 固定为 default `feat/server_team@0a568c328ea1aae3f22ed3656e7900da7ea565c1`；active fork/gitlink 为 `codex/four-agent-memory-upstream@49c4536b0353b3b4f7b5544c065d4845615031aa`，只在该 base 上增加 Windows Shell LF、public cost-guard stub validity 与全部 tracked shell 动态回归三笔 TDD 最小修复。upstream 前移时仍须先审查增量，不能静默更新。
 - **Fact**：历史修复 ref `codex/legacy-proxy-hardening-69fd8b@69fd8b31e3fd4362af6c65407b92b26dfabebd0c` 仅存在于当前本地对象库，尚未 push；fresh clone 不可取得，未经授权不得 push。若需要跨 clone 可重建保全，必须获得 push 或外部归档授权；在此之前该项仍未完成。
 - **Fact**：版本基线为 Claude Code `2.1.226`、Codex `0.147.0`、OpenCode `1.18.16`、Pi `0.84.1`。
-- **Fact**：Task 2 已完成 Core、Proxy、Hub 本地 source-build 与无网络 runtime asset 检查；该 Gate 为 **Runtime Passed（build/assets only）**。服务健康、Mock、真实 API、TUI 与跨客户端业务流仍为 **Not Run**。历史 Windows + Claude 记录仅是 Legacy 证据，不能作为四 CLI 基线通过证明。
+- **Fact**：Task 2 fix round 1 已用新鲜唯一 context 串行重建 Core/Proxy，镜像内全部 shell 无 CR 且 `bash -n` Passed；Hub 保持原 Passed 镜像。该 Gate 为 **Runtime Passed（build/assets only）**。Core 与 Hub 是 root-default，Proxy UID 10001；本轮只记录权限元数据。服务健康、Mock、真实 API、TUI 与跨客户端业务流仍为 **Not Run**。历史 Windows + Claude 记录仅是 Legacy 证据，不能作为四 CLI 基线通过证明。
 - **Recommendation**：从 `docs/enterprise-memory-system-evaluation.md` 确认下一 Gate；执行 Windows/Docker 操作前，再读 `tests/integration/README.md` 与最新 ADR/reproduction。
 
 ## Constraints
