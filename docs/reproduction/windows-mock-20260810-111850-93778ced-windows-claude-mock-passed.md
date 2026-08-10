@@ -58,6 +58,14 @@ Windows 宿主执行 `curl.exe --noproxy '*' --fail --silent --show-error http:/
 
 独立 Windows PowerShell 子进程保存并在 `finally` 恢复 `MEMORY_CORE_GATEWAY_API_KEY`、`CLAUDE_CONFIG_DIR` 与列明的 `ANTHROPIC_*` 变量。直接把含分号 prompt 的字符串传给 Windows PowerShell `-Command` 会丢失参数引号；控制层 fail-closed 后改用 UTF-16LE Base64 的 `-EncodedCommand` 传递同一子脚本，并重新生成 marker、重新取得 Mock before。tracked 代码未因此改变。
 
+实际成功调用保留完整 `$claudeProbeScript` 中的 `try/finally` 环境隔离、`2.1.207` 精确版本检查和只接受 `mock text` 的回复检查，只把父子 PowerShell 传递方式改为：
+
+```powershell
+$encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($claudeProbeScript))
+& powershell.exe -NoProfile -EncodedCommand $encoded
+if ($LASTEXITCODE -ne 0) { throw 'Windows Claude headless probe failed' }
+```
+
 最终通过结果：
 
 - `claude --version`：`2.1.207 (Claude Code)`，exit 0；

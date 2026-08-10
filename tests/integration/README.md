@@ -368,6 +368,47 @@ claude
 
 Host gate 会把真实 worktree root 与 canonical Windows config 目录写入短期 attestation；config 目录必须是仓库外的绝对真实路径，不能使用相对路径、junction 或仓库内 `.runtime`。`windows-config-init` 先核对 attestation，再一次读取 agent-a 私有 home 的 `agent-bundle.json`；它不挂共享 bootstrap state 或 DeepSeek secret。Settings 只把 bundle 中的 key 写入 `ANTHROPIC_AUTH_TOKEN`，生成 team/agent/task/conversation 四行身份 headers，并固定写入 `TDAI_MEMORY_PROXY_BASE_URL=http://127.0.0.1:8096`，保留 Claude 自带的 session header。Run `windows-mock-20260810-111850-93778ced` 已证明新 Gateway 路径的宿主 health、Windows config/headless 与服务端 Mock/Core 观察；全局 `.claude/settings.json` 的 existence/mtime/size 元数据未改变。Windows TUI 仍为 Awaiting User Confirmation，确认前不能升级 G5 Windows UX。
 
+复现该 run 的 headless 调用时，必须在独立 Windows PowerShell 子进程中隔离环境。不要使用 `powershell.exe -Command $claudeProbeScript`：prompt 中的分号会跨父子 PowerShell 丢失引号并被重新解析。UTF-16LE `EncodedCommand` 可完整保留脚本、版本检查和回复检查：
+
+```powershell
+$claudeProbeScript = @'
+$isolatedNames = @(
+  'MEMORY_CORE_GATEWAY_API_KEY', 'CLAUDE_CONFIG_DIR',
+  'ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_API_KEY', 'ANTHROPIC_MODEL',
+  'ANTHROPIC_DEFAULT_OPUS_MODEL', 'ANTHROPIC_DEFAULT_SONNET_MODEL', 'ANTHROPIC_DEFAULT_HAIKU_MODEL'
+)
+$saved = @{}
+foreach ($name in $isolatedNames) {
+  $item = Get-Item -LiteralPath "Env:$name" -ErrorAction SilentlyContinue
+  $saved[$name] = [pscustomobject]@{
+    Exists = ($null -ne $item)
+    Value = if ($null -ne $item) { $item.Value } else { $null }
+  }
+}
+try {
+  $env:CLAUDE_CONFIG_DIR = $env:WINDOWS_CLAUDE_CONFIG_DIR
+  foreach ($name in $isolatedNames | Where-Object { $_ -ne 'CLAUDE_CONFIG_DIR' }) {
+    Remove-Item -LiteralPath "Env:$name" -ErrorAction SilentlyContinue
+  }
+  $version = & claude --version
+  if ($LASTEXITCODE -ne 0 -or $version -notmatch '^2\.1\.207(?:\s|$)') { throw 'claude-version' }
+  if (-not $env:WINDOWS_PROBE_MARKER) { throw 'probe-marker' }
+  $reply = & claude -p "$env:WINDOWS_PROBE_MARKER Reply exactly mock text; no tools" --max-turns 1
+  if ($LASTEXITCODE -ne 0 -or $reply -notmatch '^\s*mock text\s*$') { throw 'claude-headless' }
+}
+finally {
+  foreach ($name in $isolatedNames) {
+    if ($saved[$name].Exists) { Set-Item -LiteralPath "Env:$name" -Value $saved[$name].Value }
+    else { Remove-Item -LiteralPath "Env:$name" -ErrorAction SilentlyContinue }
+  }
+}
+'@
+$env:WINDOWS_PROBE_MARKER = 'WINDOWS_MOCK_MARKER_' + [guid]::NewGuid().ToString('N')
+$encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($claudeProbeScript))
+& powershell.exe -NoProfile -EncodedCommand $encoded
+if ($LASTEXITCODE -ne 0) { throw 'Windows Claude headless probe failed' }
+```
+
 ## 4. Redis profile
 
 Redis 是 Proxy 的可选临时状态层，用于 session、cache、rate limit、binding 和 version pin；它不是 Core 数据库。必须同时显式选择 Redis profile 和受限配置文件；只启动 Redis 容器不算启用：

@@ -247,7 +247,7 @@
   if ($LASTEXITCODE -ne 0) { throw 'Windows config init failed' }
   ```
 
-- [ ] 4.6 在单独 PowerShell 进程运行 headless probe。先按 4.7 的 `Mock before` 程序取得 `$mockBefore`，再把下列脚本整体传给新的 `powershell.exe -NoProfile -Command`。脚本必须用 `try/finally` 保存并恢复 `MEMORY_CORE_GATEWAY_API_KEY`、`CLAUDE_CONFIG_DIR` 和所有列出的 `ANTHROPIC_*` 变量；因此父进程中的 `MEMORY_CORE_GATEWAY_API_KEY` 会继续存在，供 4.7 的 Compose probes 展开环境，不能以永久删除变量作为隔离手段。
+- [ ] 4.6 在单独 PowerShell 进程运行 headless probe。先按 4.7 的 `Mock before` 程序取得 `$mockBefore`，再把下列脚本编码为 Windows PowerShell 所需的 UTF-16LE Base64，并整体传给新的 `powershell.exe -NoProfile -EncodedCommand`。不能直接使用 `-Command $claudeProbeScript`：含分号的 prompt 会在父子 PowerShell 参数边界丢失引号并被重新解析。脚本必须用 `try/finally` 保存并恢复 `MEMORY_CORE_GATEWAY_API_KEY`、`CLAUDE_CONFIG_DIR` 和所有列出的 `ANTHROPIC_*` 变量；因此父进程中的 `MEMORY_CORE_GATEWAY_API_KEY` 会继续存在，供 4.7 的 Compose probes 展开环境，不能以永久删除变量作为隔离手段。
 
   ```powershell
   $claudeProbeScript = @'
@@ -280,7 +280,8 @@
   }
   '@
   $env:WINDOWS_PROBE_MARKER = 'WINDOWS_MOCK_MARKER_' + [guid]::NewGuid().ToString('N')
-  & powershell.exe -NoProfile -Command $claudeProbeScript
+  $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($claudeProbeScript))
+  & powershell.exe -NoProfile -EncodedCommand $encoded
   if ($LASTEXITCODE -ne 0) { throw 'Windows Claude headless probe failed' }
   ```
 
