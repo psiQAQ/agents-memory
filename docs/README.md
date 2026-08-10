@@ -17,6 +17,7 @@
 | [Task 2 Proxy source-build Passed](reproduction/2026-08-10-task2-proxy-source-build-passed.md) | TDD 修复后的 public context/native assets/fallback | Runtime Passed（build/assets only）；Hub Not Run |
 | [Task 2 Hub recipe-context RED](reproduction/2026-08-10-task2-hub-pristine-context-red.md) | 固定 upstream Hub Dockerfile 的直接 context 失败 | Failed / Blocked；需要 combined Panel/Knowledge context |
 | [Task 2 Hub source-build Passed](reproduction/2026-08-10-task2-hub-source-build-passed.md) | upstream combined context、native SQLite 与 runtime assets | Runtime Passed（build/assets only） |
+| [Legacy Docker 运行资源精确清理](reproduction/2026-08-10-legacy-docker-resources-cleanup.md) | 旧 Compose projects、容器、网络、卷和镜像的不可恢复清理审计 | Runtime Cleanup Passed；不改变四 CLI 业务 Gate |
 | [集成实验 SOP](../tests/integration/README.md) | 后续静态验证与受控运行入口 | Stage 1 前置 Gate 未运行 |
 
 建议阅读顺序：先读 [负责人思想](repo-author-comment/comment.md)，再读当前评估和本轮 ADR/reproduction；需要执行实验时才读 SOP 及相应产品源码/测试。负责人思想与企业设计草案分别位于 `repo-author-comment/` 和 [design/2026-08-06-enterprise-memory-design.md](design/2026-08-06-enterprise-memory-design.md)，不能当作本机运行证明。
@@ -24,6 +25,8 @@
 ## Legacy：Windows + Claude 路线
 
 `specs/`、早期 `superpowers/` 计划、既有 `decisions/` 与 `reproduction/` 完整保留为 Legacy 历史。特别是 2026-08-09 至 2026-08-10 的 Docker/Windows Claude 记录只能说明其各自的旧 run，不能升级为 Claude/OpenCode/Pi/Codex 四 CLI 的通过证据。需要追溯时，从 [旧 standalone Gate ADR](decisions/2026-08-09-standalone-memory-gate.md) 和 [旧 Docker 运行记录](reproduction/2026-08-10-docker-mock-20260810-033636-no-paid-runtime-passed.md) 开始，并保持其原文结论。
+
+2026-08-10 经负责人明确授权，旧路线的 3 个 Compose project、20 个容器、4 个网络、27 个卷和旧镜像候选已完成[精确清理](reproduction/2026-08-10-legacy-docker-resources-cleanup.md)。历史文档和 Git ref 仍可追溯，但旧 `main` 的 `fork-69fd8b` 栈不能再依赖原有 runtime resources 原样启动。
 
 历史 public fork 修复 ref 为 `codex/legacy-proxy-hardening-69fd8b@69fd8b31e3fd4362af6c65407b92b26dfabebd0c`；它仅存在于当前本地对象库，尚未 push，fresh clone 不可取得，未经授权不得 push。跨 clone 可重建保全需要 push 或外部归档授权，在此之前仍未完成；它不是 active upstream 基线。
 
