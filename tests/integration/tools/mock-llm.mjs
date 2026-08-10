@@ -9,6 +9,7 @@ const leakPattern = /MEMORY_(?:(?:GATEWAY|IDENTITY)_)?LEAK_SENTINEL_[A-Z0-9_-]+/
 const memoryCredentialPattern = /sk-mem-[A-Za-z0-9_-]{32}/i;
 const stage1OperationPattern = /STAGE1_OP_[A-Z0-9_-]{6,128}/g;
 const stage1MarkerPattern = /MEMORY_NONCE_[A-Za-z0-9_-]{1,128}/g;
+const stage1FixturePattern = /\bSTAGE1_FIXTURE_(text|stream|tool|count|http-400|http-429|http-500|timeout)\b/;
 
 function digest(value) {
   return createHash('sha256').update(value).digest('hex');
@@ -41,6 +42,15 @@ function readJson(request) {
     });
     request.on('error', reject);
   });
+}
+
+function selectedFixture(request, body) {
+  const header = request.headers['x-mock-fixture'];
+  if (typeof header === 'string') return header;
+  const messages = Array.isArray(body?.messages) ? body.messages : [];
+  const text = messages.map((message) => typeof message?.content === 'string' ? message.content : '').join('\n');
+  const fixture = text.match(stage1FixturePattern)?.[1];
+  return ['stream', 'count'].includes(fixture) ? 'text' : fixture ?? 'text';
 }
 
 function observe(observations, aggregate, request, body, fixture) {
@@ -189,7 +199,7 @@ export function createMockServer({ timeoutMs = Number(process.env.MOCK_TIMEOUT_M
     if (request.method !== 'POST') return sendJson(response, 405, { error: { type: 'method_not_allowed' } });
     let body;
     try { body = await readJson(request); } catch (error) { return sendJson(response, error.message === 'body-too-large' ? 413 : 400, { error: { type: error.message } }); }
-    const fixture = request.headers['x-mock-fixture'] ?? 'text';
+    const fixture = selectedFixture(request, body);
     observe(observations, aggregate, request, body, fixtures.has(fixture) ? fixture : 'invalid');
     if (!fixtures.has(fixture)) return sendJson(response, 400, { error: { type: 'unknown_fixture' } });
     if (fixture in errorStatus) {

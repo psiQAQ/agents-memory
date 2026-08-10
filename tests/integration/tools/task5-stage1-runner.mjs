@@ -145,6 +145,20 @@ function expectedStatus(fixture) {
   return 200;
 }
 
+function validProtocolResponse(fixture, status, contentType, bytes) {
+  if (fixture === 'timeout') return status === 0 && bytes === undefined;
+  if (!(bytes instanceof ArrayBuffer)) return false;
+  const text = Buffer.from(bytes).toString('utf8');
+  if (fixture === 'stream') return /^text\/event-stream(?:;|$)/i.test(contentType) && text.includes('event: message_start') && text.includes('event: message_stop');
+  let data;
+  try { data = JSON.parse(text); } catch { return false; }
+  if (fixture.startsWith('http-')) return data?.type === 'error' && data?.error?.type === 'mock_error';
+  if (fixture === 'count') return Number.isInteger(data?.input_tokens) && data.input_tokens > 0;
+  if (data?.type !== 'message' || !Array.isArray(data.content)) return false;
+  if (fixture === 'tool') return data.content.some((block) => block?.type === 'tool_use' && block.name === 'stage1_echo');
+  return data.content.some((block) => block?.type === 'text' && typeof block.text === 'string');
+}
+
 export async function runProtocolLeakGate({ manifestPath, proxyUrl, mockUrl, outputDir, timeoutMs = 100 }) {
   if (![manifestPath, outputDir].every((path) => isAbsolute(path ?? '')) || ![proxyUrl, mockUrl].every((url) => /^https?:\/\//.test(url ?? '')) || !Number.isInteger(timeoutMs) || timeoutMs < 10 || timeoutMs > 5000) throw new Error('invalid Stage 1 arguments');
   let manifest;
@@ -166,19 +180,21 @@ export async function runProtocolLeakGate({ manifestPath, proxyUrl, mockUrl, out
         max_tokens: 32,
         ...(entry.fixture === 'stream' ? { stream: true } : {}),
         ...(entry.fixture === 'tool' ? { tools: [{ name: 'stage1_echo', description: 'deterministic fixture', input_schema: { type: 'object', properties: {} } }] } : {}),
-        messages: [{ role: 'user', content: 'Run the deterministic Stage 1 protocol check.' }],
+        messages: [{ role: 'user', content: `STAGE1_FIXTURE_${entry.fixture} Run the deterministic Stage 1 protocol check.` }],
       };
-      const fixtureHeader = ['tool', 'http-400', 'http-429', 'http-500', 'timeout'].includes(entry.fixture) ? entry.fixture : 'text';
       let status;
+      let contentType = '';
+      let responseBytes;
       try {
         const response = await fetch(new URL(path, proxyUrl), {
           method: 'POST',
-          headers: { ...proxyHeaders(manifest, entry.client, keys[entry.client], sentinel), 'x-mock-fixture': fixtureHeader },
+          headers: proxyHeaders(manifest, entry.client, keys[entry.client], sentinel),
           body: JSON.stringify(body),
           signal: AbortSignal.timeout(entry.fixture === 'timeout' ? timeoutMs : 5000),
         });
         status = response.status;
-        await response.arrayBuffer();
+        contentType = response.headers.get('content-type') ?? '';
+        responseBytes = await response.arrayBuffer();
       } catch (error) {
         if (entry.fixture !== 'timeout' || !['AbortError', 'TimeoutError'].includes(error?.name)) throw error;
         status = 0;
@@ -186,7 +202,7 @@ export async function runProtocolLeakGate({ manifestPath, proxyUrl, mockUrl, out
       const observed = await json(new URL('/__mock/requests', mockUrl));
       const targetPath = `/anthropic/v1/messages${count ? '/count_tokens' : ''}`;
       const requests = Array.isArray(observed.data?.requests) ? observed.data.requests.filter((request) => request?.path === targetPath) : [];
-      if (status !== expectedStatus(entry.fixture) || requests.length !== 1 || requests.some(isUnsafeObservation)) throw new Error();
+      if (status !== expectedStatus(entry.fixture) || !validProtocolResponse(entry.fixture, status, contentType, responseBytes) || requests.length !== 1 || requests.some(isUnsafeObservation)) throw new Error();
       assertions.push({ name, status, model_requests: requests.length });
     } catch {
       const failed = { status: 'failed', assertion: name, passed: assertions.length };

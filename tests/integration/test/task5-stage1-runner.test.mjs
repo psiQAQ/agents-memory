@@ -80,7 +80,7 @@ test('Task 5 headless driver rejects unknown clients, scenarios, runs, and self 
   ]) assert.throws(call, /invalid/);
 });
 
-async function fixture({ unsafe = false } = {}) {
+async function fixture({ unsafe = false, corruptTool = false } = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'task5-runner-'));
   const mock = createMockServer({ timeoutMs: 40 });
   await ensureFetchSafeServer(mock);
@@ -110,24 +110,25 @@ async function fixture({ unsafe = false } = {}) {
     const source = path.split('/')[1];
     const client = Object.entries({ claude: 'claude-code', opencode: 'opencode', pi: 'pi' }).find(([, value]) => value === source)?.[0];
     const body = await new Promise((resolve) => { let text = ''; request.on('data', (chunk) => { text += chunk; }); request.on('end', () => resolve(text)); });
-    if (!client || request.headers.authorization !== `Bearer ${keys[client]}` || request.headers['x-team-id'] !== 'team-shared' || request.headers['x-agent-id'] !== ids[client].agent_id || request.headers['x-task-id'] !== 'task-shared' || request.headers['x-conversation-id'] !== ids[client].session_id) {
+    if (!client || request.headers['x-mock-fixture'] !== undefined || request.headers.authorization !== `Bearer ${keys[client]}` || request.headers['x-team-id'] !== 'team-shared' || request.headers['x-agent-id'] !== ids[client].agent_id || request.headers['x-task-id'] !== 'task-shared' || request.headers['x-conversation-id'] !== ids[client].session_id) {
       response.writeHead(401, { 'content-type': 'application/json' }).end('{}');
       return;
     }
-    const fixture = request.headers['x-mock-fixture'];
     const count = path.endsWith('/count_tokens');
     const upstream = await fetch(`${mockUrl}/anthropic/v1/messages${count ? '/count_tokens' : ''}`, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
         'x-api-key': 'mock-key',
-        'x-mock-fixture': fixture,
         ...(unsafe ? { 'x-team-id': request.headers['x-team-id'] } : {}),
       },
       body,
     });
     response.writeHead(upstream.status, { 'content-type': upstream.headers.get('content-type') ?? 'application/json' });
-    response.end(Buffer.from(await upstream.arrayBuffer()));
+    const upstreamBody = Buffer.from(await upstream.arrayBuffer());
+    response.end(corruptTool && body.includes('STAGE1_FIXTURE_tool')
+      ? JSON.stringify({ id: 'msg_corrupt', type: 'message', role: 'assistant', content: [{ type: 'text', text: 'not a tool response' }] })
+      : upstreamBody);
   });
   await ensureFetchSafeServer(proxy);
   return {
@@ -277,6 +278,15 @@ test('Task 5 protocol runner fails closed and records only the failing assertion
     const evidence = await readFile(join(outputDir, 'stage1-mock.json'), 'utf8');
     assert.deepEqual(JSON.parse(evidence), { status: 'failed', assertion: 'leak-claude-text', passed: 0 });
     assert.doesNotMatch(evidence, /team-shared|x-team-id|sk-mem-|MEMORY_/i);
+  } finally { await value.close(); }
+});
+
+test('Task 5 protocol runner rejects a 200 response with the wrong Anthropic tool shape', async () => {
+  const value = await fixture({ corruptTool: true });
+  try {
+    const outputDir = join(value.directory, 'corrupt-tool-evidence');
+    await assert.rejects(runProtocolLeakGate({ manifestPath: value.manifestPath, proxyUrl: value.proxyUrl, mockUrl: value.mockUrl, outputDir, timeoutMs: 20 }), /assertion=leak-claude-tool/);
+    assert.deepEqual(JSON.parse(await readFile(join(outputDir, 'stage1-mock.json'), 'utf8')), { status: 'failed', assertion: 'leak-claude-tool', passed: 2 });
   } finally { await value.close(); }
 });
 
