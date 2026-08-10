@@ -36,13 +36,16 @@ function hasCredential(value) {
 
 export async function renderSettings(options) {
   const { target, template, configDir, bundleFile, spaceId = 'default' } = options;
-  if (!urls[target]) throw new Error('invalid target');
+  const claudeTarget = Boolean(urls[target]);
+  if (!claudeTarget && !['opencode', 'pi'].includes(target)) throw new Error('invalid target');
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(spaceId) || spaceId.includes('..')) throw new Error('invalid space-id');
-  if (![template, configDir, bundleFile].every((path) => isAbsolute(path ?? ''))) throw new Error('invalid path');
+  if (![configDir, bundleFile, ...(claudeTarget ? [template] : [])].every((path) => isAbsolute(path ?? ''))) throw new Error('invalid path');
   let source;
   let parsed;
-  try { source = await readFile(template, 'utf8'); parsed = JSON.parse(source); } catch { throw new Error('invalid template'); }
-  if ((source.match(/__MEMORY_PROXY_BASE_URL__/g) ?? []).length !== 1 || !parsed || typeof parsed !== 'object' || Array.isArray(parsed) || !parsed.env || typeof parsed.env !== 'object' || Array.isArray(parsed.env) || parsed.env.ANTHROPIC_BASE_URL !== '__MEMORY_PROXY_BASE_URL__' || parsed.env.TDAI_MEMORY_PROXY_BASE_URL !== undefined || hasCredential(parsed)) throw new Error('invalid template');
+  if (claudeTarget) {
+    try { source = await readFile(template, 'utf8'); parsed = JSON.parse(source); } catch { throw new Error('invalid template'); }
+    if ((source.match(/__MEMORY_PROXY_BASE_URL__/g) ?? []).length !== 1 || !parsed || typeof parsed !== 'object' || Array.isArray(parsed) || !parsed.env || typeof parsed.env !== 'object' || Array.isArray(parsed.env) || parsed.env.ANTHROPIC_BASE_URL !== '__MEMORY_PROXY_BASE_URL__' || parsed.env.TDAI_MEMORY_PROXY_BASE_URL !== undefined || hasCredential(parsed)) throw new Error('invalid template');
+  }
   let bundle;
   try {
     const metadata = await lstat(bundleFile);
@@ -55,22 +58,68 @@ export async function renderSettings(options) {
   const identityFields = ['service_id', 'team_id', 'user_id', 'agent_id', 'task_id', 'session_id', 'display_name'];
   const idFields = identityFields.filter((name) => name !== 'display_name');
   if (!identity || typeof identity !== 'object' || Array.isArray(identity) || Object.keys(identity).sort().join() !== [...identityFields].sort().join() || identity.service_id !== spaceId || !idFields.every((name) => identityPattern.test(identity[name])) || !validDisplayName(identity.display_name)) throw new Error('invalid agent-bundle-file');
-  const expectedBaseUrl = `${urls[target]}/${spaceId}`;
-  const rendered = source.replace('__MEMORY_PROXY_BASE_URL__', expectedBaseUrl);
-  if (/__[A-Z0-9_]+__/.test(rendered)) throw new Error('invalid template');
   let output;
-  try { output = JSON.parse(rendered); } catch { throw new Error('invalid template'); }
-  if (!output.env || typeof output.env !== 'object' || Array.isArray(output.env) || output.env.ANTHROPIC_BASE_URL !== expectedBaseUrl) throw new Error('invalid template');
-  output.env.ANTHROPIC_AUTH_TOKEN = key;
-  output.env.TDAI_MEMORY_PROXY_BASE_URL = toolUrls[target];
-  output.env.ANTHROPIC_CUSTOM_HEADERS = [
-    `x-team-id: ${identity.team_id}`,
-    `x-agent-id: ${identity.agent_id}`,
-    `x-task-id: ${identity.task_id}`,
-    `x-conversation-id: ${identity.session_id}`,
-  ].join('\n');
-  const destination = join(configDir, 'settings.json');
-  const temporary = join(configDir, `.settings.${process.pid}.${randomUUID()}.tmp`);
+  let filename;
+  if (claudeTarget) {
+    const expectedBaseUrl = `${urls[target]}/${spaceId}`;
+    const rendered = source.replace('__MEMORY_PROXY_BASE_URL__', expectedBaseUrl);
+    if (/__[A-Z0-9_]+__/.test(rendered)) throw new Error('invalid template');
+    try { output = JSON.parse(rendered); } catch { throw new Error('invalid template'); }
+    if (!output.env || typeof output.env !== 'object' || Array.isArray(output.env) || output.env.ANTHROPIC_BASE_URL !== expectedBaseUrl) throw new Error('invalid template');
+    output.env.ANTHROPIC_AUTH_TOKEN = key;
+    output.env.TDAI_MEMORY_PROXY_BASE_URL = toolUrls[target];
+    output.env.ANTHROPIC_CUSTOM_HEADERS = [
+      `x-team-id: ${identity.team_id}`,
+      `x-agent-id: ${identity.agent_id}`,
+      `x-task-id: ${identity.task_id}`,
+      `x-conversation-id: ${identity.session_id}`,
+    ].join('\n');
+    filename = 'settings.json';
+  } else if (target === 'opencode') {
+    output = {
+      $schema: 'https://opencode.ai/config.json',
+      provider: {
+        'memory-anthropic': {
+          npm: '@ai-sdk/anthropic',
+          name: 'MemoryProxy OpenCode',
+          options: {
+            baseURL: `http://memory-proxy:8096/opencode/${spaceId}/v1`,
+            authToken: '{env:MEMORY_USER_KEY}',
+            headers: {
+              'x-team-id': '{env:MEMORY_TEAM_ID}',
+              'x-agent-id': '{env:MEMORY_AGENT_ID}',
+              'x-task-id': '{env:MEMORY_TASK_ID}',
+              'x-conversation-id': '{env:MEMORY_SESSION_ID}',
+            },
+          },
+          models: { 'deepseek-v4-pro': { name: 'MemoryProxy DeepSeek Pro', limit: { context: 128000, output: 8192 } } },
+        },
+      },
+      model: 'memory-anthropic/deepseek-v4-pro',
+    };
+    filename = 'opencode.json';
+  } else {
+    output = {
+      providers: {
+        'memory-anthropic': {
+          baseUrl: `http://memory-proxy:8096/pi/${spaceId}`,
+          api: 'anthropic-messages',
+          apiKey: '$MEMORY_USER_KEY',
+          authHeader: true,
+          headers: {
+            'x-team-id': '$MEMORY_TEAM_ID',
+            'x-agent-id': '$MEMORY_AGENT_ID',
+            'x-task-id': '$MEMORY_TASK_ID',
+            'x-conversation-id': '$MEMORY_SESSION_ID',
+          },
+          models: [{ id: 'deepseek-v4-pro', name: 'MemoryProxy DeepSeek Pro', reasoning: true, input: ['text'], contextWindow: 128000, maxTokens: 8192 }],
+        },
+      },
+    };
+    filename = 'models.json';
+  }
+  const destination = join(configDir, filename);
+  const temporary = join(configDir, `.${filename}.${process.pid}.${randomUUID()}.tmp`);
   try {
     await mkdir(configDir, { recursive: true, mode: 0o700 }).catch(async () => {
       if (!(await stat(configDir)).isDirectory()) throw new Error('not a directory');
@@ -88,6 +137,15 @@ export async function renderSettings(options) {
     await unlink(temporary).catch(() => {});
     throw new Error('cannot write settings');
   }
+  return {
+    environment: {
+      MEMORY_USER_KEY: key,
+      MEMORY_TEAM_ID: identity.team_id,
+      MEMORY_AGENT_ID: identity.agent_id,
+      MEMORY_TASK_ID: identity.task_id,
+      MEMORY_SESSION_ID: identity.session_id,
+    },
+  };
 }
 
 if (isMain(import.meta)) {

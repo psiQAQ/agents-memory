@@ -49,6 +49,51 @@ test('renderer writes fixed Docker and Windows proxy URLs without changing templ
   } finally { await rm(f.directory, { recursive: true, force: true }); }
 });
 
+test('renderer writes native OpenCode and Pi Anthropic configs with only the selected private identity environment', async () => {
+  const f = await fixture();
+  const otherKey = `sk-mem-${'Z'.repeat(32)}`;
+  try {
+    for (const [target, expectedFile] of [['opencode', 'opencode.json'], ['pi', 'models.json']]) {
+      const clientKey = target === 'opencode' ? key : otherKey;
+      const identity = { ...baseIdentity, agent_id: `agent-${target}`, session_id: `session-${target}`, display_name: target };
+      await writeFile(f.bundleFile, JSON.stringify(bundle(clientKey, identity)));
+      const configDir = join(f.directory, target);
+      const rendered = await renderSettings({ target, configDir, bundleFile: f.bundleFile, spaceId: 'default' });
+      assert.deepEqual(rendered.environment, {
+        MEMORY_USER_KEY: clientKey,
+        MEMORY_TEAM_ID: 'team-a',
+        MEMORY_AGENT_ID: `agent-${target}`,
+        MEMORY_TASK_ID: 'task-a',
+        MEMORY_SESSION_ID: `session-${target}`,
+      });
+      assert.doesNotMatch(JSON.stringify(rendered.environment), new RegExp(target === 'opencode' ? otherKey : key));
+      const config = JSON.parse(await readFile(join(configDir, expectedFile), 'utf8'));
+      const text = JSON.stringify(config);
+      assert.doesNotMatch(text, /sk-mem-|Authorization|claude-code|api\.deepseek\.com/i);
+      if (target === 'opencode') {
+        const provider = config.provider['memory-anthropic'];
+        assert.equal(provider.npm, '@ai-sdk/anthropic');
+        assert.equal(provider.options.baseURL, 'http://memory-proxy:8096/opencode/default/v1');
+        assert.equal(provider.options.authToken, '{env:MEMORY_USER_KEY}');
+        assert.deepEqual(provider.options.headers, {
+          'x-team-id': '{env:MEMORY_TEAM_ID}', 'x-agent-id': '{env:MEMORY_AGENT_ID}', 'x-task-id': '{env:MEMORY_TASK_ID}', 'x-conversation-id': '{env:MEMORY_SESSION_ID}',
+        });
+        assert.equal(config.model, 'memory-anthropic/deepseek-v4-pro');
+      } else {
+        const provider = config.providers['memory-anthropic'];
+        assert.equal(provider.baseUrl, 'http://memory-proxy:8096/pi/default');
+        assert.equal(provider.api, 'anthropic-messages');
+        assert.equal(provider.apiKey, '$MEMORY_USER_KEY');
+        assert.equal(provider.authHeader, true);
+        assert.deepEqual(provider.headers, {
+          'x-team-id': '$MEMORY_TEAM_ID', 'x-agent-id': '$MEMORY_AGENT_ID', 'x-task-id': '$MEMORY_TASK_ID', 'x-conversation-id': '$MEMORY_SESSION_ID',
+        });
+        assert.equal(provider.models[0].id, 'deepseek-v4-pro');
+      }
+    }
+  } finally { await rm(f.directory, { recursive: true, force: true }); }
+});
+
 test('renderer CLI creates a fresh config directory and accepts one terminal CRLF after the bundle JSON', async () => {
   const f = await fixture();
   try {

@@ -4,7 +4,7 @@ import { dirname, isAbsolute, join, relative } from 'node:path';
 import { isMain } from './runtime-lib.mjs';
 import { validateManifest } from './test-runner.mjs';
 
-const agents = new Set(['agent-a', 'agent-b', 'agent-c']);
+const agents = new Set(['agent-a', 'agent-b', 'agent-c', 'claude', 'opencode', 'pi']);
 const keyPattern = /^sk-mem-[A-Za-z0-9_-]{32}$/;
 const identityPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 

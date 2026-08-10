@@ -12,21 +12,26 @@ const keys = {
   'agent-b': `sk-mem-${'B'.repeat(32)}`,
   'agent-c': `sk-mem-${'C'.repeat(32)}`,
 };
+const task4Keys = {
+  claude: `sk-mem-${'F'.repeat(32)}`,
+  opencode: `sk-mem-${'G'.repeat(32)}`,
+  pi: `sk-mem-${'H'.repeat(32)}`,
+};
 const owner = { uid: process.getuid?.() ?? 10001, gid: process.getgid?.() ?? 10001 };
 const tool = fileURLToPath(new URL('../tools/prepare-agent.mjs', import.meta.url));
 
-async function fixture() {
+async function fixture(credentials = keys) {
   const root = await mkdtemp(join(tmpdir(), 'memory-agent-config-'));
   const stateDir = join(root, 'state', 'run');
   await mkdir(join(stateDir, 'credentials'), { recursive: true });
-  await Promise.all(Object.entries(keys).map(([agent, key]) => writeFile(join(stateDir, 'credentials', `${agent}.user-key`), `${key}\n`)));
-  await writeFile(join(stateDir, 'bootstrap.private.json'), JSON.stringify({ secret: keys['agent-a'] }));
+  await Promise.all(Object.entries(credentials).map(([agent, key]) => writeFile(join(stateDir, 'credentials', `${agent}.user-key`), `${key}\n`)));
+  await writeFile(join(stateDir, 'bootstrap.private.json'), JSON.stringify({ secret: Object.values(credentials)[0] }));
   await writeFile(join(stateDir, 'run-manifest.json'), JSON.stringify({
     run_id: 'run-1',
     service_id: 'default',
     team_id: 'team-1',
     task_id: 'task-1',
-    clients: Object.fromEntries(Object.keys(keys).map((agent) => [agent, {
+    clients: Object.fromEntries(Object.keys(credentials).map((agent) => [agent, {
       user_id: `user-${agent}`,
       agent_id: `id-${agent}`,
       session_id: `session-${agent}`,
@@ -36,6 +41,24 @@ async function fixture() {
   }));
   return { root, stateDir };
 }
+
+test('prepare-agent publishes only each selected Task 4 client bundle into its private home', async () => {
+  const f = await fixture(task4Keys);
+  try {
+    for (const client of Object.keys(task4Keys)) {
+      const home = join(f.root, `home-${client}`);
+      await mkdir(home);
+      await prepareAgent({ agent: client, stateDir: f.stateDir, homeDir: home, spaceId: 'default', ...owner });
+      const bundleText = await readFile(join(home, '.memory', 'agent-bundle.json'), 'utf8');
+      const bundle = JSON.parse(bundleText);
+      assert.equal(bundle.memory_user_key, task4Keys[client]);
+      assert.equal(bundle.identity.agent_id, `id-${client}`);
+      assert.equal(bundle.identity.session_id, `session-${client}`);
+      for (const [other, otherKey] of Object.entries(task4Keys)) if (other !== client) assert.doesNotMatch(bundleText, new RegExp(otherKey));
+      assert.deepEqual(await readdir(join(home, '.memory')), ['agent-bundle.json']);
+    }
+  } finally { await rm(f.root, { recursive: true, force: true }); }
+});
 
 test('prepare-agent copies only the selected credential into an isolated private home', async () => {
   const f = await fixture();
