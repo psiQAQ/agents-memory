@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import test from 'node:test';
 
@@ -113,4 +114,15 @@ test('active mock overlay renders runtime config and waits for healthy services'
   assert.equal(bootstrap.depends_on['memory-core'].condition, 'service_healthy');
   assert.equal(bootstrap.environment.MEMORY_CORE_SERVICE_TOKEN_FILE, '/runtime-config/gateway.token');
   assert.ok(bootstrap.volumes.some((volume) => volume.source === 'runtime-config' && volume.target === '/runtime-config' && volume.read_only));
+});
+
+test('active SOP matrix supplies and clears only a disposable non-LLM gateway value', async () => {
+  const readme = await readFile(join(integrationRoot, 'README.md'), 'utf8');
+  const block = readme.match(/active Compose 静态入口[\s\S]*?```powershell\n([\s\S]*?)\n```/)?.[1] ?? '';
+  const assignment = "$env:MEMORY_CORE_GATEWAY_API_KEY = 'task4-static-gateway-key'";
+  assert.ok(block.indexOf(assignment) >= 0);
+  assert.ok(block.indexOf(assignment) < block.indexOf("foreach ($profile"));
+  assert.match(block, /finally \{\n\s+Remove-Item Env:MEMORY_CORE_GATEWAY_API_KEY -ErrorAction SilentlyContinue\n\}/);
+  assert.match(readme, /disposable non-LLM gateway 值/);
+  assert.match(readme, /不得在 Paid Gate 中复用/);
 });

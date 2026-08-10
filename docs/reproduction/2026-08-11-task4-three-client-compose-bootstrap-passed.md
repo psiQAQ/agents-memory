@@ -10,7 +10,7 @@
 
 ## 结论边界
 
-Task 4 已建立 active `compose.four-cli*.yaml`、无 secret 三客户端 manifest、动态三 owner/outsider bootstrap、私有 bundle/config renderer 与三款固定非 root CLI image。review fix 补齐 Mock runtime config/healthy 依赖、config-dir no-follow 与 Node base digest pin。root Node suite 最终为 80/80；Compose base 和六个 overlay 均可解析；三镜像从官方发布源串行构建并通过精确 version/help/UID Gate。
+Task 4 已建立 active `compose.four-cli*.yaml`、无 secret 三客户端 manifest、动态三 owner/outsider bootstrap、私有 bundle/config renderer 与三款固定非 root CLI image。review fix 补齐 Mock runtime config/healthy 依赖、config-dir no-follow 与 Node base digest pin。root Node suite 最终为 81/81；Compose base 和六个 overlay 均可解析；三镜像从官方发布源串行构建并通过精确 version/help/UID Gate。
 
 本记录不证明 Memory 服务启动、Mock prompt、三写六读、ACL/leak、管理 CRUD、真实模型、TUI 或 Codex。它们仍为 Not Run。
 
@@ -65,7 +65,7 @@ Docker Client/Server 均为 `29.6.2`。最终 Dockerfile 不允许通过 build a
 
 ## 最终复验
 
-- `node --test tests/integration/test/*.test.mjs`：exit 0，80/80。
+- `node --test tests/integration/test/*.test.mjs`：exit 0，81/81。
 - active base + `mock`/`real`/`claude`/`opencode`/`pi`/`management` Compose config matrix：全部 exit 0。
 - 全部 `tests/integration/**/*.sh` 的 `bash -n`：Passed。首次 Windows 组合校验因 PowerShell 交给 Git Bash 的反斜杠路径被拼接而停止；将路径规范化为 `/` 后重跑通过，不是 shell 语法 RED。
 - Markdown 相对链接、UTF-8 无 BOM/LF、secret-shape scan、`git diff --check`：Passed。

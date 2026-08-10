@@ -53,7 +53,7 @@ flowchart LR
 | Task 1 历史保全、active docs、gitlink | Static baseline | 本轮文档/指针工作；不是服务运行 |
 | Stage 1 upstream source-build | Runtime Passed | 全部 tracked/image shell、Core/Proxy 新构建与必要 runtime assets Passed；Hub 保持原 Passed 镜像；不等于服务/业务 Runtime Passed |
 | Stage 1 Claude/OpenCode/Pi 原生路由 | Runtime Passed | 真实 handler/route tests 31/31 与新镜像内 31/31；含 session-init-enabled stream/non-stream、count_tokens 与选定 console privacy，不等于服务/客户端业务流 Passed |
-| Stage 1 client Compose/bootstrap/config/images | Runtime Passed | root Node 80/80、Compose matrix、Mock runtime config/healthy 依赖、config no-follow、三 owner+outsider、六 cross-owner binding、三镜像 build/version/help/UID；仅 client build/config assets |
+| Stage 1 client Compose/bootstrap/config/images | Runtime Passed | root Node 81/81、Compose matrix、Mock runtime config/healthy 依赖、config no-follow、三 owner+outsider、六 cross-owner binding、三镜像 build/version/help/UID；仅 client build/config assets |
 | Stage 1 Mock identity/share/isolation/leak | Not Run | 不执行 Docker workload |
 | Stage 1 TUI | Not Run | 仅在 headless Gate 通过后由用户确认 |
 | Stage 1 真实模型 | Not Run | 需完整 Mock Gate 与明确授权 |

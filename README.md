@@ -13,7 +13,7 @@
 
 **Fact**：upstream base 锁定 `feat/server_team@0a568c328ea1aae3f22ed3656e7900da7ea565c1`；active fork/gitlink 为 Task 3 review-fix 产品提交 `0bba4d798ce452d97dbce3c6fa1b7a3eccd881a2`。Claude Code、OpenCode、Pi 的三条 literal Messages 与 `count_tokens` route 已通过真实 handler tests；unknown/unbound/conflict/missing/invalid source/session 在副作用前 fail closed，平台 source 保留到 session/Core record。OpenCode/Pi 的 Anthropic session context 位于顶层 `system`，不会伪造 Claude Code 或把 `role=system` 塞入 Messages。每个 CLI 使用不同的 user、Agent、Session、user key、home、workspace 和 evidence；仅显式 team-visible memory 可在同一 Team/Task 中共享。
 
-**Boundary**：Task 3 review-fix Proxy `sha256:88a350e4...` 的 31/31 handler/route tests 保持 Passed。Task 4 新增 active `compose.four-cli*.yaml`、三 owner/六 cross-owner binding 与 outsider bootstrap、隔离 home/workspace/config/bundle，以及三款固定 CLI image；review fix 补齐 Mock runtime config/healthy 依赖、config-dir no-follow 与 Node base digest pin。root Node 80/80、Compose matrix、image build/version/help/UID Passed。该结论仅覆盖 client build/config assets，不证明服务启动、Mock 三写六读、ACL/leak、真实模型、TUI 或跨客户端业务流。上述业务 Gate 与 comprehensive leak Gate 留到 Task 5。旧 Windows + Claude 方案及其运行记录均归档为 **Legacy**。
+**Boundary**：Task 3 review-fix Proxy `sha256:88a350e4...` 的 31/31 handler/route tests 保持 Passed。Task 4 新增 active `compose.four-cli*.yaml`、三 owner/六 cross-owner binding 与 outsider bootstrap、隔离 home/workspace/config/bundle，以及三款固定 CLI image；review fix 补齐 Mock runtime config/healthy 依赖、config-dir no-follow 与 Node base digest pin。root Node 81/81、Compose matrix、image build/version/help/UID Passed。该结论仅覆盖 client build/config assets，不证明服务启动、Mock 三写六读、ACL/leak、真实模型、TUI 或跨客户端业务流。上述业务 Gate 与 comprehensive leak Gate 留到 Task 5。旧 Windows + Claude 方案及其运行记录均归档为 **Legacy**。
 
 ## 起点
 
