@@ -9,10 +9,10 @@ import { createTcpForwardServer, listenTcpForwarder } from '../tools/tcp-forward
 
 const tool = fileURLToPath(new URL('../tools/tcp-forward.mjs', import.meta.url));
 const configuration = {
-  TCP_FORWARD_LISTEN_HOST: '0.0.0.0',
-  TCP_FORWARD_LISTEN_PORT: '23561',
-  TCP_FORWARD_TARGET_HOST: 'memory-proxy',
-  TCP_FORWARD_TARGET_PORT: '8096',
+  FORWARD_LISTEN_HOST: '0.0.0.0',
+  FORWARD_LISTEN_PORT: '23561',
+  FORWARD_TARGET_HOST: 'memory-proxy',
+  FORWARD_TARGET_PORT: '8096',
 };
 
 function closeServer(server) {
@@ -64,33 +64,48 @@ function startCli(environment) {
 }
 
 test('listenTcpForwarder accepts only the fixed topology and decimal port range without echoing rejected values', async () => {
-  const server = await listenTcpForwarder({ ...configuration, TCP_FORWARD_LISTEN_PORT: String(await unusedPort()) });
+  const server = await listenTcpForwarder({ ...configuration, FORWARD_LISTEN_PORT: String(await unusedPort()) });
   await closeServer(server);
 
-  const sentinel = 'TCP_FORWARD_SENTINEL_7f5d';
+  const sentinel = 'FORWARD_SENTINEL_7f5d';
   for (const changed of [
-    { TCP_FORWARD_LISTEN_HOST: '' },
-    { TCP_FORWARD_LISTEN_HOST: `0.0.0.0\n${sentinel}` },
-    { TCP_FORWARD_LISTEN_HOST: ' 0.0.0.0' },
-    { TCP_FORWARD_LISTEN_HOST: '127.0.0.1' },
-    { TCP_FORWARD_TARGET_HOST: '' },
-    { TCP_FORWARD_TARGET_HOST: `memory-proxy\r${sentinel}` },
-    { TCP_FORWARD_TARGET_HOST: 'memory-proxy ' },
-    { TCP_FORWARD_TARGET_HOST: 'other-target' },
-    { TCP_FORWARD_LISTEN_PORT: '0' },
-    { TCP_FORWARD_LISTEN_PORT: '' },
-    { TCP_FORWARD_LISTEN_PORT: ' 80' },
-    { TCP_FORWARD_LISTEN_PORT: '65536' },
-    { TCP_FORWARD_LISTEN_PORT: '08' },
-    { TCP_FORWARD_TARGET_PORT: '1.5' },
-    { TCP_FORWARD_TARGET_PORT: '65536' },
-    { TCP_FORWARD_TARGET_PORT: `8096${sentinel}` },
+    { FORWARD_LISTEN_HOST: '' },
+    { FORWARD_LISTEN_HOST: `0.0.0.0\n${sentinel}` },
+    { FORWARD_LISTEN_HOST: ' 0.0.0.0' },
+    { FORWARD_LISTEN_HOST: '127.0.0.1' },
+    { FORWARD_TARGET_HOST: '' },
+    { FORWARD_TARGET_HOST: `memory-proxy\r${sentinel}` },
+    { FORWARD_TARGET_HOST: 'memory-proxy ' },
+    { FORWARD_TARGET_HOST: 'other-target' },
+    { FORWARD_LISTEN_PORT: '0' },
+    { FORWARD_LISTEN_PORT: '' },
+    { FORWARD_LISTEN_PORT: ' 80' },
+    { FORWARD_LISTEN_PORT: '65536' },
+    { FORWARD_LISTEN_PORT: '08' },
+    { FORWARD_TARGET_PORT: '1.5' },
+    { FORWARD_TARGET_PORT: '65536' },
+    { FORWARD_TARGET_PORT: `8096${sentinel}` },
   ]) {
     await assert.rejects(listenTcpForwarder({ ...configuration, ...changed }), (error) => {
       assert.doesNotMatch(error.message, new RegExp(sentinel));
       assert.doesNotMatch(error.message, /0\.0\.0\.0|memory-proxy|other-target|65536|1\.5/);
       return true;
     });
+  }
+});
+
+test('listenTcpForwarder rejects the legacy TCP_FORWARD environment names', async () => {
+  const legacy = {
+    TCP_FORWARD_LISTEN_HOST: '0.0.0.0',
+    TCP_FORWARD_LISTEN_PORT: String(await unusedPort()),
+    TCP_FORWARD_TARGET_HOST: 'memory-proxy',
+    TCP_FORWARD_TARGET_PORT: '8096',
+  };
+  const result = await listenTcpForwarder(legacy).then((server) => ({ server }), (error) => ({ error }));
+  try {
+    assert.equal(result.error?.message, 'invalid configuration');
+  } finally {
+    if (result.server) await closeServer(result.server);
   }
 });
 
@@ -160,12 +175,12 @@ test('CLI emits only fixed ready and failure categories without configuration or
   const occupied = net.createServer();
   await ensureFetchSafeServer(occupied, '0.0.0.0');
   const occupiedPort = occupied.address().port;
-  const sentinel = 'TCP_FORWARD_SENTINEL_3f8c';
+  const sentinel = 'FORWARD_SENTINEL_3f8c';
   try {
     for (const changed of [
-      { TCP_FORWARD_TARGET_HOST: sentinel },
-      { TCP_FORWARD_LISTEN_HOST: `0.0.0.0 ${sentinel}` },
-      { TCP_FORWARD_TARGET_PORT: `65536${sentinel}` },
+      { FORWARD_TARGET_HOST: sentinel },
+      { FORWARD_LISTEN_HOST: `0.0.0.0 ${sentinel}` },
+      { FORWARD_TARGET_PORT: `65536${sentinel}` },
     ]) {
       const invalid = await run({ ...configuration, ...changed });
       assert.equal(invalid.status, 1);
@@ -173,13 +188,13 @@ test('CLI emits only fixed ready and failure categories without configuration or
       assert.equal(invalid.stderr, 'invalid configuration\n');
     }
 
-    const busy = await run({ ...configuration, TCP_FORWARD_LISTEN_PORT: String(occupiedPort) });
+    const busy = await run({ ...configuration, FORWARD_LISTEN_PORT: String(occupiedPort) });
     assert.equal(busy.status, 1);
     assert.equal(busy.stdout, '');
     assert.equal(busy.stderr, 'listen failed\n');
 
     const readyPort = await unusedPort();
-    const ready = startCli({ ...configuration, TCP_FORWARD_LISTEN_PORT: String(readyPort) });
+    const ready = startCli({ ...configuration, FORWARD_LISTEN_PORT: String(readyPort) });
     await once(ready.child.stdout, 'data');
     assert.equal(ready.output().stdout, '{"status":"ready"}\n');
     assert.equal(ready.output().stderr, '');

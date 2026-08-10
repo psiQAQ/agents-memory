@@ -2,11 +2,11 @@ import net from 'node:net';
 import { isMain } from './runtime-lib.mjs';
 
 function configuration(environment) {
-  const { TCP_FORWARD_LISTEN_HOST, TCP_FORWARD_LISTEN_PORT, TCP_FORWARD_TARGET_HOST, TCP_FORWARD_TARGET_PORT } = environment;
+  const { FORWARD_LISTEN_HOST, FORWARD_LISTEN_PORT, FORWARD_TARGET_HOST, FORWARD_TARGET_PORT } = environment;
   const port = (value) => (/^[1-9]\d*$/.test(value ?? '') && Number(value) <= 65535 ? Number(value) : null);
-  const listenPort = port(TCP_FORWARD_LISTEN_PORT);
-  const targetPort = port(TCP_FORWARD_TARGET_PORT);
-  if (TCP_FORWARD_LISTEN_HOST !== '0.0.0.0' || TCP_FORWARD_TARGET_HOST !== 'memory-proxy' || !listenPort || !targetPort) throw new Error('invalid configuration');
+  const listenPort = port(FORWARD_LISTEN_PORT);
+  const targetPort = port(FORWARD_TARGET_PORT);
+  if (FORWARD_LISTEN_HOST !== '0.0.0.0' || FORWARD_TARGET_HOST !== 'memory-proxy' || !listenPort || !targetPort) throw new Error('invalid configuration');
   return { listenPort, targetPort };
 }
 
