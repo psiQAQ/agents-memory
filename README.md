@@ -33,10 +33,13 @@
 ```text
 refine-memory/
 ├── README.md                      # 本文件:项目背景与导航
-├── CLAUDE.md                      # 供 Claude Code 使用的仓库指引
+├── CLAUDE.md                      # 所有 Agent 共用的唯一项目级指令源与知识库索引
+├── .codex/config.toml             # Codex 读取 CLAUDE.md 的仓库级 fallback
 ├── submodules/
 │   └── TencentDB-Agent-Memory/    # 个人 fork 的可开发 git submodule
 └── docs/
+    ├── README.md                  # 文档知识库、计划库与实施状态记录库索引
+    ├── enterprise-memory-system-evaluation.md # 当前状态、风险与下一 Gate
     ├── repo-author-comment/
     │   └── comment.md             # ① 负责人方案思想(高优先级,先读)
     ├── design/
@@ -88,7 +91,7 @@ git submodule update --init submodules/TencentDB-Agent-Memory
 
 ## 当前执行顺序
 
-当前主入口是[企业智能体记忆系统评估](docs/enterprise-memory-system-evaluation.md)，其中集中记录证据状态、风险、评分门槛和下一步；本轮 Docker-first 约束见[规格](docs/specs/2026-08-09-docker-memory-lab.md)。Standalone 业务 Gate 的身份、共享与证据边界见[决策记录](docs/decisions/2026-08-09-standalone-memory-gate.md)，根 Gate 静态实现见[复现记录](docs/reproduction/2026-08-09-standalone-memory-static-contract.md)；public fork 的原始集成边界见[决策记录](docs/decisions/2026-08-10-public-fork-integration.md)与[集成记录](docs/reproduction/2026-08-10-public-fork-integration-static.md)，当前 Proxy 公开构建回退见[新决策记录](docs/decisions/2026-08-10-public-proxy-docker-fallback.md)，Windows 端口边界见[Loopback Gateway 决策](docs/decisions/2026-08-10-windows-loopback-gateway.md)。
+[文档知识库索引](docs/README.md)按调研、参考、设计、规格、计划、决策和复现证据分类全部材料。当前状态主入口是[企业智能体记忆系统评估](docs/enterprise-memory-system-evaluation.md)，其中集中记录证据状态、风险、评分门槛和下一步；本轮 Docker-first 约束见[规格](docs/specs/2026-08-09-docker-memory-lab.md)。Standalone 业务 Gate 的身份、共享与证据边界见[决策记录](docs/decisions/2026-08-09-standalone-memory-gate.md)，根 Gate 静态实现见[复现记录](docs/reproduction/2026-08-09-standalone-memory-static-contract.md)；public fork 的原始集成边界见[决策记录](docs/decisions/2026-08-10-public-fork-integration.md)与[集成记录](docs/reproduction/2026-08-10-public-fork-integration-static.md)，当前 Proxy 公开构建回退见[新决策记录](docs/decisions/2026-08-10-public-proxy-docker-fallback.md)，Windows 端口边界见[Loopback Gateway 决策](docs/decisions/2026-08-10-windows-loopback-gateway.md)。
 
 本轮运行证据按 run ID 保持不可变，不用后一次成功覆盖前一次失败：
 
