@@ -116,11 +116,10 @@
   $env:MEMORY_CORE_GATEWAY_API_KEY = 'static-lab-gateway-key'
   docker compose -f tests/integration/compose.yaml config --quiet
   docker compose -f tests/integration/compose.yaml -f tests/integration/compose.hardened.yaml config --quiet
-  docker compose -f tests/integration/compose.yaml -f tests/integration/compose.hardened.yaml -f tests/integration/compose.windows.yaml config --quiet
   node --test tests/integration/test/compose-contract.test.mjs
   ```
 
-  `compose-contract.test.mjs` 会在系统临时目录创建一次性 dummy secret、evidence、Windows config 与 attestation，再调用 Compose JSON 展开 real/Windows 组合并在 `finally` 清理；不得手工替换为真实 key。测试 exit 0 才算四组均通过。
+  不执行裸的 Windows `docker compose ... config --quiet`：`compose-contract.test.mjs` 是 Windows 展开 Gate。它会在系统临时目录创建一次性 dummy secret、evidence、仓库外 Windows config 与 attestation，设置 `PROJECT_ROOT`、`WINDOWS_CLAUDE_CONFIG_DIR`、`WINDOWS_CONFIG_ATTESTATION_FILE`，用 `windows-config-gate.mjs` 生成 attestation，再调用 Compose JSON 展开 real/Windows 组合并在 `finally` 清理；不得手工替换为真实 key。测试 exit 0 才算四组均通过。
 
 - [ ] 2.8 提交 Compose 阶段：
 
@@ -268,7 +267,7 @@
       Remove-Item -LiteralPath "Env:$name" -ErrorAction SilentlyContinue
     }
     $version = & claude --version
-    if ($LASTEXITCODE -ne 0 -or $version -ne '2.1.207') { throw 'claude-version' }
+    if ($LASTEXITCODE -ne 0 -or $version -notmatch '^2\.1\.207(?:\s|$)') { throw 'claude-version' }
     if (-not $env:WINDOWS_PROBE_MARKER) { throw 'probe-marker' }
     $reply = & claude -p "$env:WINDOWS_PROBE_MARKER Reply exactly mock text; no tools" --max-turns 1
     if ($LASTEXITCODE -ne 0 -or $reply -notmatch '^\\s*mock text\\s*$') { throw 'claude-headless' }
@@ -299,16 +298,19 @@
   if (!Array.isArray(requests)) throw new Error('mock-shape');
   const forbiddenHeaders = new Set(['x-agent-id','x-conversation-id','x-task-id','x-team-id','x-claude-code-session-id','x-vertex-ai-session-id']);
   const messages = requests.filter(({ method, path }) => method === 'POST' && path === '/anthropic/v1/messages');
-  const text = JSON.stringify(messages);
-  const headersLeaked = messages.some(({ headers = {} }) => Object.keys(headers).some((name) => forbiddenHeaders.has(name.toLowerCase()) || name.toLowerCase().startsWith('x-tdai-')));
+  const invalidObservation = messages.some((request) =>
+    !['sensitive_value_seen', 'unexpected_credential_seen', 'memory_user_credential_seen'].every((name) => typeof request?.[name] === 'boolean') ||
+    request.sensitive_value_seen || request.unexpected_credential_seen || request.memory_user_credential_seen ||
+    !Array.isArray(request?.header_names) || request.header_names.some((name) => forbiddenHeaders.has(String(name).toLowerCase()) || String(name).toLowerCase().startsWith('x-tdai-'))
+  );
   const result = {
     messages: messages.length,
-    sensitive_value_seen: /lab-gateway-|MEMORY_CORE_GATEWAY_API_KEY/i.test(text),
-    unexpected_credential_seen: /authorization|api[_-]?key|bearer/i.test(text),
-    memory_user_credential_seen: /memory[_-]?user[_-]?credential/i.test(text),
-    internal_identity_header_seen: headersLeaked
+    sensitive_value_seen: messages.some((request) => request.sensitive_value_seen),
+    unexpected_credential_seen: messages.some((request) => request.unexpected_credential_seen),
+    memory_user_credential_seen: messages.some((request) => request.memory_user_credential_seen),
+    internal_identity_header_seen: messages.some((request) => Array.isArray(request.header_names) && request.header_names.some((name) => forbiddenHeaders.has(String(name).toLowerCase()) || String(name).toLowerCase().startsWith('x-tdai-')))
   };
-  if (Object.values(result).slice(1).some(Boolean)) throw new Error('mock-policy');
+  if (invalidObservation || Object.values(result).slice(1).some(Boolean)) throw new Error('mock-policy');
   console.log(JSON.stringify(result));
   '@
   $mockBeforeJson = & $dockerCli compose --profile tools @composeFiles run --rm --no-deps test-runner --input-type=module --eval $mockProgram
@@ -335,7 +337,7 @@
   const gatewayToken = (await readFile('/runtime-config/gateway.token', 'utf8')).trim();
   const marker = process.env.WINDOWS_PROBE_MARKER;
   if (!marker) throw new Error('core-marker');
-  let status = 0, body, elapsed_ms = 0;
+  let status = 0, body, elapsed_ms = 0, owner_hits = 0, owner_mismatch = 0;
   for (let attempt = 0; attempt < 30; attempt += 1) {
     const started = Date.now();
     const response = await fetch('http://memory-core:8420/v3/conversation/query', {
@@ -344,11 +346,12 @@
     });
     status = response.status; elapsed_ms += Date.now() - started;
     body = await response.json();
-    if (status === 200 && body.code === 0) break;
+    const rows = body?.data?.messages ?? [];
+    owner_hits = rows.filter((row) => row?.content?.includes(marker) && row.team_id === manifest.team_id && row.user_id === client.user_id && row.agent_id === client.agent_id && row.task_id === manifest.task_id).length;
+    owner_mismatch = rows.filter((row) => row?.content?.includes(marker) && (row.team_id !== manifest.team_id || row.user_id !== client.user_id || row.agent_id !== client.agent_id || row.task_id !== manifest.task_id)).length;
+    if (status === 200 && body.code === 0 && owner_hits >= 1 && owner_mismatch === 0) break;
+    if (attempt < 29) await new Promise((resolveDelay) => setTimeout(resolveDelay, 1000));
   }
-  const rows = body?.data?.messages ?? [];
-  const owner_hits = rows.filter((row) => row?.content?.includes(marker) && row.team_id === manifest.team_id && row.user_id === client.user_id && row.agent_id === client.agent_id && row.task_id === manifest.task_id).length;
-  const owner_mismatch = rows.filter((row) => row?.content?.includes(marker) && (row.team_id !== manifest.team_id || row.user_id !== client.user_id || row.agent_id !== client.agent_id || row.task_id !== manifest.task_id)).length;
   const result = { http_status: status, core_code_zero: body?.code === 0, owner_hits, owner_mismatch, elapsed_ms };
   if (status !== 200 || !result.core_code_zero || owner_hits < 1 || owner_mismatch !== 0) throw new Error('core-oracle');
   console.log(JSON.stringify(result));
@@ -369,9 +372,10 @@
     completed = $true
   }
   $probePath = Join-Path $env:EVIDENCE_DIR 'windows-headless-probe.json'
+  if (Test-Path -LiteralPath $probePath) { throw 'probe-path-exists' }
   $tempPath = "$probePath.$([guid]::NewGuid().ToString('N')).tmp"
   [IO.File]::WriteAllText($tempPath, ($result | ConvertTo-Json -Compress -Depth 4), [Text.UTF8Encoding]::new($false))
-  [IO.File]::Move($tempPath, $probePath, $true)
+  [IO.File]::Move($tempPath, $probePath)
   ```
 
 - [ ] 4.8 写不可变运行报告并更新主状态：本次新 run 只证明 Windows 10 native Claude Runtime Passed；双客户端汇总结论必须分别引用本次 Windows run 与既有 Docker Claude run `docker-mock-20260810-033636`，不得暗示同一新 project 重跑了 Docker Claude。streaming/tool/thinking、真实 DeepSeek、Win11/LAN/WSL、Gateway 故障恢复仍 Not Run，企业结论保持 No-Go/Conditional Go 边界。
