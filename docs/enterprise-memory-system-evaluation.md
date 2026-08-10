@@ -54,6 +54,8 @@
 
 > **Static Integrated**：独立复审通过的 public fork 精确 SHA 已写入根 gitlink、镜像标签和静态测试；不代表镜像、服务或业务流已经运行。
 
+> **Loopback Gateway**：只在 Windows 本机 `127.0.0.1` 接收 TCP 连接，再把字节原样转发到 internal 网络中 MemoryProxy 的轻量容器。
+
 > **Verified Fact**：已由当前源码、配置展开或自动测试直接确认的事实。
 
 > **Reported Claim**：来自项目说明或外部资料、但尚未由本地实验独立复核的说法。
@@ -66,12 +68,12 @@
 
 > **Go / Conditional Go / No-Go**：分别表示可进入目标阶段、满足列明条件后才可进入、以及当前不得进入。
 
-**评估状态：** Windows 重启后 Docker 已恢复；完整所选镜像构建、默认无付费 Mock/Standalone 两级业务 Gate、Hub health 与只读业务探针、Docker Claude `2.1.207` headless、TUI 启动与 Mock 文本往返 Runtime Passed；真实 DeepSeek 与 Windows Claude Not Run
+**评估状态：** Windows 重启后 Docker 已恢复；完整所选镜像构建、默认无付费 Mock/Standalone 两级业务 Gate、Hub health 与只读业务探针、Docker Claude `2.1.207` headless、TUI 启动与 Mock 文本往返 Runtime Passed；Loopback Gateway Static Integrated，Windows 新 runtime Pending；真实 DeepSeek Not Run
 **更新时间：** 2026-08-10
 
-**当前决策：** 对公司试点或部署仍为 **No-Go**；对继续本机、无付费、默认 Mock 的开发为 **Conditional Go**。当前运行已证明受控 A 写/B 共享/C 隔离、Docker headless 与 TUI Mock 文本往返；但真实 DeepSeek 协议与 key 安全、Windows Claude、stream/tool/thinking、故障恢复和备份等硬 Gate 仍未通过。
+**当前决策：** 对公司试点或部署仍为 **No-Go**；对继续本机、无付费、默认 Mock 的开发为 **Conditional Go**。当前运行已证明受控 A 写/B 共享/C 隔离、Docker headless 与 TUI Mock 文本往返；Gateway 目前只有静态集成证据，旧 Windows run 在宿主 loopback 处失败。真实 DeepSeek 协议与 key 安全、Windows Claude、stream/tool/thinking、故障恢复和备份等硬 Gate 仍未通过。
 
-本页是管理者与开发者的主评估入口：把架构假设、已验证证据、风险与下一步集中在同一处。详细设计见 [企业记忆管理方案](design/2026-08-06-enterprise-memory-design.md)，本轮实施范围见 [Docker-first 规格](specs/2026-08-09-docker-memory-lab.md)、[Standalone 业务 Gate 决策](decisions/2026-08-09-standalone-memory-gate.md)、[public fork 集成决策](decisions/2026-08-10-public-fork-integration.md)和[集成记录](reproduction/2026-08-10-public-fork-integration-static.md)。本轮不可变运行链为：[002427 WSL 阻塞](reproduction/2026-08-10-docker-mock-20260810-002427-wsl-resource-blocked.md) → [015646 Bootstrap 重放](reproduction/2026-08-10-docker-mock-20260810-015646-bootstrap-replay-blocked.md) → [024419 forged contract](reproduction/2026-08-10-docker-mock-20260810-024419-forged-contract-failed.md) → [030443 session 前置条件](reproduction/2026-08-10-docker-mock-20260810-030443-session-precondition-failed.md) → [033636 无付费运行通过](reproduction/2026-08-10-docker-mock-20260810-033636-no-paid-runtime-passed.md) → [TUI 用户确认](reproduction/2026-08-10-docker-mock-20260810-033636-tui-user-confirmed.md) → [TUI 文本往返](reproduction/2026-08-10-docker-mock-20260810-033636-tui-message-passed.md)。完整静态证据索引保留在[集成说明](../tests/integration/README.md)。
+本页是管理者与开发者的主评估入口：把架构假设、已验证证据、风险与下一步集中在同一处。详细设计见 [企业记忆管理方案](design/2026-08-06-enterprise-memory-design.md)，本轮实施范围见 [Docker-first 规格](specs/2026-08-09-docker-memory-lab.md)、[Standalone 业务 Gate 决策](decisions/2026-08-09-standalone-memory-gate.md)、[public fork 集成决策](decisions/2026-08-10-public-fork-integration.md)、[Loopback Gateway 决策](decisions/2026-08-10-windows-loopback-gateway.md)和[集成记录](reproduction/2026-08-10-public-fork-integration-static.md)。本轮不可变运行链为：[002427 WSL 阻塞](reproduction/2026-08-10-docker-mock-20260810-002427-wsl-resource-blocked.md) → [015646 Bootstrap 重放](reproduction/2026-08-10-docker-mock-20260810-015646-bootstrap-replay-blocked.md) → [024419 forged contract](reproduction/2026-08-10-docker-mock-20260810-024419-forged-contract-failed.md) → [030443 session 前置条件](reproduction/2026-08-10-docker-mock-20260810-030443-session-precondition-failed.md) → [033636 无付费运行通过](reproduction/2026-08-10-docker-mock-20260810-033636-no-paid-runtime-passed.md) → [TUI 用户确认](reproduction/2026-08-10-docker-mock-20260810-033636-tui-user-confirmed.md) → [TUI 文本往返](reproduction/2026-08-10-docker-mock-20260810-033636-tui-message-passed.md) → [093140 Windows loopback 阻塞](reproduction/2026-08-10-windows-mock-20260810-093140-loopback-blocked.md)。完整静态证据索引保留在[集成说明](../tests/integration/README.md)。
 
 > **Profile**：必须显式选择才启用的服务组。本项目把 Redis、Docker Claude 和真实 DeepSeek 分别放在受控 profile 中。
 
@@ -114,7 +116,8 @@ flowchart LR
   F --> DA["Docker Claude A/B/C fixtures<br/>各自私有 home 与 workspace"]
   F --> WI["Windows config init<br/>首轮仅 agent-a"]
   WI --> WA["Windows Claude agent-a<br/>待验证"]
-  WA -->|"127.0.0.1:8096"| P["MemoryProxy"]
+  WA -->|"127.0.0.1:8096"| G["Loopback Gateway<br/>Static Integrated / runtime Pending"]
+  G -->|"internal TCP<br/>memory-proxy:8096"| P["MemoryProxy"]
   DA -->|"memory-proxy:8096"| P
   P -->|"Anthropic Mock"| M["Mock LLM"]
   C["MemoryCore<br/>SQLite"] -->|"OpenAI Mock"| M
@@ -127,7 +130,7 @@ flowchart LR
   R["Redis profile"] -. "Proxy 临时状态层" .-> P
 ```
 
-非技术说明：Bootstrap 会创建三套测试身份，每套 key 与 identity 只以单个私有 bundle 整体切换；A 的团队可见记忆显式共享给 B，C 不绑定。Runner 直接查询 Core 的 L0/L1，不用“模型看起来记住了”代替证据；Mock 只保留泄漏布尔值。Run `docker-mock-20260810-033636` 已真实证明 A 写入、B 共享读取、C 隔离以及 Hub 只读业务 API；Docker Claude agent-a 又完成了用户可见的 `mock text` 往返，服务端确认新增观察中列明的敏感诱饵、凭证形态和内部 header 泄漏检查均为 0，且 L0 owner 一致。Windows Claude 尚未启动，真实 DeepSeek 不在本图已验证范围内。
+非技术说明：Bootstrap 会创建三套测试身份，每套 key 与 identity 只以单个私有 bundle 整体切换；A 的团队可见记忆显式共享给 B，C 不绑定。Runner 直接查询 Core 的 L0/L1，不用“模型看起来记住了”代替证据；Mock 只保留泄漏布尔值。Run `docker-mock-20260810-033636` 已真实证明 A 写入、B 共享读取、C 隔离以及 Hub 只读业务 API；Docker Claude agent-a 又完成了用户可见的 `mock text` 往返。Windows 侧将先经过只发布本机端口的 Gateway，再进入隔离网络中的 Proxy；这条新路径目前只有静态证据，尚未取得 Windows runtime 通过结果。真实 DeepSeek 也不在本图已验证范围内。
 
 ## DeepSeek 三层协议与凭证边界
 
@@ -151,7 +154,8 @@ flowchart LR
 
   MB["每客户端 agent bundle<br/>Memory 用户 key + identity"] --> WC["Windows Claude"]
   MB --> DC["Docker Claude"]
-  WC -->|"本地 Anthropic Messages<br/>Memory 用户 bearer"| PX
+  WC -->|"本地 Anthropic Messages<br/>Memory 用户 bearer"| LG["Loopback Gateway"]
+  LG -->|"internal TCP"| PX
   DC -->|"内部 Anthropic Messages<br/>Memory 用户 bearer"| PX
 
   PX -->|"Anthropic /v1/messages<br/>DeepSeek key"| API["DeepSeek API"]
@@ -162,16 +166,16 @@ flowchart LR
   EG["egress-net<br/>仅 Proxy / Core / Hub"] --- API
 ```
 
-非技术说明：Claude 客户端只知道 Memory 用户 key，并始终先访问本地 Proxy；它们既不持有 DeepSeek key，也不接入外网网络。付费 Gate 与配置生成器会短暂读取 Compose secret，但没有外网出口。长期运行服务中，Core 与 Knowledge 直接从 secret 读取 key，Proxy 只从自己的私有配置卷读取；该卷不挂给 bootstrap、runner 或 Claude。只有 Proxy、Core、Hub 可通过 `egress-net` 联系 DeepSeek。以上是 **Verified Fact（静态配置与测试）**，真实协议请求仍为 **Runtime Not Run**。
+非技术说明：Claude 客户端只知道 Memory 用户 key；Windows Claude 先经过本机 Gateway，Docker Claude 直接走隔离网络，两者最终都访问 Proxy。它们既不持有 DeepSeek key，也不接入模型出口网络。付费 Gate 与配置生成器会短暂读取 Compose secret，但没有外网出口。长期运行服务中，Core 与 Knowledge 直接从 secret 读取 key，Proxy 只从自己的私有配置卷读取；该卷不挂给 bootstrap、runner 或 Claude。只有 Proxy、Core、Hub 可通过 `egress-net` 联系 DeepSeek。以上是 **Verified Fact（静态配置与测试）**；Windows Gateway runtime 与真实协议请求仍为 **Runtime Not Run**。
 
 ## 状态矩阵
 
 | 评估项 | 状态 | 当前证据 | 不能证明的内容 |
 | -- | -- | -- | -- |
 | 架构与权限模型 | Partial Runtime Passed | A/B/C 身份绑定、冲突身份、缺失/forged source 和共享/隔离已在真实容器 data plane 通过 | 撤销、跨 team、旧库 scrub、生产身份源与完整文件权限 |
-| 默认 Mock 编排 | Runtime Passed（受限范围） | 58/58 Node tests；完整所选镜像 build；Mock 11 项、Standalone 12 项、Hub health、两项只读业务 probe 与 Docker TUI 文本往返 | 故障恢复、Redis、长时并发、生产负载 |
+| 默认 Mock 编排 | Runtime Passed（受限范围） | 64/64 Node tests；完整所选镜像 build；Mock 11 项、Standalone 12 项、Hub health、两项只读业务 probe 与 Docker TUI 文本往返 | 故障恢复、Redis、长时并发、生产负载 |
 | Standalone 业务 Gate | Runtime Passed | A 写、Core L0/L1 oracle、B 显式共享、C 隔离、4 项拒绝负测 zero model side effect 与上游 hygiene | 撤销、恶意记忆、跨 team 和生产数据治理 |
-| Windows 10 原生 Claude + Docker Linux Claude | Partial Runtime Passed | Docker Claude config precheck、`2.1.207` headless、TUI 启动和 Mock 文本往返 Passed | Windows Claude、两客户端真实会话、真实模型协议 |
+| Windows 10 原生 Claude + Docker Linux Claude | Docker Partial Runtime Passed；Windows Pending | Docker Claude config precheck、`2.1.207` headless、TUI 启动和 Mock 文本往返 Passed；Loopback Gateway Static Integrated | Gateway 新 runtime、Windows config/headless/TUI、两客户端真实会话、真实模型协议 |
 | Codex / WSL Claude / Win11 / LAN | Deferred / Not Run | 不在当前批准范围；Docker Desktop 使用 WSL 后端不等于 WSL Claude 已测试 | 跨客户端共享、Win11 和局域网行为 |
 | 真实 DeepSeek 路径 | Blocked / Runtime Not Run | Host canonical preflight、短期 attestation、Compose secret、Proxy 私有配置卷、internal/egress 双网络和 Agent secret 隔离已通过静态契约测试 | 协议兼容、质量、延迟和费用 |
 | 效率评分 | Not Rated | 尚无 10 组成对任务 | 生产力收益或 ROI |
@@ -183,6 +187,7 @@ flowchart LR
 | DeepSeek key 或 Memory key 泄漏到受跟踪模板、非本客户端配置、日志或报告 | 工作区外 secret、host attestation、脱敏模板、忽略规则与 Gate；每客户端私有 runtime `settings.json` 中的 `ANTHROPIC_AUTH_TOKEN` 是 Memory key 的预期落点，不保存其 hash/前缀/长度 | Static Passed / Runtime Not Run |
 | Gateway service token、Memory 用户 key 或内部身份进入模型 header/body | 根 runner 注入非凭证诱饵并检查三个布尔结果；public fork `69fd8b31e3fd4362af6c65407b92b26dfabebd0c` 使用上游 allowlist；最终 Mock/Standalone evidence 与项目日志扫描未发现凭证形态或内部值 | Runtime Passed in Mock Scope |
 | Windows config 写入仓库或目录链接目标 | 工具推导真实 root；只允许仓库外 canonical absolute path；host/runtime attestation；持久 home 逐层拒绝跟随链接 | Static Passed / Runtime Not Run |
+| Loopback Gateway 具备非 internal 网络出口，且 Windows 到 Proxy 的请求为明文瞬时流量 | 只有无 secret/volume、固定目标、只读且 drop capabilities 的 Gateway 加入 `loopback-ingress`；Proxy 保持 internal；入口固定绑定 `127.0.0.1` | Static Integrated / Windows runtime Pending；LAN 与生产 No-Go |
 | 默认运行产生付费或客户端绕过 Proxy 访问外网 | base/real 默认网络均为 internal；真实层需显式 profile 与 Gate，且只有 Proxy/Core/Hub 加入 egress network | Mock Runtime Passed；不是 packet capture |
 | Proxy 配置内嵌 DeepSeek key 被 bootstrap/runner/Claude 间接读取 | DeepSeek 配置独立写入 `proxy-private-config`；只有一次性 renderer 与 Proxy 挂载，其他服务只能挂不含 DeepSeek key 的 Core 配置卷 | Static Passed / Runtime Not Run |
 | 普通 `down` 或删除宿主 secret 后，凭证与业务数据仍留在 Docker volumes | 各 run 使用唯一 project；失败 run 的普通 `down` 实证保留 volumes，最终 TUI project 的 6 个卷仍保留；只允许对精确 project 清理，禁止全局 prune | Runtime Confirmed / Cleanup Recovery Not Run |
@@ -204,8 +209,8 @@ flowchart LR
 | 可靠性 | Not Rated | Medium | No-Go | 已有完整 build、一次成功 run 与三次可定位失败，但尚未执行任何服务 stop/restart/recreate 或 backup/restore | Core/Proxy/Hub/Redis 故障、恢复、持久化与备份还原的真实结果 |
 | 安全性 | 2/5 | High | No-Go | 真实 Mock data plane 中 auth、身份冲突、missing/forged source、B/C ACL、zero-side-effect 与上游 hygiene 通过 | 旧库离线清理、真实 DeepSeek secret 隔离、跨 team、key 撤销、inspect/log 扫描与恶意记忆 |
 | 使用便利性 | 2/5 | Medium | Conditional | 完整镜像、readiness、两级 Gate、Hub probe、headless 与 TUI 文本往返已跑通；失败链可定位 | 由另一操作者从干净环境复现、停止和恢复 |
-| Claude Code 适配性 | 2/5 | Medium | No-Go | Docker config precheck、固定版本 `2.1.207` headless、TUI 启动和 Mock 文本往返 Passed | Windows Claude、真实模型、stream、tool use、thinking 与长会话 |
-| 跨平台兼容性 | 1/5 | Low | No-Go | Windows 10 宿主上的 Docker Linux runtime Passed，但 Windows Claude 尚未启动 | Windows 10 双客户端后，再做 Windows 11、WSL Claude 与 LAN |
+| Claude Code 适配性 | 2/5 | Medium | No-Go | Docker config precheck、固定版本 `2.1.207` headless、TUI 启动和 Mock 文本往返 Passed；Windows Gateway 仅 Static Integrated | Gateway 新 runtime、Windows Claude、真实模型、stream、tool use、thinking 与长会话 |
+| 跨平台兼容性 | 1/5 | Low | No-Go | Windows 10 宿主上的 Docker Linux runtime Passed；旧 Windows run 在宿主 loopback 处失败，新 Gateway runtime Pending | Windows 10 双客户端后，再做 Windows 11、WSL Claude 与 LAN |
 | 记忆治理能力 | 2/5 | High | No-Go | A 写、Core L0/L1、B 显式共享、C 隔离和身份负测已在真实容器业务 Gate 通过 | 撤销、审计、生命周期、跨 team、冲突写入和恶意记忆测试 |
 | 效率 | Not Rated | Low | Conditional | 尚无 10 组成对任务 | 至少 10 组“启用/关闭记忆”任务的成功率、turns、延迟和重复纠正率 |
 | 成本 | Not Rated | Low | Conditional | 真实模型未调用，且没有统一硬费用上限 | 分别记录 Proxy/Core/Knowledge 请求、token、单次成功成本与预算停止行为 |
@@ -214,7 +219,7 @@ flowchart LR
 
 **Conditional Go（继续本机开发）：** 可以继续锁定 `69fd8b31e3fd4362af6c65407b92b26dfabebd0c`、默认 Mock、无付费、internal network 的本地开发，并使用保留的 `mem-it-20260810-033636` project 验证 Windows Claude。不得加载真实 secret，不得把受限 Mock Runtime Passed 扩写为真实 DeepSeek、Windows、可靠性或企业部署通过。该 SHA 未 push，当前只在本工作区可复现。
 
-**Recommendation：** 下一步使用工作区外项目专用配置目录验证 Windows 10 原生 Claude 接入同一 MemoryProxy，不覆盖用户全局 `.claude`。真实 DeepSeek 仍等待工作区外新 secret 与用户单独批准，并须单独验证 Anthropic/OpenAI、stream/tool/thinking、secret 不泄漏和费用记录。故障恢复、Win11、WSL Claude 与 LAN 另行排期。
+**Recommendation：** 下一步创建唯一 Windows Mock project，只启动最小服务并显式包含 Loopback Gateway；先以 `curl.exe --noproxy '*'` 证明宿主入口，再使用工作区外项目专用配置目录验证 Windows 10 原生 Claude，不覆盖用户全局 `.claude`。真实 DeepSeek 仍等待工作区外新 secret 与用户单独批准，并须单独验证 Anthropic/OpenAI、stream/tool/thinking、secret 不泄漏和费用记录。故障恢复、Win11、WSL Claude 与 LAN 另行排期。
 
 > **BuildKit named contexts**：Docker 构建镜像时从多个明确目录读取源码的机制；这里让 Hub 直接使用当前 Tencent fork 的 Panel 和 Knowledge，而不复制一份容易过期的源码快照。
 

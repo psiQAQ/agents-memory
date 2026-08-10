@@ -84,11 +84,11 @@ refine-memory/
 git submodule update --init submodules/TencentDB-Agent-Memory
 ```
 
-当前 gitlink 指向尚未 push 的本地 public fork 提交 `69fd8b31e3fd4362af6c65407b92b26dfabebd0c`。从首个本地修复 `c75ef58` 起至当前修复，共 27 个本地 public commit。Windows 重启后 Docker engine 已恢复；完整所选镜像构建、无付费 Mock 两级 Gate、Hub health 与只读业务探针、Docker Claude `2.1.207` headless、TUI 启动和文本往返均已通过。服务端同时确认新增 Anthropic/OpenAI 观察中列明的敏感诱饵、凭证形态和内部 header 泄漏检查均为 0，MemoryCore L0 提示命中且 owner 一致。该结果仍不包含 Windows Claude、真实 DeepSeek、stream/tool/thinking、故障恢复或 Win11/LAN。新的 clone 在该提交推送到 `psiQAQ/TencentDB-Agent-Memory` 前无法取得它；本任务没有 push 授权。
+当前 gitlink 指向尚未 push 的本地 public fork 提交 `69fd8b31e3fd4362af6c65407b92b26dfabebd0c`。从首个本地修复 `c75ef58` 起至当前修复，共 27 个本地 public commit。Windows 重启后 Docker engine 已恢复；完整所选镜像构建、无付费 Mock 两级 Gate、Hub health 与只读业务探针、Docker Claude `2.1.207` headless、TUI 启动和文本往返均已通过。服务端同时确认新增 Anthropic/OpenAI 观察中列明的敏感诱饵、凭证形态和内部 header 泄漏检查均为 0，MemoryCore L0 提示命中且 owner 一致。Windows Loopback Gateway 已 **Static Integrated**，但新 Gateway 路径的 Windows runtime 仍为 **Pending**；旧 run 在直接从 internal Proxy 发布宿主端口处失败，Windows config/headless/TUI 未执行。真实 DeepSeek、stream/tool/thinking、故障恢复或 Win11/LAN 也仍不在已通过范围。新的 clone 在该提交推送到 `psiQAQ/TencentDB-Agent-Memory` 前无法取得它；本任务没有 push 授权。
 
 ## 当前执行顺序
 
-当前主入口是[企业智能体记忆系统评估](docs/enterprise-memory-system-evaluation.md)，其中集中记录证据状态、风险、评分门槛和下一步；本轮 Docker-first 约束见[规格](docs/specs/2026-08-09-docker-memory-lab.md)。Standalone 业务 Gate 的身份、共享与证据边界见[决策记录](docs/decisions/2026-08-09-standalone-memory-gate.md)，根 Gate 静态实现见[复现记录](docs/reproduction/2026-08-09-standalone-memory-static-contract.md)；public fork 的原始集成边界见[决策记录](docs/decisions/2026-08-10-public-fork-integration.md)与[集成记录](docs/reproduction/2026-08-10-public-fork-integration-static.md)，当前 Proxy 公开构建回退见[新决策记录](docs/decisions/2026-08-10-public-proxy-docker-fallback.md)。
+当前主入口是[企业智能体记忆系统评估](docs/enterprise-memory-system-evaluation.md)，其中集中记录证据状态、风险、评分门槛和下一步；本轮 Docker-first 约束见[规格](docs/specs/2026-08-09-docker-memory-lab.md)。Standalone 业务 Gate 的身份、共享与证据边界见[决策记录](docs/decisions/2026-08-09-standalone-memory-gate.md)，根 Gate 静态实现见[复现记录](docs/reproduction/2026-08-09-standalone-memory-static-contract.md)；public fork 的原始集成边界见[决策记录](docs/decisions/2026-08-10-public-fork-integration.md)与[集成记录](docs/reproduction/2026-08-10-public-fork-integration-static.md)，当前 Proxy 公开构建回退见[新决策记录](docs/decisions/2026-08-10-public-proxy-docker-fallback.md)，Windows 端口边界见[Loopback Gateway 决策](docs/decisions/2026-08-10-windows-loopback-gateway.md)。
 
 本轮运行证据按 run ID 保持不可变，不用后一次成功覆盖前一次失败：
 
@@ -99,8 +99,9 @@ git submodule update --init submodules/TencentDB-Agent-Memory
 | `docker-mock-20260810-024419` | Gate 1 通过；Gate 2 暴露 forged source 的 400/401 预期差异 | [Forged contract 失败](docs/reproduction/2026-08-10-docker-mock-20260810-024419-forged-contract-failed.md) |
 | `docker-mock-20260810-030443` | Gate 1 通过；Gate 2 暴露 B session 未初始化，并推断 C 需要同类前置条件 | [Session 前置条件失败](docs/reproduction/2026-08-10-docker-mock-20260810-030443-session-precondition-failed.md) |
 | `docker-mock-20260810-033636` | 两级 Gate、Hub 只读业务探针、Docker Claude headless、TUI 启动和 Mock 文本往返通过 | [无付费运行通过](docs/reproduction/2026-08-10-docker-mock-20260810-033636-no-paid-runtime-passed.md)、[TUI 用户确认](docs/reproduction/2026-08-10-docker-mock-20260810-033636-tui-user-confirmed.md)、[TUI 文本往返](docs/reproduction/2026-08-10-docker-mock-20260810-033636-tui-message-passed.md) |
+| `windows-mock-20260810-093140-a664249f` | 两级 Gate 与 agent config 通过；宿主 loopback 阻塞，Windows config/headless/TUI 未运行 | [宿主 Loopback 阻塞](docs/reproduction/2026-08-10-windows-mock-20260810-093140-loopback-blocked.md) |
 
-1. 验证 Windows 10 原生 Claude 使用工作区外的项目专用配置目录接入同一 MemoryProxy；不覆盖用户全局 `.claude`。
+1. 创建唯一的新 Windows Mock project，通过 `Windows Claude → Loopback Gateway → MemoryProxy` 路径重新执行宿主 health、项目专用配置、headless 与 TUI；不覆盖用户全局 `.claude`，也不复用旧失败 run。
 2. 再验证 Windows Claude 与隔离 Docker Linux Claude 的身份隔离、共享读取和写入治理。
 3. 仅在用户提供工作区外的新 secret 文件且真实 Gate 通过后，显式加载 real profile 验证 DeepSeek；Codex、WSL Claude、Win11、LAN、备份恢复与故障注入后置；public fork 的可复现通用修复独立提交，不混入私有编排。
 
