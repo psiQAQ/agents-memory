@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { createHash } from 'node:crypto';
 import { isMain } from './runtime-lib.mjs';
 
 const fixtures = new Set(['text', 'tool', 'thinking', 'thinking-missing', 'http-400', 'http-429', 'http-500', 'timeout']);
@@ -6,6 +7,16 @@ const errorStatus = { 'http-400': 400, 'http-429': 429, 'http-500': 500 };
 const maxBodyBytes = 1024 * 1024;
 const leakPattern = /MEMORY_(?:(?:GATEWAY|IDENTITY)_)?LEAK_SENTINEL_[A-Z0-9_-]+/i;
 const memoryCredentialPattern = /sk-mem-[A-Za-z0-9_-]{32}/i;
+const stage1OperationPattern = /STAGE1_OP_[A-Z0-9_-]{6,128}/g;
+const stage1MarkerPattern = /MEMORY_NONCE_[A-Za-z0-9_-]{1,128}/g;
+
+function digest(value) {
+  return createHash('sha256').update(value).digest('hex');
+}
+
+function increment(record, key) {
+  record[key] = (record[key] ?? 0) + 1;
+}
 
 function sanitizeObservedNames(names) {
   return names.map((name) => leakPattern.test(name) || memoryCredentialPattern.test(name) ? '[redacted-sensitive-name]' : name).sort();
@@ -32,7 +43,7 @@ function readJson(request) {
   });
 }
 
-function observe(observations, request, body, fixture) {
+function observe(observations, aggregate, request, body, fixture) {
   const path = new URL(request.url, 'http://mock').pathname;
   const authorization = request.headers.authorization;
   const apiKey = request.headers['x-api-key'];
@@ -57,6 +68,26 @@ function observe(observations, request, body, fixture) {
     memory_user_credential_seen: memoryUserCredentialSeen,
   });
   if (observations.length > 100) observations.shift();
+  aggregate.total_requests += 1;
+  increment(aggregate.paths, path);
+  increment(aggregate.fixtures, fixture);
+  const bodyText = JSON.stringify(body);
+  const operation = bodyText.match(stage1OperationPattern)?.[0];
+  if (operation) {
+    const operationHash = digest(operation);
+    if (!aggregate.operations[operationHash] && Object.keys(aggregate.operations).length < 64) {
+      aggregate.operations[operationHash] = { requests: 0, marker_hashes: [] };
+    }
+    const entry = aggregate.operations[operationHash];
+    if (entry) {
+      entry.requests += 1;
+      for (const marker of bodyText.match(stage1MarkerPattern) ?? []) {
+        const markerHash = digest(marker);
+        if (!entry.marker_hashes.includes(markerHash) && entry.marker_hashes.length < 16) entry.marker_hashes.push(markerHash);
+      }
+      entry.marker_hashes.sort();
+    }
+  }
 }
 
 function coreExtraction(body) {
@@ -139,18 +170,27 @@ function anthropicEvents(body, fixture) {
 export function createMockServer({ timeoutMs = Number(process.env.MOCK_TIMEOUT_MS) || 1000 } = {}) {
   const delay = Math.min(Math.max(Number(timeoutMs) || 1000, 1), 30000);
   const observations = [];
+  const aggregate = { total_requests: 0, paths: {}, fixtures: {}, operations: {} };
   return http.createServer(async (request, response) => {
     const path = new URL(request.url, 'http://mock').pathname;
     if (request.method === 'GET' && path === '/healthz') return sendJson(response, 200, { status: 'ok' });
     if (request.method === 'GET' && path === '/__mock/requests') return sendJson(response, 200, { requests: observations });
-    if (request.method === 'POST' && path === '/__mock/reset') { observations.length = 0; return sendJson(response, 200, { status: 'ok' }); }
+    if (request.method === 'GET' && path === '/__mock/aggregate') return sendJson(response, 200, aggregate);
+    if (request.method === 'POST' && path === '/__mock/reset') {
+      observations.length = 0;
+      aggregate.total_requests = 0;
+      aggregate.paths = {};
+      aggregate.fixtures = {};
+      aggregate.operations = {};
+      return sendJson(response, 200, { status: 'ok' });
+    }
     const isProtocol = ['/openai/v1/chat/completions', '/anthropic/v1/messages', '/anthropic/v1/messages/count_tokens'].includes(path);
     if (!isProtocol) return sendJson(response, 404, { error: { type: 'not_found' } });
     if (request.method !== 'POST') return sendJson(response, 405, { error: { type: 'method_not_allowed' } });
     let body;
     try { body = await readJson(request); } catch (error) { return sendJson(response, error.message === 'body-too-large' ? 413 : 400, { error: { type: error.message } }); }
     const fixture = request.headers['x-mock-fixture'] ?? 'text';
-    observe(observations, request, body, fixtures.has(fixture) ? fixture : 'invalid');
+    observe(observations, aggregate, request, body, fixtures.has(fixture) ? fixture : 'invalid');
     if (!fixtures.has(fixture)) return sendJson(response, 400, { error: { type: 'unknown_fixture' } });
     if (fixture in errorStatus) {
       const error = { type: 'mock_error', message: 'mock fixture error' };

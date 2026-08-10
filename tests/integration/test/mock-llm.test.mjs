@@ -137,6 +137,35 @@ test('mock only exposes whitelisted routes and sanitized observations', async ()
   });
 });
 
+test('mock keeps a bounded redacted Stage 1 aggregate without raw prompts or markers', async () => {
+  await withMock(async (baseUrl) => {
+    const operation = 'STAGE1_OP_WRITE_CLAUDE_ABC123';
+    const marker = 'MEMORY_NONCE_ABC123XYZ';
+    await fetch(`${baseUrl}/anthropic/v1/messages`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-api-key': 'mock-key' },
+      body: JSON.stringify({ model: 'mock', messages: [{ role: 'user', content: `${operation} remember ${marker}` }] }),
+    });
+    const aggregate = await (await fetch(`${baseUrl}/__mock/aggregate`)).json();
+    assert.equal(aggregate.total_requests, 1);
+    assert.equal(aggregate.paths['/anthropic/v1/messages'], 1);
+    assert.equal(Object.keys(aggregate.operations).length, 1);
+    const observed = Object.values(aggregate.operations)[0];
+    assert.equal(observed.requests, 1);
+    assert.equal(observed.marker_hashes.length, 1);
+    assert.match(observed.marker_hashes[0], /^[a-f0-9]{64}$/);
+    assert.doesNotMatch(JSON.stringify(aggregate), /STAGE1_OP_|MEMORY_NONCE_|remember/i);
+
+    await fetch(`${baseUrl}/__mock/reset`, { method: 'POST' });
+    assert.deepEqual(await (await fetch(`${baseUrl}/__mock/aggregate`)).json(), {
+      total_requests: 0,
+      paths: {},
+      fixtures: {},
+      operations: {},
+    });
+  });
+});
+
 test('mock provides deterministic OpenAI text, stream, tool, errors, and timeout', async () => {
   await withMock(async (baseUrl) => {
     const text = await (await request(baseUrl, '/openai/v1/chat/completions', { model: 'mock', messages: [] })).json();

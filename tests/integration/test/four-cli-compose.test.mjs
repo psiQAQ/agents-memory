@@ -73,6 +73,16 @@ test('active client containers are non-root and receive only their private home 
     assert.ok(prepare.volumes.some((volume) => volume.source === 'bootstrap-state' && volume.target === '/state' && volume.read_only));
     assert.ok(prepare.volumes.some((volume) => volume.source === `${client}-home` && volume.target === '/agent-home'));
     assert.match(JSON.stringify(prepare.command), new RegExp(`prepare-agent\\.mjs.*--agent.*${client}`));
+
+    const headless = parsed.services[`${client}-headless`];
+    assert.equal(headless.user, '10001:10001');
+    assert.equal(headless.read_only, true);
+    assert.deepEqual(headless.entrypoint, ['node', '/opt/memory-client/task5-headless-client.mjs']);
+    assert.deepEqual(headless.volumes.map(({ source, target }) => ({ source, target })), [
+      { source: `${client}-home`, target: '/home/agent' },
+      { source: `${client}-workspace`, target: '/workspace' },
+    ]);
+    assert.doesNotMatch(JSON.stringify(headless), /bootstrap-state|\/state|docker\.sock|DEEPSEEK/i);
   }
   assert.equal(clientVolumes.size, 6);
 });
@@ -114,6 +124,17 @@ test('active mock overlay renders runtime config and waits for healthy services'
   assert.equal(bootstrap.depends_on['memory-core'].condition, 'service_healthy');
   assert.equal(bootstrap.environment.MEMORY_CORE_SERVICE_TOKEN_FILE, '/runtime-config/gateway.token');
   assert.ok(bootstrap.volumes.some((volume) => volume.source === 'runtime-config' && volume.target === '/runtime-config' && volume.read_only));
+
+  const mock = parsed.services['mock-llm'];
+  assert.deepEqual(mock.healthcheck.test, ['CMD', 'node', 'tools/healthcheck.mjs', 'http://127.0.0.1:8080/healthz']);
+
+  const gate = parsed.services['stage1-gate'];
+  assert.deepEqual(gate.profiles, ['mock']);
+  assert.equal(gate.user, '10001:10001');
+  assert.equal(gate.read_only, true);
+  assert.ok(gate.volumes.some((volume) => volume.source === 'bootstrap-state' && volume.target === '/state' && volume.read_only));
+  assert.ok(gate.volumes.some((volume) => volume.target === '/evidence' && volume.type === 'bind'));
+  assert.doesNotMatch(JSON.stringify(gate), /docker\.sock|DEEPSEEK|PROXY_UPSTREAM_API_KEY|MEMORY_LLM_API_KEY/i);
 });
 
 test('active SOP matrix supplies and clears only a disposable non-LLM gateway value', async () => {

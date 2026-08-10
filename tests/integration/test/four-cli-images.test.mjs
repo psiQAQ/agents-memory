@@ -20,6 +20,8 @@ test('Task 4 client images pin official artifacts, verify installs, and end as u
     assert.match(dockerfile, /^FROM node:22-bookworm-slim@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436$/m);
     assert.match(dockerfile, /useradd[^\n]*--uid 10001/);
     assert.match(dockerfile, /^USER agent$/m);
+    assert.match(dockerfile, /COPY --from=integration tools\/task5-headless-client\.mjs/);
+    assert.match(dockerfile, /COPY --from=integration tools\/task5-contract\.mjs/);
     assert.match(dockerfile, /launch-client\.mjs/);
     assert.doesNotMatch(dockerfile, /latest|docker\.sock|PROXY_UPSTREAM_API_KEY|MEMORY_LLM_API_KEY|api\.deepseek\.com/i);
     assert.doesNotMatch(dockerfile, /^ARG (?:NPM_REGISTRY|CLAUDE_|OPENCODE_|PI_)/m);

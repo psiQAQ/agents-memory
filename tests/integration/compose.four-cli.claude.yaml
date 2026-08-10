@@ -1,6 +1,6 @@
 services:
   claude-config:
-    image: refine-memory-integration-tools:task4
+    image: refine-memory-integration-tools:task5
     profiles: ["claude"]
     user: "0:0"
     depends_on:
@@ -38,3 +38,26 @@ services:
       - claude-home:/home/agent
       - claude-workspace:/workspace
     command: ["--version"]
+  claude-headless:
+    image: refine-memory-claude-code:2.1.226
+    profiles: ["claude"]
+    user: "10001:10001"
+    init: true
+    read_only: true
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    depends_on:
+      claude-config:
+        condition: service_completed_successfully
+      memory-proxy:
+        condition: service_healthy
+    environment:
+      HOME: /home/agent
+      MEMORY_SPACE_ID: ${MEMORY_SPACE_ID:-default}
+      MOCK_BASE_URL: http://mock-llm:8080
+    volumes:
+      - claude-home:/home/agent
+      - claude-workspace:/workspace
+    entrypoint: ["node", "/opt/memory-client/task5-headless-client.mjs"]
+    command: ["--client", "claude", "--scenario", "${STAGE1_CLIENT_SCENARIO:-write}", "--run-id", "${RUN_ID:-task5-static}", "--owner", "${STAGE1_OWNER:-}", "--home-dir", "/home/agent", "--bundle-file", "/home/agent/.memory/agent-bundle.json", "--space-id", "${MEMORY_SPACE_ID:-default}", "--template", "/opt/memory-client/settings.template.json"]
+    restart: "no"

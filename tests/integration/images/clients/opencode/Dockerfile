@@ -13,6 +13,8 @@ RUN groupadd --gid 10001 agent \
 COPY --from=integration tools/launch-client.mjs /opt/memory-client/launch-client.mjs
 COPY --from=integration tools/render-settings.mjs /opt/memory-client/render-settings.mjs
 COPY --from=integration tools/runtime-lib.mjs /opt/memory-client/runtime-lib.mjs
+COPY --from=integration tools/task5-contract.mjs /opt/memory-client/task5-contract.mjs
+COPY --from=integration tools/task5-headless-client.mjs /opt/memory-client/task5-headless-client.mjs
 
 ENV HOME=/home/agent
 WORKDIR /workspace

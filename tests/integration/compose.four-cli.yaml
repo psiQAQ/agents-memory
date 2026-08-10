@@ -1,5 +1,5 @@
 x-tools-service: &tools-service
-  image: refine-memory-integration-tools:task4
+  image: refine-memory-integration-tools:task5
   build:
     context: .
     dockerfile: images/tools/Dockerfile

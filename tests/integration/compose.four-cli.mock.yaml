@@ -1,6 +1,6 @@
 services:
   config-init:
-    image: refine-memory-integration-tools:task4
+    image: refine-memory-integration-tools:task5
     build:
       context: .
       dockerfile: images/tools/Dockerfile
@@ -71,7 +71,7 @@ services:
     volumes:
       - runtime-config:/runtime-config:ro
   mock-llm:
-    image: refine-memory-integration-tools:task4
+    image: refine-memory-integration-tools:task5
     build:
       context: .
       dockerfile: images/tools/Dockerfile
@@ -82,8 +82,47 @@ services:
       MOCK_PORT: "8080"
     expose: ["8080"]
     healthcheck:
-      test: ["CMD", "node", "tools/healthcheck.mjs", "http://127.0.0.1:8080/health"]
+      test: ["CMD", "node", "tools/healthcheck.mjs", "http://127.0.0.1:8080/healthz"]
       interval: 2s
       timeout: 2s
       retries: 20
       start_period: 2s
+
+  stage1-gate:
+    image: refine-memory-integration-tools:task5
+    build:
+      context: .
+      dockerfile: images/tools/Dockerfile
+    profiles: ["mock"]
+    user: "10001:10001"
+    read_only: true
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+      memory-core:
+        condition: service_healthy
+      memory-proxy:
+        condition: service_healthy
+      mock-llm:
+        condition: service_healthy
+    environment:
+      MOCK_BASE_URL: http://mock-llm:8080
+      CORE_BASE_URL: http://memory-core:8420
+      PROXY_BASE_URL: http://memory-proxy:8096
+    command:
+      - tools/task5-stage1-runner.mjs
+      - --manifest
+      - /state/run/run-manifest.json
+      - --gateway-token-file
+      - /runtime-config/gateway.token
+      - --output-dir
+      - /evidence
+      - --scenario
+      - ${STAGE1_SCENARIO:-protocol-leak}
+    volumes:
+      - bootstrap-state:/state:ro
+      - runtime-config:/runtime-config:ro
+      - type: bind
+        source: ${EVIDENCE_DIR:-../../.runtime/runs/task5-manual}
+        target: /evidence
+    restart: "no"
