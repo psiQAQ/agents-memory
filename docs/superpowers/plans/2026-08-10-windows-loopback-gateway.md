@@ -74,6 +74,7 @@
 
 - Modify: `tests/integration/test/compose-contract.test.mjs`
 - Modify: `tests/integration/compose.hardened.yaml`
+- Modify: `tests/integration/compose.windows.yaml`
 
 - [ ] 2.1 先改 hardened 契约测试，要求：唯一发布端口的 service 是 `loopback-gateway`；MemoryProxy 没有 `ports` 且只连接 internal `default`；Gateway 同时连接 `default` 与 `loopback-ingress`，后者不是 internal。
 
@@ -81,7 +82,9 @@
 
   同时断言除 Gateway 外没有服务加入 `loopback-ingress`，避免把非 internal 网络意外扩散给持数据服务。
 
-- [ ] 2.3 运行 RED：
+- [ ] 2.3 恢复并锁定 `compose.windows.yaml` 作为显式 Windows override：它必须定义 `windows-config-init`，并以 mapping 形式声明 `depends_on.loopback-gateway.condition: service_healthy`。在 `compose-contract.test.mjs` 中展开 Windows 组合并静态断言该 service、依赖和 condition；不得只依赖运行时启动顺序，也不得把 Gateway health gate 放到宿主脚本中替代 Compose 契约。
+
+- [ ] 2.4 运行 RED：
 
   ```powershell
   node --test tests/integration/test/compose-contract.test.mjs
@@ -89,7 +92,7 @@
 
   预期：旧 hardened 层仍由 `memory-proxy` 发布端口且没有 Gateway，测试失败。
 
-- [ ] 2.4 最小修改 `compose.hardened.yaml`：保留 Proxy data/log volumes，移除其 `ports`；新增 Gateway 与 `loopback-ingress`。Gateway 使用固定非凭证环境：
+- [ ] 2.5 最小修改 `compose.hardened.yaml`：保留 Proxy data/log volumes，移除其 `ports`；新增 Gateway 与 `loopback-ingress`。恢复的 `compose.windows.yaml` 保持 Windows-only 配置；其中 `windows-config-init` 必须等待 `loopback-gateway` 的 `service_healthy`。Gateway 使用固定非凭证环境：
 
   ```yaml
   environment:
@@ -101,28 +104,29 @@
 
   healthcheck 只做本地 TCP connect，不调用 Proxy 业务 API；发布规则为 `127.0.0.1:8096:8096`。
 
-- [ ] 2.5 运行 GREEN：
+- [ ] 2.6 运行 GREEN：
 
   ```powershell
   node --test tests/integration/test/compose-contract.test.mjs
   ```
 
-- [ ] 2.6 展开四组 Compose，确保 base 不出现 Gateway、hardened/Windows 出现 Gateway、real 仍保持既有 secret/egress 边界：
+- [ ] 2.7 展开四组 Compose，确保 base 不出现 Gateway、hardened/Windows 出现 Gateway、Windows `windows-config-init` 依赖 Gateway healthy、real 仍保持既有 secret/egress 边界：
 
   ```powershell
   $env:MEMORY_CORE_GATEWAY_API_KEY = 'static-lab-gateway-key'
   docker compose -f tests/integration/compose.yaml config --quiet
   docker compose -f tests/integration/compose.yaml -f tests/integration/compose.hardened.yaml config --quiet
+  docker compose -f tests/integration/compose.yaml -f tests/integration/compose.hardened.yaml -f tests/integration/compose.windows.yaml config --quiet
   node --test tests/integration/test/compose-contract.test.mjs
   ```
 
   `compose-contract.test.mjs` 会在系统临时目录创建一次性 dummy secret、evidence、Windows config 与 attestation，再调用 Compose JSON 展开 real/Windows 组合并在 `finally` 清理；不得手工替换为真实 key。测试 exit 0 才算四组均通过。
 
-- [ ] 2.7 提交 Compose 阶段：
+- [ ] 2.8 提交 Compose 阶段：
 
   ```powershell
   git diff --check
-  git add -- tests/integration/compose.hardened.yaml tests/integration/test/compose-contract.test.mjs
+  git add -- tests/integration/compose.hardened.yaml tests/integration/compose.windows.yaml tests/integration/test/compose-contract.test.mjs
   git commit -m "fix(integration): publish Proxy through loopback gateway"
   ```
 
@@ -244,26 +248,131 @@
   if ($LASTEXITCODE -ne 0) { throw 'Windows config init failed' }
   ```
 
-- [ ] 4.6 在单独 PowerShell 进程只设置 `CLAUDE_CONFIG_DIR`，清除可能覆盖模型/endpoint 的 Claude 环境变量，并运行：
+- [ ] 4.6 在单独 PowerShell 进程运行 headless probe。先按 4.7 的 `Mock before` 程序取得 `$mockBefore`，再把下列脚本整体传给新的 `powershell.exe -NoProfile -Command`。脚本必须用 `try/finally` 保存并恢复 `MEMORY_CORE_GATEWAY_API_KEY`、`CLAUDE_CONFIG_DIR` 和所有列出的 `ANTHROPIC_*` 变量；因此父进程中的 `MEMORY_CORE_GATEWAY_API_KEY` 会继续存在，供 4.7 的 Compose probes 展开环境，不能以永久删除变量作为隔离手段。
 
   ```powershell
-  $env:CLAUDE_CONFIG_DIR = $env:WINDOWS_CLAUDE_CONFIG_DIR
-  Remove-Item Env:MEMORY_CORE_GATEWAY_API_KEY -ErrorAction SilentlyContinue
-  Remove-Item Env:ANTHROPIC_BASE_URL,Env:ANTHROPIC_AUTH_TOKEN,Env:ANTHROPIC_API_KEY,Env:ANTHROPIC_MODEL,Env:ANTHROPIC_DEFAULT_OPUS_MODEL,Env:ANTHROPIC_DEFAULT_SONNET_MODEL,Env:ANTHROPIC_DEFAULT_HAIKU_MODEL -ErrorAction SilentlyContinue
-  claude --version
+  $claudeProbeScript = @'
+  $isolatedNames = @(
+    'MEMORY_CORE_GATEWAY_API_KEY', 'CLAUDE_CONFIG_DIR',
+    'ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_API_KEY', 'ANTHROPIC_MODEL',
+    'ANTHROPIC_DEFAULT_OPUS_MODEL', 'ANTHROPIC_DEFAULT_SONNET_MODEL', 'ANTHROPIC_DEFAULT_HAIKU_MODEL'
+  )
+  $saved = @{}
+  foreach ($name in $isolatedNames) {
+    $item = Get-Item -LiteralPath "Env:$name" -ErrorAction SilentlyContinue
+    $saved[$name] = [pscustomobject]@{ Exists = ($null -ne $item); Value = if ($null -ne $item) { $item.Value } else { $null } }
+  }
+  try {
+    $env:CLAUDE_CONFIG_DIR = $env:WINDOWS_CLAUDE_CONFIG_DIR
+    foreach ($name in $isolatedNames | Where-Object { $_ -ne 'CLAUDE_CONFIG_DIR' }) {
+      Remove-Item -LiteralPath "Env:$name" -ErrorAction SilentlyContinue
+    }
+    $version = & claude --version
+    if ($LASTEXITCODE -ne 0 -or $version -ne '2.1.207') { throw 'claude-version' }
+    if (-not $env:WINDOWS_PROBE_MARKER) { throw 'probe-marker' }
+    $reply = & claude -p "$env:WINDOWS_PROBE_MARKER Reply exactly mock text; no tools" --max-turns 1
+    if ($LASTEXITCODE -ne 0 -or $reply -notmatch '^\\s*mock text\\s*$') { throw 'claude-headless' }
+  }
+  finally {
+    foreach ($name in $isolatedNames) {
+      if ($saved[$name].Exists) { Set-Item -LiteralPath "Env:$name" -Value $saved[$name].Value }
+      else { Remove-Item -LiteralPath "Env:$name" -ErrorAction SilentlyContinue }
+    }
+  }
+  '@
   $env:WINDOWS_PROBE_MARKER = 'WINDOWS_MOCK_MARKER_' + [guid]::NewGuid().ToString('N')
-  claude -p "$env:WINDOWS_PROBE_MARKER Reply exactly mock text; no tools" --max-turns 1
+  & powershell.exe -NoProfile -Command $claudeProbeScript
+  if ($LASTEXITCODE -ne 0) { throw 'Windows Claude headless probe failed' }
   ```
 
   要求版本精确为 `2.1.207`，headless 输出包含且只表达 `mock text`，exit 0。
 
-- [ ] 4.7 通过 Mock observation 和 Core oracle 证明：Anthropic `/messages` 请求增量至少 1；列明的 credential、sentinel、内部 identity/session header 泄漏布尔均为 false；Core L0 对本次非敏感 marker 的 owner 命中至少 1、owner mismatch 为 0。只把计数、状态、耗时与布尔值原子写入 ignored JSON。
+- [ ] 4.7 通过独立的 Mock observation 和 Core oracle 程序证明：Anthropic `/messages` 请求增量至少 1；列明的 credential、sentinel、内部 identity/session header 泄漏布尔均为 false；Core L0 对本次非敏感 marker 的 owner 命中至少 1、owner mismatch 为 0。不得调用或依赖任何 ignored 旧脚本。两个 probe 都通过 `compose --profile tools @composeFiles run --rm --no-deps test-runner --input-type=module --eval` 在 internal 网络执行，stdout 仅输出脱敏的计数、HTTP status、耗时和布尔值；失败只输出 allowlisted stage 名。
 
-  两个 probe 都通过 `compose --profile tools @composeFiles run --rm --no-deps test-runner --input-type=module --eval` 在 internal 网络执行：
+  在 4.6 前立即执行 `Mock before`，并在其成功后立即执行 `Mock after`；两段均为可直接执行的独立程序：
 
-  - Mock probe 在 Windows Claude 前后读取 `http://mock-llm:8080/__mock/requests`，统计 `/anthropic/v1/messages`；`sensitive_value_seen`、`unexpected_credential_seen`、`memory_user_credential_seen` 必须全为 false，且 header 名不得出现 `x-agent-id`、`x-conversation-id`、`x-task-id`、`x-team-id`、`x-claude-code-session-id`、`x-vertex-ai-session-id` 或任何 `x-tdai-*`。
-  - Core probe 只在容器内从 `/state/run/run-manifest.json`、其受限 `credential_file` 与 `/runtime-config/gateway.token` 读取运行期身份，最多轮询 30 次 `POST http://memory-core:8420/v3/conversation/query`；请求使用 manifest 的 service/team/user/agent/task/session，最终必须 HTTP 200、业务 `code=0`、marker 命中至少 1、owner mismatch 0。
-  - probe stdout 只包含整数/布尔/HTTP status，不输出 marker、credential、gateway token、ID 或响应正文；失败只报告 allowlisted stage 名。
+  ```powershell
+  $mockProgram = @'
+  const response = await fetch('http://mock-llm:8080/__mock/requests');
+  if (!response.ok) throw new Error('mock-fetch');
+  const { requests } = await response.json();
+  if (!Array.isArray(requests)) throw new Error('mock-shape');
+  const forbiddenHeaders = new Set(['x-agent-id','x-conversation-id','x-task-id','x-team-id','x-claude-code-session-id','x-vertex-ai-session-id']);
+  const messages = requests.filter(({ method, path }) => method === 'POST' && path === '/anthropic/v1/messages');
+  const text = JSON.stringify(messages);
+  const headersLeaked = messages.some(({ headers = {} }) => Object.keys(headers).some((name) => forbiddenHeaders.has(name.toLowerCase()) || name.toLowerCase().startsWith('x-tdai-')));
+  const result = {
+    messages: messages.length,
+    sensitive_value_seen: /lab-gateway-|MEMORY_CORE_GATEWAY_API_KEY/i.test(text),
+    unexpected_credential_seen: /authorization|api[_-]?key|bearer/i.test(text),
+    memory_user_credential_seen: /memory[_-]?user[_-]?credential/i.test(text),
+    internal_identity_header_seen: headersLeaked
+  };
+  if (Object.values(result).slice(1).some(Boolean)) throw new Error('mock-policy');
+  console.log(JSON.stringify(result));
+  '@
+  $mockBeforeJson = & $dockerCli compose --profile tools @composeFiles run --rm --no-deps test-runner --input-type=module --eval $mockProgram
+  if ($LASTEXITCODE -ne 0) { throw 'mock-before' }
+  $mockBefore = ($mockBeforeJson | ConvertFrom-Json).messages
+  # Run 4.6 here.
+  $mockAfterJson = & $dockerCli compose --profile tools @composeFiles run --rm --no-deps test-runner --input-type=module --eval $mockProgram
+  if ($LASTEXITCODE -ne 0) { throw 'mock-after' }
+  $mockAfter = ($mockAfterJson | ConvertFrom-Json).messages
+  if ($mockAfter -lt ($mockBefore + 1)) { throw 'mock-delta' }
+  ```
+
+  接着运行以下 Core oracle；它只在容器内读取 manifest、其受限 `credential_file` 和 gateway token，最多轮询 30 次。请求使用 manifest 的 service/team/user/agent/task/session，且程序不会回显任何 marker、credential、gateway token、ID 或响应正文：
+
+  ```powershell
+  $coreProgram = @'
+  import { readFile } from 'node:fs/promises';
+  import { dirname, resolve } from 'node:path';
+  const manifestPath = '/state/run/run-manifest.json';
+  const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+  const client = manifest.clients?.['agent-a'];
+  if (!client?.credential_file) throw new Error('core-manifest');
+  const credential = (await readFile(resolve(dirname(manifestPath), client.credential_file), 'utf8')).trim();
+  const gatewayToken = (await readFile('/runtime-config/gateway.token', 'utf8')).trim();
+  const marker = process.env.WINDOWS_PROBE_MARKER;
+  if (!marker) throw new Error('core-marker');
+  let status = 0, body, elapsed_ms = 0;
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const started = Date.now();
+    const response = await fetch('http://memory-core:8420/v3/conversation/query', {
+      method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${gatewayToken}`, 'x-tdai-service-id': manifest.service_id, 'x-tdai-user-key': credential },
+      body: JSON.stringify({ team_id: manifest.team_id, user_id: client.user_id, agent_id: client.agent_id, task_id: manifest.task_id, session_id: client.session_id, limit: 100, offset: 0 })
+    });
+    status = response.status; elapsed_ms += Date.now() - started;
+    body = await response.json();
+    if (status === 200 && body.code === 0) break;
+  }
+  const rows = body?.data?.messages ?? [];
+  const owner_hits = rows.filter((row) => row?.content?.includes(marker) && row.team_id === manifest.team_id && row.user_id === client.user_id && row.agent_id === client.agent_id && row.task_id === manifest.task_id).length;
+  const owner_mismatch = rows.filter((row) => row?.content?.includes(marker) && (row.team_id !== manifest.team_id || row.user_id !== client.user_id || row.agent_id !== client.agent_id || row.task_id !== manifest.task_id)).length;
+  const result = { http_status: status, core_code_zero: body?.code === 0, owner_hits, owner_mismatch, elapsed_ms };
+  if (status !== 200 || !result.core_code_zero || owner_hits < 1 || owner_mismatch !== 0) throw new Error('core-oracle');
+  console.log(JSON.stringify(result));
+  '@
+  $coreJson = & $dockerCli compose --profile tools @composeFiles run --rm --no-deps -e WINDOWS_PROBE_MARKER=$env:WINDOWS_PROBE_MARKER test-runner --input-type=module --eval $coreProgram
+  if ($LASTEXITCODE -ne 0) { throw 'core-oracle' }
+  ```
+
+  最后仅以原子替换写入 ignored JSON；文件内容不含 marker、ID、token、credential、请求头或响应正文：
+
+  ```powershell
+  $result = [ordered]@{
+    mock_messages_before = [int]$mockBefore
+    mock_messages_after = [int]$mockAfter
+    mock_messages_delta = [int]($mockAfter - $mockBefore)
+    mock_policy_passed = $true
+    core = ($coreJson | ConvertFrom-Json)
+    completed = $true
+  }
+  $probePath = Join-Path $env:EVIDENCE_DIR 'windows-headless-probe.json'
+  $tempPath = "$probePath.$([guid]::NewGuid().ToString('N')).tmp"
+  [IO.File]::WriteAllText($tempPath, ($result | ConvertTo-Json -Compress -Depth 4), [Text.UTF8Encoding]::new($false))
+  [IO.File]::Move($tempPath, $probePath, $true)
+  ```
 
 - [ ] 4.8 写不可变运行报告并更新主状态：本次新 run 只证明 Windows 10 native Claude Runtime Passed；双客户端汇总结论必须分别引用本次 Windows run 与既有 Docker Claude run `docker-mock-20260810-033636`，不得暗示同一新 project 重跑了 Docker Claude。streaming/tool/thinking、真实 DeepSeek、Win11/LAN/WSL、Gateway 故障恢复仍 Not Run，企业结论保持 No-Go/Conditional Go 边界。
 
