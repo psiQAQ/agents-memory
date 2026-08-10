@@ -70,11 +70,11 @@ client 容器只挂自己的 home/workspace，不挂 bootstrap-state、模型 ke
 
 | Client | 固定 image ID | 已验证边界 |
 | --- | --- | --- |
-| Claude Code `2.1.226` | `sha256:4822ca8d312f3c63cc53afac0c700f0f66611109b20eacdf6cce9794d6dd76fc` | Node base digest、npm wrapper/native integrity、version/help、UID 10001 |
-| OpenCode `1.18.16` | `sha256:02661f09dc296c9676e3e0a4a6437568a02127414f661087b16074854abe5efc` | Node base digest、npm wrapper/native integrity、version/help、UID 10001 |
-| Pi `0.84.1` | `sha256:252d3871ef9662bd6e34fad449b8fb3b1ca0cb461e8211472489136660babab2` | Node base digest、Release SHA-256、version/help、UID 10001 |
+| Claude Code `2.1.226` | `sha256:440d744ef794a29340622f920458fb533c9bff3d3db0b9ce01d3c5947c68492b` | Node base digest、npm wrapper/native integrity、version/help、UID 10001 |
+| OpenCode `1.18.16` | `sha256:8cdd9dfe249acc1888cb8c6fd8d00bfe46091cc4802fc44f3102adfd976886ab` | Node base digest、npm wrapper/native integrity、version/help、UID 10001 |
+| Pi `0.84.1` | `sha256:8d3275d699e20f9ab0e91f69f2eb50bcdf6b8722e331ba995c94444ebe56bc82` | Node base digest、Release SHA-256、version/help、UID 10001 |
 
-独立 review 后，Mock overlay 已补齐 runtime config、只读挂载与 healthy 依赖；renderer 逐级拒绝 config-dir symlink/junction；三镜像固定 `node:22-bookworm-slim@sha256:d649c27...`。`real` overlay 在 Task 4 仍只是 profile/config 静态入口，不含 `.env`/Paid launcher，不可当作 Task 6 运行 SOP。完整 RED 链与命令见 [Task 4 reproduction](../../docs/reproduction/2026-08-11-task4-three-client-compose-bootstrap-passed.md)。这些结果不证明 CLI prompt、服务健康、Mock 共享/ACL/leak、管理 CRUD、TUI 或真实 API。
+formal review 后，bootstrap 在发布 private/public artifact 前验证三 owner 的 user/key/Agent/Session/asset cardinality、outsider 身份与 Team/Task 隔离，并逐字段验证六条新增 binding 且保留全部既有 binding。renderer/launcher 只读取对应 home 的 `.memory/agent-bundle.json`，逐级拒绝 home/`.memory` symlink、junction 或非目录，并拒绝 linked final file。先前 review 的 Mock runtime config、只读挂载、healthy 依赖、config-dir no-follow 与固定 `node:22-bookworm-slim@sha256:d649c27...` 保持。`real` overlay 在 Task 4 仍只是 profile/config 静态入口，不含 `.env`/Paid launcher，不可当作 Task 6 运行 SOP。完整 RED 链与命令见 [Task 4 reproduction](../../docs/reproduction/2026-08-11-task4-three-client-compose-bootstrap-passed.md)。这些结果不证明 CLI prompt、服务健康、Mock 共享/ACL/leak、管理 CRUD、TUI 或真实 API。
 
 ## 后续受控顺序
 

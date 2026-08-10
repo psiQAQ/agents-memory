@@ -14,7 +14,7 @@ function parseArgs(argv) {
 
 export async function prepareWindowsConfig(options, environment = process.env) {
   await verifyWindowsConfigAttestation(environment, options.attestation, options.configDir);
-  await renderSettings({ target: 'windows', template: options.template, configDir: options.configDir, bundleFile: options.bundleFile, spaceId: options.spaceId });
+  await renderSettings({ target: 'windows', template: options.template, configDir: options.configDir, bundleFile: options.bundleFile, bundleHomeDir: options.bundleHomeDir, spaceId: options.spaceId });
 }
 
 if (isMain(import.meta)) {
@@ -24,6 +24,7 @@ if (isMain(import.meta)) {
       attestation: values['--attestation'],
       template: values['--template'],
       configDir: values['--config-dir'],
+      bundleHomeDir: values['--bundle-home-dir'],
       bundleFile: values['--agent-bundle-file'],
       spaceId: values['--space-id'],
     });

@@ -60,6 +60,10 @@ function requireItems(data) {
   return data.items;
 }
 
+function requireDistinct(values, expected) {
+  if (values.length !== expected || values.some((value) => typeof value !== 'string' || !value) || new Set(values).size !== expected) throw new Error('invalid core response');
+}
+
 function bindingInput(binding) {
   const result = {
     asset_id: requireId(binding, 'asset_id'),
@@ -89,10 +93,10 @@ async function publishManifest(file, value, writeFileImpl, renameFileImpl) {
   }
 }
 
-export async function bootstrap({ coreUrl, serviceId, runId, outputDir, clients, clientManifest, activeClients, timeoutMs = 10000, manifestWriteFile = writeFile, manifestRenameFile = rename }) {
+export async function bootstrap({ coreUrl, serviceId, runId, outputDir, clients, clientManifest, activeClients, timeoutMs = 10000, manifestWriteFile = writeFile, manifestRenameFile = rename, sessionIdFactory = randomUUID }) {
   const task4Clients = clientManifest === undefined ? undefined : task4Selection(clientManifest, activeClients);
   if (task4Clients) clients = task4Clients.map(({ id }) => id);
-  if (!/^https?:\/\//.test(coreUrl ?? '') || !serviceId || !validRunId(runId) || !isAbsolute(outputDir) || !Array.isArray(clients) || clients.length < 3 || new Set(clients).size !== clients.length || clients.some((client) => !/^[a-z][a-z0-9-]*$/.test(client)) || !Number.isInteger(timeoutMs) || timeoutMs <= 0) throw new Error('invalid bootstrap arguments');
+  if (!/^https?:\/\//.test(coreUrl ?? '') || !serviceId || !validRunId(runId) || !isAbsolute(outputDir) || !Array.isArray(clients) || clients.length < 3 || new Set(clients).size !== clients.length || clients.some((client) => !/^[a-z][a-z0-9-]*$/.test(client)) || !Number.isInteger(timeoutMs) || timeoutMs <= 0 || typeof sessionIdFactory !== 'function') throw new Error('invalid bootstrap arguments');
   let serviceToken;
   if (process.env.MEMORY_CORE_SERVICE_TOKEN_FILE) {
     try { serviceToken = (await readFile(process.env.MEMORY_CORE_SERVICE_TOKEN_FILE, 'utf8')).trim(); } catch { throw new Error('invalid MEMORY_CORE_SERVICE_TOKEN_FILE'); }
@@ -118,11 +122,16 @@ export async function bootstrap({ coreUrl, serviceId, runId, outputDir, clients,
   const team = await call(coreUrl, serviceId, '/v3/meta/team/create', { name: `team-${runId}`, owner_user_id: owner.user_id }, owner.user_key, serviceToken);
   const teamId = requireId(team, 'team_id');
   for (const client of clients.slice(1)) await createUser(client);
+  if (task4Clients) {
+    requireDistinct(clients.map((client) => users[client].user_id), 3);
+    requireDistinct(clients.map((client) => users[client].user_key), 3);
+  }
   for (const client of clients.slice(1)) await call(coreUrl, serviceId, '/v3/meta/team-member/add', { team_id: teamId, user_id: users[client].user_id, role: 'member' }, owner.user_key, serviceToken);
   for (const client of clients) {
     const agent = await call(coreUrl, serviceId, '/v3/meta/agent/create', { team_id: teamId, owner_user_id: users[client].user_id, name: client }, users[client].user_key, serviceToken);
     users[client].agent_id = requireId(agent, 'agent_id');
   }
+  if (task4Clients) requireDistinct(clients.map((client) => users[client].agent_id), 3);
   const task = await call(coreUrl, serviceId, '/v3/meta/task/create', { team_id: teamId, creator_user_id: owner.user_id, title: `task-${runId}`, linked_agents: clients.map((client) => ({ agent_id: users[client].agent_id })) }, owner.user_key, serviceToken);
   const taskId = requireId(task, 'task_id');
 
@@ -136,6 +145,7 @@ export async function bootstrap({ coreUrl, serviceId, runId, outputDir, clients,
     outsiderUser.agent_id = requireId(outsiderAgent, 'agent_id');
     const outsiderTask = await call(coreUrl, serviceId, '/v3/meta/task/create', { team_id: outsiderTeamId, creator_user_id: outsiderUser.user_id, title: `task-${runId}-outsider`, linked_agents: [{ agent_id: outsiderUser.agent_id }] }, outsiderUser.user_key, serviceToken);
     outsider = { team_id: outsiderTeamId, task_id: requireId(outsiderTask, 'task_id') };
+    if (clients.some((client) => users[client].user_id === outsiderUser.user_id || users[client].user_key === outsiderUser.user_key || users[client].agent_id === outsiderUser.agent_id) || outsider.team_id === teamId || outsider.task_id === taskId) throw new Error('invalid core response');
   }
 
   const listBindings = async (client) => requireItems(await call(coreUrl, serviceId, '/v3/meta/agent-fixed-asset/list', { agent_id: users[client].agent_id, limit: 100, offset: 0 }, users[client].user_key, serviceToken));
@@ -152,18 +162,29 @@ export async function bootstrap({ coreUrl, serviceId, runId, outputDir, clients,
       if (shared.asset_id !== assetId || shared.visibility !== 'team') throw new Error('invalid core response');
       ownerAssetIds[client] = assetId;
     }
+    requireDistinct(Object.values(ownerAssetIds), 3);
+    const verifiedPairs = new Set();
     for (const client of clients) {
       const existingInputs = (await listBindings(client)).map(bindingInput);
       const existingById = new Map(existingInputs.map((binding) => [binding.asset_id, binding]));
+      if (existingById.size !== existingInputs.length) throw new Error('invalid core response');
       const additions = Object.entries(ownerAssetIds)
         .filter(([ownerName, assetId]) => ownerName !== client && !existingById.has(assetId))
         .map(([, assetId]) => ({ asset_id: assetId, asset_type: 'chat_memory', injection_mode: 'summary', priority: 0, created_by: users[client].user_id }));
       await call(coreUrl, serviceId, '/v3/meta/agent-fixed-asset/set', { agent_id: users[client].agent_id, bindings: [...existingInputs, ...additions] }, users[client].user_key, serviceToken);
-      const verifiedById = new Map((await listBindings(client)).map(bindingInput).map((binding) => [binding.asset_id, binding]));
-      if (Object.values(ownerAssetIds).some((assetId) => !verifiedById.has(assetId)) || existingInputs.some((binding) => JSON.stringify(verifiedById.get(binding.asset_id)) !== JSON.stringify(binding))) throw new Error('invalid core response');
+      const verifiedInputs = (await listBindings(client)).map(bindingInput);
+      const verifiedById = new Map(verifiedInputs.map((binding) => [binding.asset_id, binding]));
+      if (verifiedById.size !== verifiedInputs.length || existingInputs.some((binding) => JSON.stringify(verifiedById.get(binding.asset_id)) !== JSON.stringify(binding))) throw new Error('invalid core response');
+      for (const [ownerName, assetId] of Object.entries(ownerAssetIds)) {
+        if (ownerName === client) continue;
+        const expected = bindingInput({ asset_id: assetId, asset_type: 'chat_memory', injection_mode: 'summary', priority: 0, created_by: users[client].user_id });
+        if (JSON.stringify(verifiedById.get(assetId)) !== JSON.stringify(expected)) throw new Error('invalid core response');
+        verifiedPairs.add(JSON.stringify([client, assetId]));
+      }
     }
     if ((await listBindings('outsider')).some((binding) => Object.values(ownerAssetIds).includes(binding?.asset_id))) throw new Error('invalid core response');
-    sharedMemory = { owner_asset_ids: ownerAssetIds, cross_owner_binding_count: clients.length * (clients.length - 1) };
+    if (verifiedPairs.size !== 6) throw new Error('invalid core response');
+    sharedMemory = { owner_asset_ids: ownerAssetIds, cross_owner_binding_count: verifiedPairs.size };
   } else {
     const source = clients[0];
     const consumers = clients.slice(1, 2);
@@ -189,17 +210,21 @@ export async function bootstrap({ coreUrl, serviceId, runId, outputDir, clients,
     sharedMemory = { asset_ids: [sourceAssetId], source, consumers, excluded };
   }
 
+  const sessionIds = Object.fromEntries(clients.map((client) => [client, sessionIdFactory()]));
+  if (task4Clients) requireDistinct(Object.values(sessionIds), 3);
+  const outsiderSessionId = outsider ? sessionIdFactory() : undefined;
+  if (outsider && (typeof outsiderSessionId !== 'string' || !outsiderSessionId)) throw new Error('invalid core response');
   const manifestClients = {};
   for (const client of clients) {
     const credentialFile = `credentials/${client}.user-key`;
     await secureWrite(join(outputDir, credentialFile), `${users[client].user_key}\n`);
-    manifestClients[client] = { user_id: users[client].user_id, agent_id: users[client].agent_id, session_id: randomUUID(), credential_file: credentialFile, display_name: client };
+    manifestClients[client] = { user_id: users[client].user_id, agent_id: users[client].agent_id, session_id: sessionIds[client], credential_file: credentialFile, display_name: client };
   }
   let manifestOutsider;
   if (outsider) {
     const credentialFile = 'credentials/outsider.user-key';
     await secureWrite(join(outputDir, credentialFile), `${users.outsider.user_key}\n`);
-    manifestOutsider = { ...outsider, user_id: users.outsider.user_id, agent_id: users.outsider.agent_id, session_id: randomUUID(), credential_file: credentialFile, display_name: 'Synthetic Outsider' };
+    manifestOutsider = { ...outsider, user_id: users.outsider.user_id, agent_id: users.outsider.agent_id, session_id: outsiderSessionId, credential_file: credentialFile, display_name: 'Synthetic Outsider' };
   }
   await secureWrite(join(outputDir, 'bootstrap.private.json'), JSON.stringify({ admin_user_key: adminKey, user_keys: Object.fromEntries([...clients, ...(outsider ? ['outsider'] : [])].map((client) => [client, users[client].user_key])) }, null, 2));
   const manifest = {

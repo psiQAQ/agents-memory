@@ -50,12 +50,25 @@ async function ensureNoFollowDirectory(path) {
   }
 }
 
+async function readAgentBundle(bundleHomeDir, bundleFile) {
+  if (!isAbsolute(bundleHomeDir ?? '') || !isAbsolute(bundleFile ?? '') || bundleFile !== join(bundleHomeDir, '.memory', 'agent-bundle.json')) throw new Error('invalid agent-bundle-file');
+  try {
+    for (const directory of [bundleHomeDir, join(bundleHomeDir, '.memory')]) {
+      const metadata = await lstat(directory);
+      if (metadata.isSymbolicLink() || !metadata.isDirectory()) throw new Error();
+    }
+    const metadata = await lstat(bundleFile);
+    if (metadata.isSymbolicLink() || !metadata.isFile() || metadata.nlink !== 1 || metadata.size > 16384) throw new Error();
+    return JSON.parse(await readFile(bundleFile, 'utf8'));
+  } catch { throw new Error('invalid agent-bundle-file'); }
+}
+
 export async function renderSettings(options) {
-  const { target, template, configDir, bundleFile, homeDir, spaceId = 'default' } = options;
+  const { target, template, configDir, bundleFile, bundleHomeDir, homeDir, spaceId = 'default' } = options;
   const claudeTarget = Boolean(urls[target]);
   if (!claudeTarget && !['opencode', 'pi'].includes(target)) throw new Error('invalid target');
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(spaceId) || spaceId.includes('..')) throw new Error('invalid space-id');
-  if (![configDir, bundleFile, ...(claudeTarget ? [template] : [])].every((path) => isAbsolute(path ?? ''))) throw new Error('invalid path');
+  if (![configDir, bundleFile, bundleHomeDir, ...(claudeTarget ? [template] : [])].every((path) => isAbsolute(path ?? ''))) throw new Error('invalid path');
   if (homeDir !== undefined) {
     if (!isAbsolute(homeDir) || relative(resolve(homeDir), resolve(configDir)).startsWith('..') || isAbsolute(relative(resolve(homeDir), resolve(configDir)))) throw new Error('invalid path');
     await ensureNoFollowDirectory(homeDir);
@@ -66,12 +79,7 @@ export async function renderSettings(options) {
     try { source = await readFile(template, 'utf8'); parsed = JSON.parse(source); } catch { throw new Error('invalid template'); }
     if ((source.match(/__MEMORY_PROXY_BASE_URL__/g) ?? []).length !== 1 || !parsed || typeof parsed !== 'object' || Array.isArray(parsed) || !parsed.env || typeof parsed.env !== 'object' || Array.isArray(parsed.env) || parsed.env.ANTHROPIC_BASE_URL !== '__MEMORY_PROXY_BASE_URL__' || parsed.env.TDAI_MEMORY_PROXY_BASE_URL !== undefined || hasCredential(parsed)) throw new Error('invalid template');
   }
-  let bundle;
-  try {
-    const metadata = await lstat(bundleFile);
-    if (metadata.isSymbolicLink() || !metadata.isFile() || metadata.nlink !== 1 || metadata.size > 16384) throw new Error();
-    bundle = JSON.parse(await readFile(bundleFile, 'utf8'));
-  } catch { throw new Error('invalid agent-bundle-file'); }
+  const bundle = await readAgentBundle(bundleHomeDir, bundleFile);
   if (!bundle || typeof bundle !== 'object' || Array.isArray(bundle) || Object.keys(bundle).sort().join() !== 'identity,memory_user_key' || !keyPattern.test(bundle.memory_user_key)) throw new Error('invalid agent-bundle-file');
   const key = bundle.memory_user_key;
   const identity = bundle.identity;
@@ -169,7 +177,7 @@ export async function renderSettings(options) {
 if (isMain(import.meta)) {
   try {
     const value = args(process.argv.slice(2));
-    await renderSettings({ target: value['--target'], template: value['--template'], configDir: value['--config-dir'], bundleFile: value['--agent-bundle-file'], spaceId: value['--space-id'] });
+    await renderSettings({ target: value['--target'], template: value['--template'], configDir: value['--config-dir'], bundleFile: value['--agent-bundle-file'], bundleHomeDir: value['--bundle-home-dir'], spaceId: value['--space-id'] });
     process.stdout.write(JSON.stringify({ status: 'ok', target: value['--target'] }) + '\n');
   } catch (error) {
     process.stderr.write(`${error.message}\n`);

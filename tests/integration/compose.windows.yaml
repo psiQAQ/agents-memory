@@ -22,6 +22,8 @@ services:
       - /lab/claude/settings.template.json
       - --config-dir
       - /windows-config
+      - --bundle-home-dir
+      - /agent-home
       - --agent-bundle-file
       - /agent-home/.memory/agent-bundle.json
       - --space-id

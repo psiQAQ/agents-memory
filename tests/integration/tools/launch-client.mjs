@@ -13,8 +13,8 @@ const privateEnvironment = ['MEMORY_USER_KEY', 'MEMORY_TEAM_ID', 'MEMORY_AGENT_I
 export async function launchClient({ client, homeDir, bundleFile, spaceId, args = [], template, spawnProcess = spawn, parentEnvironment = process.env }) {
   const definition = clients[client];
   if (!definition) throw new Error('invalid client');
-  if (![homeDir, bundleFile].every((path) => isAbsolute(path ?? '')) || !Array.isArray(args) || args.some((argument) => typeof argument !== 'string') || (client === 'claude' && !isAbsolute(template ?? ''))) throw new Error('invalid launcher arguments');
-  const rendered = await renderSettings({ target: definition.target, template, configDir: join(homeDir, ...definition.config), bundleFile, homeDir, spaceId });
+  if (![homeDir, bundleFile].every((path) => isAbsolute(path ?? '')) || bundleFile !== join(homeDir, '.memory', 'agent-bundle.json') || !Array.isArray(args) || args.some((argument) => typeof argument !== 'string') || (client === 'claude' && !isAbsolute(template ?? ''))) throw new Error('invalid launcher arguments');
+  const rendered = await renderSettings({ target: definition.target, template, configDir: join(homeDir, ...definition.config), bundleFile, bundleHomeDir: homeDir, homeDir, spaceId });
   const environment = { ...parentEnvironment };
   for (const name of privateEnvironment) delete environment[name];
   Object.assign(environment, rendered.environment);

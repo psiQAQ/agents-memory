@@ -9,6 +9,7 @@ node /opt/memory-lab/tools/render-settings.mjs \
   --target docker \
   --template /opt/memory-lab/settings.template.json \
   --config-dir "$CLAUDE_CONFIG_DIR" \
+  --bundle-home-dir "/home/claude" \
   --agent-bundle-file "/home/claude/.memory/agent-bundle.json" \
   --space-id "$MEMORY_SPACE_ID"
 

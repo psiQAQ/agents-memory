@@ -71,3 +71,30 @@ Docker Client/Server 均为 `29.6.2`。最终 Dockerfile 不允许通过 build a
 - Markdown 相对链接、UTF-8 无 BOM/LF、secret-shape scan、`git diff --check`：Passed。
 - root 完整测试与上述静态校验均未读取 `.env`、settings、secret 或 runtime evidence 原文。
 - review rebuild 后首次 help harness 因 OpenCode 将正文写到 stderr，PowerShell stdout-only nonempty 检查而中止；合并 stdout/stderr 后 OpenCode/Pi 均为 help exit 0/nonempty。
+
+## Formal review fix round 1（append-only）
+
+本节保留上方初次实现/review 的 RED 链和 image IDs；它们是当时固定输入的不可变证据。以下 IDs 对当前 launcher/renderer source supersede 上表，不把本轮 retag 写成 build。
+
+### RED → GREEN
+
+- Bootstrap RED：`node --test tests/integration/test/bootstrap.test.mjs` exit 1，12 项中 9 passed / 3 failed。旧实现分别接受 5/5 个 owner user/key/Agent/Session/asset cardinality 破坏、6/6 个 outsider user/key/Agent/Team/Task/scope 重叠，以及 4/4 个新增 binding 字段 mutation。
+- Bootstrap GREEN：同命令 exit 0，12/12。发布任何 credential、`bootstrap.private.json` 或 `run-manifest.json` 前，三 owner 的五组值各自 exact cardinality=3；outsider user/key/Agent 不与 owner 重叠且 Team/Task 分别不同；post-set 保留既有 binding，逐字段验证六个 distinct `(consumer, foreignOwnerAsset)` pair 的 `asset_id`、`asset_type`、`injection_mode`、`priority`、`created_by`。
+- Bundle RED：`node --test tests/integration/test/launch-client.test.mjs tests/integration/test/render-settings.test.mjs` exit 1，13 项中 11 passed / 2 failed。launcher 接受 linked `.memory` 和 absolute out-of-home bundle 并 spawn 两次；renderer 两例均错误 exit 0。
+- Caller RED：`node --test tests/integration/test/runtime-assets.test.mjs tests/integration/test/compose-contract.test.mjs` exit 1，14 项中 11 passed / 3 failed，确认 legacy Claude entrypoint、Windows wrapper 和 Windows Compose 尚未传入 bundle home。
+- Bundle/caller GREEN：renderer 与 launcher 只接受 `<home>/.memory/agent-bundle.json`，依次 `lstat` home 和 `.memory` 并拒绝 symlink/junction/非目录，final file 仍须 single-link regular file；legacy Claude 与 Windows caller 同步。bootstrap、launcher、renderer、runtime assets、Compose contract focused 命令 exit 0，39/39。
+- Fresh root：`node --test tests/integration/test/*.test.mjs` exit 0，86/86。
+
+### 当前三镜像证据
+
+三个 Dockerfile 都复制了变更后的 launcher/renderer，因此按 Claude → OpenCode → Pi 串行各 build 一次；固定 Node digest 与官方 CLI integrity/SHA layer 命中已审计 cache。未启动业务栈、未调用模型 API。
+
+| Client | 单次 build | 当前 active image ID | Runtime |
+| --- | --- | --- | --- |
+| Claude Code `2.1.226` | exit 0，11.648 s，直接 tag `refine-memory-claude-code:2.1.226` | `sha256:440d744ef794a29340622f920458fb533c9bff3d3db0b9ce01d3c5947c68492b` | Config.User `agent`；network-none UID `10001`；version/help exit 0，version `2.1.226 (Claude Code)` |
+| OpenCode `1.18.16` | exit 0，1.463 s，误写旧本地别名 `refine-memory-opencode:1.2.10` | `sha256:8cdd9dfe249acc1888cb8c6fd8d00bfe46091cc4802fc44f3102adfd976886ab` | 同一 image 仅用 `docker image tag` 增加 active `:1.18.16`，不是第二次 build；Config.User `agent`；network-none UID `10001`；version/help exit 0，version `1.18.16` |
+| Pi `0.84.1` | exit 0，1.434 s，误写旧本地别名 `refine-memory-pi:0.60.0` | `sha256:8d3275d699e20f9ab0e91f69f2eb50bcdf6b8722e331ba995c94444ebe56bc82` | 同一 image 仅用 `docker image tag` 增加 active `:0.84.1`，不是第二次 build；Config.User `agent`；network-none UID `10001`；version/help exit 0，version `0.84.1` |
+
+Active base + `mock`/`real`/`claude`/`opencode`/`pi`/`management` Compose config 全部 exit 0；Mock 只使用随后清理的 disposable non-LLM gateway 值。`bash -n` 3/3、Markdown relative links 62、changed UTF-8 no-BOM/LF、secret-shape、gitlink/product status 与 `git diff --check` 均纳入最终静态 Gate。本轮没有读取 `.env`、settings、secret、home 或 runtime evidence 原文。服务、Mock 三写六读、ACL/leak、管理 CRUD、真实 API、TUI 和 Codex 仍为 Not Run。
+
+Review Minor 的 commit-provenance ledger 只记为 deferred，留待最终 consolidation；不扩大本 fix diff。

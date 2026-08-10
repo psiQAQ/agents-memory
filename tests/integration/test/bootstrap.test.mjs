@@ -16,6 +16,27 @@ const task4Clients = [
   { id: 'pi', source: 'pi', display_name: 'Pi' },
 ];
 
+async function assertNoTask4Artifacts(output) {
+  for (const file of [
+    'run-manifest.json',
+    'bootstrap.private.json',
+    ...['claude', 'opencode', 'pi', 'outsider'].map((client) => join('credentials', `${client}.user-key`)),
+  ]) assert.equal(await readFile(join(output, file), 'utf8').catch((error) => error.code), 'ENOENT');
+  assert.deepEqual(await readdir(join(output, 'credentials')), []);
+}
+
+function task4Bootstrap(bootstrap, core, output, extra = {}) {
+  return bootstrap({
+    coreUrl: core.baseUrl,
+    serviceId: 'default',
+    runId: `run-${Math.random().toString(16).slice(2)}`,
+    outputDir: output,
+    clientManifest: task4Clients,
+    activeClients: 'claude,opencode,pi',
+    ...extra,
+  });
+}
+
 test('bootstrap selects the three allowlisted clients and creates three-owner sharing plus an isolated outsider', async () => {
   const { bootstrap } = await import('../tools/bootstrap.mjs');
   const core = await fakeCore({ clientNames: task4Clients.map(({ id }) => id), outsiderName: 'outsider' });
@@ -51,6 +72,80 @@ test('bootstrap selects the three allowlisted clients and creates three-owner sh
     await assert.rejects(bootstrap({ coreUrl: core.baseUrl, serviceId: 'default', runId: 'unknown', outputDir: join(directory, 'unknown'), clientManifest: task4Clients, activeClients: 'claude,opencode,codex' }), /invalid active clients/);
     await assert.rejects(bootstrap({ coreUrl: core.baseUrl, serviceId: 'default', runId: 'partial', outputDir: join(directory, 'partial'), clientManifest: task4Clients, activeClients: 'claude,opencode' }), /invalid active clients/);
   } finally { await core.close(); await rm(directory, { recursive: true, force: true }); }
+});
+
+test('bootstrap rejects duplicate Task 4 owner identity and session sets before publishing artifacts', async () => {
+  const { bootstrap } = await import('../tools/bootstrap.mjs');
+  const directory = await mkdtemp(join(tmpdir(), 'memory-bootstrap-cardinality-'));
+  let accepted = 0;
+  try {
+    for (const [name, coreOptions, bootstrapOptions] of [
+      ['user', { duplicateOwnerField: 'user_id' }, {}],
+      ['key', { duplicateOwnerField: 'user_key' }, {}],
+      ['agent', { duplicateOwnerField: 'agent_id' }, {}],
+      ['asset', { duplicateOwnerField: 'asset_id' }, {}],
+      ['session', {}, { sessionIdFactory: () => 'duplicate-session' }],
+    ]) {
+      const core = await fakeCore({ clientNames: task4Clients.map(({ id }) => id), outsiderName: 'outsider', ...coreOptions });
+      const output = join(directory, name);
+      try {
+        const error = await task4Bootstrap(bootstrap, core, output, bootstrapOptions).then(() => { accepted += 1; return undefined; }, (failure) => failure);
+        if (error) assert.match(error.message, /invalid core response/);
+      } finally { await core.close(); }
+    }
+    assert.equal(accepted, 0);
+    for (const name of ['user', 'key', 'agent', 'asset', 'session']) await assertNoTask4Artifacts(join(directory, name));
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test('bootstrap rejects outsider identity or scope overlap before publishing artifacts', async () => {
+  const { bootstrap } = await import('../tools/bootstrap.mjs');
+  const directory = await mkdtemp(join(tmpdir(), 'memory-bootstrap-outsider-'));
+  let accepted = 0;
+  try {
+    for (const [name, mutation] of [
+      ['user', { outsiderOverlapField: 'user_id' }],
+      ['key', { outsiderOverlapField: 'user_key' }],
+      ['agent', { outsiderOverlapField: 'agent_id' }],
+      ['team', { outsiderOverlapField: 'team_id' }],
+      ['task', { outsiderOverlapField: 'task_id' }],
+      ['scope', { sameOutsiderScope: true }],
+    ]) {
+      const core = await fakeCore({ clientNames: task4Clients.map(({ id }) => id), outsiderName: 'outsider', ...mutation });
+      const output = join(directory, name);
+      try {
+        const error = await task4Bootstrap(bootstrap, core, output).then(() => { accepted += 1; return undefined; }, (failure) => failure);
+        if (error) assert.match(error.message, /invalid core response/);
+      } finally { await core.close(); }
+    }
+    assert.equal(accepted, 0);
+    for (const name of ['user', 'key', 'agent', 'team', 'task', 'scope']) await assertNoTask4Artifacts(join(directory, name));
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test('bootstrap rejects every mutated foreign binding field and publishes no private state', async () => {
+  const { bootstrap } = await import('../tools/bootstrap.mjs');
+  const directory = await mkdtemp(join(tmpdir(), 'memory-bootstrap-added-binding-'));
+  const mutations = [
+    { field: 'asset_type', value: 'knowledge' },
+    { field: 'injection_mode', value: 'full' },
+    { field: 'priority', value: 99 },
+    { field: 'created_by', value: 'usr-wrong' },
+  ];
+  let accepted = 0;
+  try {
+    for (const [index, addedBindingMutation] of mutations.entries()) {
+      const core = await fakeCore({ clientNames: task4Clients.map(({ id }) => id), outsiderName: 'outsider', addedBindingMutation });
+      const output = join(directory, `case-${index}`);
+      try {
+        const error = await task4Bootstrap(bootstrap, core, output).then(() => { accepted += 1; return undefined; }, (failure) => failure);
+        if (error) assert.match(error.message, /invalid core response/);
+        else await assertNoTask4Artifacts(output).catch(() => {});
+      } finally { await core.close(); }
+    }
+    assert.equal(accepted, 0);
+    for (const index of mutations.keys()) await assertNoTask4Artifacts(join(directory, `case-${index}`));
+  } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
 test('bootstrap CLI reads the tracked manifest and ACTIVE_CLIENTS without accepting an arbitrary client list', async () => {

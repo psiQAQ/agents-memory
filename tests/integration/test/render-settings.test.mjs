@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { link, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -17,16 +17,21 @@ function bundle(memoryUserKey = key, identity = baseIdentity) {
 
 async function fixture() {
   const directory = await mkdtemp(join(tmpdir(), 'memory-render-'));
+  const bundleHome = join(directory, 'home');
+  await mkdir(join(bundleHome, '.memory'), { recursive: true });
   const template = join(directory, 'settings.template.json');
   const config = join(directory, 'config');
-  const bundleFile = join(directory, 'agent-bundle.json');
+  const bundleFile = join(bundleHome, '.memory', 'agent-bundle.json');
   await writeFile(template, JSON.stringify({ env: { ANTHROPIC_BASE_URL: '__MEMORY_PROXY_BASE_URL__' } }));
   await writeFile(bundleFile, `${JSON.stringify(bundle())}\r\n`);
-  return { directory, template, config, bundleFile };
+  return { directory, bundleHome, template, config, bundleFile };
 }
 
 function run(args) {
-  return spawnSync(process.execPath, [fileURLToPath(tool), ...args], { encoding: 'utf8' });
+  const values = [...args];
+  const bundleIndex = values.indexOf('--agent-bundle-file');
+  if (bundleIndex >= 0 && !values.includes('--bundle-home-dir')) values.push('--bundle-home-dir', dirname(dirname(values[bundleIndex + 1])));
+  return spawnSync(process.execPath, [fileURLToPath(tool), ...values], { encoding: 'utf8' });
 }
 
 test('renderer writes fixed Docker and Windows proxy URLs without changing template', async () => {
@@ -58,7 +63,7 @@ test('renderer writes native OpenCode and Pi Anthropic configs with only the sel
       const identity = { ...baseIdentity, agent_id: `agent-${target}`, session_id: `session-${target}`, display_name: target };
       await writeFile(f.bundleFile, JSON.stringify(bundle(clientKey, identity)));
       const configDir = join(f.directory, target);
-      const rendered = await renderSettings({ target, configDir, bundleFile: f.bundleFile, spaceId: 'default' });
+      const rendered = await renderSettings({ target, configDir, bundleFile: f.bundleFile, bundleHomeDir: f.bundleHome, spaceId: 'default' });
       assert.deepEqual(rendered.environment, {
         MEMORY_USER_KEY: clientKey,
         MEMORY_TEAM_ID: 'team-a',
@@ -152,17 +157,47 @@ test('renderer removes a written temporary file when destination rename fails', 
 test('renderer concurrent calls use distinct same-directory temporary files', async () => {
   const f = await fixture();
   const otherKey = `sk-mem-${'B'.repeat(32)}`;
-  const otherBundleFile = join(f.directory, 'other-agent-bundle.json');
+  const otherBundleHome = join(f.directory, 'other-home');
+  const otherBundleFile = join(otherBundleHome, '.memory', 'agent-bundle.json');
   try {
+    await mkdir(join(otherBundleHome, '.memory'), { recursive: true });
     await writeFile(otherBundleFile, JSON.stringify(bundle(otherKey)));
     await Promise.all([
-      renderSettings({ target: 'docker', template: f.template, configDir: f.config, bundleFile: f.bundleFile }),
-      renderSettings({ target: 'windows', template: f.template, configDir: f.config, bundleFile: otherBundleFile }),
+      renderSettings({ target: 'docker', template: f.template, configDir: f.config, bundleFile: f.bundleFile, bundleHomeDir: f.bundleHome }),
+      renderSettings({ target: 'windows', template: f.template, configDir: f.config, bundleFile: otherBundleFile, bundleHomeDir: otherBundleHome }),
     ]);
     const output = JSON.parse(await readFile(join(f.config, 'settings.json'), 'utf8'));
     assert.ok([key, otherKey].includes(output.env.ANTHROPIC_AUTH_TOKEN));
     assert.deepEqual((await readdir(f.config)).filter((name) => name.startsWith('.settings.') && name.endsWith('.tmp')), []);
   } finally { await rm(f.directory, { recursive: true, force: true }); }
+});
+
+test('renderer rejects a linked or out-of-home bundle without leaking the key', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'memory-render-bundle-boundary-'));
+  const outside = join(directory, 'outside');
+  await mkdir(outside);
+  const outsideBundle = join(outside, 'agent-bundle.json');
+  await writeFile(outsideBundle, JSON.stringify(bundle()));
+  try {
+    const linkedHome = join(directory, 'linked-home');
+    await mkdir(linkedHome);
+    await symlink(outside, join(linkedHome, '.memory'), process.platform === 'win32' ? 'junction' : 'dir');
+    const plainHome = join(directory, 'plain-home');
+    await mkdir(plainHome);
+    const cases = [
+      { home: linkedHome, bundleFile: join(linkedHome, '.memory', 'agent-bundle.json') },
+      { home: plainHome, bundleFile: outsideBundle },
+    ];
+    const results = cases.map(({ home, bundleFile }, index) => run([
+      '--target', 'opencode',
+      '--config-dir', join(directory, `config-${index}`),
+      '--agent-bundle-file', bundleFile,
+      '--bundle-home-dir', home,
+      '--space-id', 'default',
+    ]));
+    assert.deepEqual(results.map((result) => result.status === 0), [false, false]);
+    assert.doesNotMatch(results.map((result) => `${result.stdout}${result.stderr}`).join('\n'), new RegExp(key));
+  } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
 test('renderer rejects a config directory symlink before writing a private key outside home', async () => {

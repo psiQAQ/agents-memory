@@ -21,6 +21,7 @@ test('Claude entrypoint rebuilds isolated settings before every CLI invocation',
   const entrypoint = await read('images/claude/entrypoint.sh');
   assert.match(entrypoint, /render-settings\.mjs/);
   assert.match(entrypoint, /--target docker/);
+  assert.match(entrypoint, /--bundle-home-dir "\/home\/claude"/);
   assert.match(entrypoint, /--agent-bundle-file/);
   assert.match(entrypoint, /\/home\/claude\/\.memory\/agent-bundle\.json/);
   assert.doesNotMatch(entrypoint, /--memory-user-key-file|--identity-file/);
@@ -79,6 +80,7 @@ test('Windows config wrapper verifies host attestation before rendering settings
   assert.match(wrapper, /verifyWindowsConfigAttestation/);
   assert.match(wrapper, /renderSettings/);
   assert.ok(wrapper.indexOf('await verifyWindowsConfigAttestation') < wrapper.indexOf('await renderSettings'));
+  assert.match(wrapper, /bundleHomeDir/);
   assert.match(wrapper, /bundleFile/);
   assert.doesNotMatch(wrapper, /console\.log|set -x/);
 });

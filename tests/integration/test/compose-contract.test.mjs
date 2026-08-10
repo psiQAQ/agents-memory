@@ -164,7 +164,7 @@ test('Windows override is opt-in, requires a canonical host config bind, and exp
     assert.equal(volumes['/state'], undefined);
     assert.equal(service.environment.HOST_PROJECT_ROOT, repositoryRoot);
     assert.equal(service.environment.HOST_WINDOWS_CLAUDE_CONFIG_DIR, configDir);
-    assert.match(JSON.stringify(service.command), /prepare-windows-config\.mjs.*--attestation.*windows-config-attestation.*--agent-bundle-file.*\/agent-home\/\.memory\/agent-bundle\.json/);
+    assert.match(JSON.stringify(service.command), /prepare-windows-config\.mjs.*--attestation.*windows-config-attestation.*--bundle-home-dir.*\/agent-home.*--agent-bundle-file.*\/agent-home\/\.memory\/agent-bundle\.json/);
   } finally {
     await rm(configDir, { recursive: true, force: true });
     await rm(gateDir, { recursive: true, force: true });

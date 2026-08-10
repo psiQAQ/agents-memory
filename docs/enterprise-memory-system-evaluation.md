@@ -18,9 +18,9 @@
 | Container user metadata | Core/Hub root-default（UID 0）；Proxy `app`（UID 10001） | source-build evidence；本轮不扩大为权限改造 |
 | Legacy preservation | `codex/legacy-proxy-hardening-69fd8b@69fd8b31e3fd4362af6c65407b92b26dfabebd0c` | local-only、未 push；fresh clone 不可取得，未经授权不得 push；跨 clone 可重建保全仍未完成 |
 | Legacy runtime lifecycle | 3 projects / 20 containers / 4 networks / 27 volumes / 6 image candidates absent | 2026-08-10 Runtime Cleanup Passed；旧栈需从 Git 历史重新构建并创建新资源 |
-| Claude Code | `2.1.226` / image `sha256:4822ca8d312f3c63cc53afac0c700f0f66611109b20eacdf6cce9794d6dd76fc` | base digest + npm integrity、build、version/help、UID 10001 Passed；prompt/TUI Not Run |
-| OpenCode | `1.18.16` / image `sha256:02661f09dc296c9676e3e0a4a6437568a02127414f661087b16074854abe5efc` | base digest + npm integrity、build、version/help、UID 10001 Passed；prompt/TUI Not Run |
-| Pi | `0.84.1` / image `sha256:252d3871ef9662bd6e34fad449b8fb3b1ca0cb461e8211472489136660babab2` | base digest + Release SHA-256、build、version/help、UID 10001 Passed；prompt/TUI Not Run |
+| Claude Code | `2.1.226` / image `sha256:440d744ef794a29340622f920458fb533c9bff3d3db0b9ce01d3c5947c68492b` | base digest + npm integrity、build、version/help、UID 10001 Passed；prompt/TUI Not Run |
+| OpenCode | `1.18.16` / image `sha256:8cdd9dfe249acc1888cb8c6fd8d00bfe46091cc4802fc44f3102adfd976886ab` | base digest + npm integrity、build、version/help、UID 10001 Passed；prompt/TUI Not Run |
+| Pi | `0.84.1` / image `sha256:8d3275d699e20f9ab0e91f69f2eb50bcdf6b8722e331ba995c94444ebe56bc82` | base digest + Release SHA-256、build、version/help、UID 10001 Passed；prompt/TUI Not Run |
 | Codex | `0.147.0` | 固定版本；Not Run |
 
 ## 架构与阶段
@@ -53,7 +53,7 @@ flowchart LR
 | Task 1 历史保全、active docs、gitlink | Static baseline | 本轮文档/指针工作；不是服务运行 |
 | Stage 1 upstream source-build | Runtime Passed | 全部 tracked/image shell、Core/Proxy 新构建与必要 runtime assets Passed；Hub 保持原 Passed 镜像；不等于服务/业务 Runtime Passed |
 | Stage 1 Claude/OpenCode/Pi 原生路由 | Runtime Passed | 真实 handler/route tests 31/31 与新镜像内 31/31；含 session-init-enabled stream/non-stream、count_tokens 与选定 console privacy，不等于服务/客户端业务流 Passed |
-| Stage 1 client Compose/bootstrap/config/images | Runtime Passed | root Node 81/81、Compose matrix、Mock runtime config/healthy 依赖、config no-follow、三 owner+outsider、六 cross-owner binding、三镜像 build/version/help/UID；仅 client build/config assets |
+| Stage 1 client Compose/bootstrap/config/images | Runtime Passed | root Node 86/86、Compose matrix、owner/outsider cardinality、binding post-set 全字段验证、config/bundle no-follow、三 owner+outsider、六 cross-owner binding、三镜像 build/version/help/UID；仅 client build/config assets |
 | Stage 1 Mock identity/share/isolation/leak | Not Run | 不执行 Docker workload |
 | Stage 1 TUI | Not Run | 仅在 headless Gate 通过后由用户确认 |
 | Stage 1 真实模型 | Not Run | 需完整 Mock Gate 与明确授权 |

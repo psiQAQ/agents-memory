@@ -24,7 +24,7 @@
 | [Task 3 Anthropic platform routes Passed](reproduction/2026-08-11-task3-anthropic-platform-routes-passed.md) | 三平台 literal route、source 保真、session/privacy 与原 Task 3 Proxy image | 原范围部分被 review erratum 收窄；保留不可变证据 |
 | [Task 3 review fix round 1 RED/erratum](reproduction/2026-08-11-task3-review-fix-round1-erratum.md) | Anthropic session body、count_tokens 与共享 console privacy 独立复现 | Failed / Reproduced；原 Passed 范围勘误 |
 | [Task 3 review fix round 1 Passed](reproduction/2026-08-11-task3-review-fix-round1-passed.md) | 三项 Important 修复、31 tests 与新 Proxy image | Runtime Passed（handler/route + build/assets only） |
-| [Task 4 三客户端 Compose/bootstrap](reproduction/2026-08-11-task4-three-client-compose-bootstrap-passed.md) | active Compose、三 owner/outsider、CLI config/image 与 Pi RED 链 | Runtime Passed（client build/config assets only） |
+| [Task 4 三客户端 Compose/bootstrap](reproduction/2026-08-11-task4-three-client-compose-bootstrap-passed.md) | active Compose、三 owner/outsider、严格 binding/bundle 边界、CLI image 与 Pi RED 链 | Runtime Passed（client build/config assets only） |
 | [Legacy Docker 运行资源精确清理](reproduction/2026-08-10-legacy-docker-resources-cleanup.md) | 旧 Compose projects、容器、网络、卷和镜像的不可恢复清理审计 | Runtime Cleanup Passed；不改变四 CLI 业务 Gate |
 | [集成实验 SOP](../tests/integration/README.md) | 后续静态验证与受控运行入口 | Task 4 assets Passed；下一 Gate 为 Task 5 Mock |
 
