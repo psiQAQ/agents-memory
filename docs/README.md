@@ -19,6 +19,7 @@
 | [Task 2 Hub source-build Passed](reproduction/2026-08-10-task2-hub-source-build-passed.md) | upstream combined context、native SQLite 与 runtime assets | Runtime Passed（build/assets only） |
 | [Task 2 Shell Gate fix round 1 RED/erratum](reproduction/2026-08-11-task2-shell-assets-fix-round1-red-erratum.md) | 动态枚举全部 tracked shell 与旧镜像遗漏、权限元数据勘误 | Failed / Superseded evidence；旧 Core/Proxy 镜像被替代 |
 | [Task 2 Shell Gate fix round 1 Passed](reproduction/2026-08-11-task2-shell-assets-fix-round1-passed.md) | 全部 shell LF/syntax、新 Core/Proxy 串行重建与 runtime assets | Runtime Passed（build/assets only） |
+| [Task 2 Shell Gate fix round 2](reproduction/2026-08-11-task2-shell-gate-producer-status-round2-passed.md) | partial NUL output 后 producer nonzero 的 fail-closed 回归 | Passed；镜像输入未变，无需重建 |
 | [Legacy Docker 运行资源精确清理](reproduction/2026-08-10-legacy-docker-resources-cleanup.md) | 旧 Compose projects、容器、网络、卷和镜像的不可恢复清理审计 | Runtime Cleanup Passed；不改变四 CLI 业务 Gate |
 | [集成实验 SOP](../tests/integration/README.md) | 后续静态验证与受控运行入口 | Stage 1 前置 Gate 未运行 |
 
