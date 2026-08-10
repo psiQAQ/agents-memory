@@ -1,9 +1,74 @@
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { fakeCore } from './helpers.mjs';
+
+const bootstrapTool = fileURLToPath(new URL('../tools/bootstrap.mjs', import.meta.url));
+const clientManifestFile = fileURLToPath(new URL('../clients/manifest.json', import.meta.url));
+
+const task4Clients = [
+  { id: 'claude', source: 'claude-code', display_name: 'Claude Code' },
+  { id: 'opencode', source: 'opencode', display_name: 'OpenCode' },
+  { id: 'pi', source: 'pi', display_name: 'Pi' },
+];
+
+test('bootstrap selects the three allowlisted clients and creates three-owner sharing plus an isolated outsider', async () => {
+  const { bootstrap } = await import('../tools/bootstrap.mjs');
+  const core = await fakeCore({ clientNames: task4Clients.map(({ id }) => id), outsiderName: 'outsider' });
+  const directory = await mkdtemp(join(tmpdir(), 'memory-bootstrap-task4-'));
+  try {
+    const manifest = await bootstrap({
+      coreUrl: core.baseUrl,
+      serviceId: 'default',
+      runId: 'run-task4',
+      outputDir: join(directory, 'run'),
+      clientManifest: task4Clients,
+      activeClients: 'claude,opencode,pi',
+    });
+    assert.deepEqual(Object.keys(manifest.clients), ['claude', 'opencode', 'pi']);
+    assert.equal(manifest.outsider.team_id, 'team-outsider-runtime');
+    assert.equal(manifest.outsider.task_id, 'task-outsider-runtime');
+    assert.notEqual(manifest.outsider.team_id, manifest.team_id);
+    assert.notEqual(manifest.outsider.task_id, manifest.task_id);
+    assert.doesNotMatch(JSON.stringify(manifest), /sk-mem-|_key/);
+
+    const ownerAssets = Object.fromEntries(task4Clients.map(({ id }) => [id, `chat_memory-team-runtime-agt-usr-${id}`]));
+    assert.deepEqual(manifest.shared_memory.owner_asset_ids, ownerAssets);
+    assert.equal(manifest.shared_memory.cross_owner_binding_count, 6);
+    for (const { id } of task4Clients) {
+      assert.equal(core.assets[ownerAssets[id]].visibility, 'team');
+      assert.deepEqual(core.bindings[id].map(({ asset_id }) => asset_id).sort(), Object.values(ownerAssets).sort());
+    }
+    assert.deepEqual(core.bindings.outsider.map(({ asset_id }) => asset_id), ['chat_memory-team-outsider-runtime-agt-usr-outsider']);
+    assert.equal(core.requests.filter(({ path }) => path.endsWith('/agent-fixed-asset/set')).length, 3);
+    assert.equal(core.requests.filter(({ path }) => path.endsWith('/asset/update')).length, 3);
+
+    await assert.rejects(bootstrap({ coreUrl: core.baseUrl, serviceId: 'default', runId: 'dup', outputDir: join(directory, 'dup'), clientManifest: task4Clients, activeClients: 'claude,claude,pi' }), /invalid active clients/);
+    await assert.rejects(bootstrap({ coreUrl: core.baseUrl, serviceId: 'default', runId: 'unknown', outputDir: join(directory, 'unknown'), clientManifest: task4Clients, activeClients: 'claude,opencode,codex' }), /invalid active clients/);
+    await assert.rejects(bootstrap({ coreUrl: core.baseUrl, serviceId: 'default', runId: 'partial', outputDir: join(directory, 'partial'), clientManifest: task4Clients, activeClients: 'claude,opencode' }), /invalid active clients/);
+  } finally { await core.close(); await rm(directory, { recursive: true, force: true }); }
+});
+
+test('bootstrap CLI reads the tracked manifest and ACTIVE_CLIENTS without accepting an arbitrary client list', async () => {
+  const core = await fakeCore({ clientNames: task4Clients.map(({ id }) => id), outsiderName: 'outsider' });
+  const directory = await mkdtemp(join(tmpdir(), 'memory-bootstrap-task4-cli-'));
+  const outputDir = join(directory, 'run');
+  try {
+    const child = spawn(process.execPath, [bootstrapTool, '--core-url', core.baseUrl, '--service-id', 'default', '--run-id', 'run-task4-cli', '--output-dir', outputDir, '--client-manifest', clientManifestFile, '--active-clients', 'claude,opencode,pi'], { env: { ...process.env }, stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8').on('data', (chunk) => { stdout += chunk; });
+    child.stderr.setEncoding('utf8').on('data', (chunk) => { stderr += chunk; });
+    const status = await new Promise((resolve) => child.on('close', resolve));
+    assert.equal(status, 0, stderr);
+    assert.equal(stdout.trim(), '{"status":"ok"}');
+    assert.deepEqual(Object.keys(JSON.parse(await readFile(join(outputDir, 'run-manifest.json'), 'utf8')).clients), ['claude', 'opencode', 'pi']);
+  } finally { await core.close(); await rm(directory, { recursive: true, force: true }); }
+});
 
 test('bootstrap captures Core IDs, uses owner keys, and writes only sanitized manifest data', async () => {
   const { bootstrap } = await import('../tools/bootstrap.mjs');

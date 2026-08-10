@@ -60,14 +60,16 @@ export async function ensureFetchSafeServer(server, host = '127.0.0.1', maxAttem
   throw new Error('unable to allocate fetch-safe listener');
 }
 
-export async function fakeCore({ initAdmin, failure, gatewayToken, bindingMutation } = {}) {
+export async function fakeCore({ initAdmin, failure, gatewayToken, bindingMutation, clientNames = ['agent-a', 'agent-b', 'agent-c'], outsiderName } = {}) {
   const requests = [];
-  const keys = Object.fromEntries(['admin', 'agent-a', 'agent-b', 'agent-c'].map((name, index) => [name, `sk-mem-${String.fromCharCode(65 + index).repeat(32)}`]));
-  const users = Object.fromEntries(['agent-a', 'agent-b', 'agent-c'].map((name) => [name, `usr-${name}`]));
-  const bindings = Object.fromEntries(['agent-a', 'agent-b', 'agent-c'].map((name) => [name, [{
+  const names = [...clientNames, ...(outsiderName ? [outsiderName] : [])];
+  const keys = Object.fromEntries(['admin', ...names].map((name, index) => [name, `sk-mem-${String.fromCharCode(65 + index).repeat(32)}`]));
+  const users = Object.fromEntries(names.map((name) => [name, `usr-${name}`]));
+  const teamFor = (name) => name === outsiderName ? 'team-outsider-runtime' : 'team-runtime';
+  const bindings = Object.fromEntries(names.map((name) => [name, [{
     id: `binding-${name}`,
     agent_id: `agt-${users[name]}`,
-    asset_id: `chat_memory-team-runtime-agt-${users[name]}`,
+    asset_id: `chat_memory-${teamFor(name)}-agt-${users[name]}`,
     asset_type: 'chat_memory',
     injection_mode: 'summary',
     priority: 0,
@@ -76,7 +78,7 @@ export async function fakeCore({ initAdmin, failure, gatewayToken, bindingMutati
   }]]));
   const assets = Object.fromEntries(Object.entries(bindings).map(([name, rows]) => [rows[0].asset_id, {
     asset_id: rows[0].asset_id,
-    team_id: 'team-runtime',
+    team_id: teamFor(name),
     asset_type: 'chat_memory',
     name: `Chat Memory: ${name}`,
     owner_user_id: users[name],
@@ -102,11 +104,14 @@ export async function fakeCore({ initAdmin, failure, gatewayToken, bindingMutati
       if ('envelope' in failure) { response.writeHead(200, { 'content-type': 'application/json' }); response.end(JSON.stringify(failure.envelope)); return; }
     }
     if (request.url.endsWith('/init-admin')) return ok(initAdmin ?? { user_id: 'usr-admin', user_key: keys.admin });
-    if (request.url.endsWith('/user/create')) { const name = body.username.match(/agent-[abc]/)?.[0]; return ok({ user_id: users[name], default_user_key: keys[name] }); }
-    if (request.url.endsWith('/team/create')) return ok({ team_id: 'team-runtime' });
+    if (request.url.endsWith('/user/create')) {
+      const name = names.find((candidate) => body.username.endsWith(`-${candidate}`));
+      return name ? ok({ user_id: users[name], default_user_key: keys[name] }) : reject(400);
+    }
+    if (request.url.endsWith('/team/create')) return ok({ team_id: body.owner_user_id === users[outsiderName] ? 'team-outsider-runtime' : 'team-runtime' });
     if (request.url.endsWith('/team-member/add')) return ok({ member_id: 'member-runtime' });
     if (request.url.endsWith('/agent/create')) return ok({ agent_id: `agt-${body.owner_user_id}` });
-    if (request.url.endsWith('/task/create')) return ok({ task_id: 'task-runtime' });
+    if (request.url.endsWith('/task/create')) return ok({ task_id: body.team_id === 'team-outsider-runtime' ? 'task-outsider-runtime' : 'task-runtime' });
     if (request.url.endsWith('/agent-fixed-asset/list')) {
       const name = Object.keys(users).find((candidate) => `agt-${users[candidate]}` === body.agent_id);
       return ok({ items: structuredClone(bindings[name] ?? []), total: bindings[name]?.length ?? 0, limit: body.limit ?? 20, offset: body.offset ?? 0 });
