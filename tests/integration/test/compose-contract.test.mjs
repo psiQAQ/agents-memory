@@ -208,8 +208,14 @@ test('hardened override publishes Proxy only through the least-privilege loopbac
   assert.equal(gateway.ports[0].host_ip, '127.0.0.1');
   assert.equal(gateway.ports[0].published, '8096');
   assert.equal(gateway.ports[0].target, 8096);
-  assert.match(JSON.stringify(gateway.healthcheck.test), /127\.0\.0\.1/);
-  assert.doesNotMatch(JSON.stringify(gateway.healthcheck.test), /memory-proxy|fetch|https?:/i);
+  const healthcheck = gateway.healthcheck.test;
+  assert.deepEqual(healthcheck.slice(0, 3), ['CMD', 'node', '-e']);
+  const healthProgram = healthcheck[3];
+  assert.match(healthProgram, /require\(['"]node:net['"]\)/);
+  assert.match(healthProgram, /\.connect\(\s*8096\s*,\s*['"]127\.0\.0\.1['"]\s*\)/);
+  assert.match(healthProgram, /\.on\(\s*['"]connect['"]\s*,\s*\(\)\s*=>\s*process\.exit\(0\)\s*\)/);
+  assert.match(healthProgram, /\.on\(\s*['"]error['"]\s*,\s*\(\)\s*=>\s*process\.exit\(1\)\s*\)/);
+  assert.doesNotMatch(healthProgram, /memory-proxy|fetch|https?:|curl/i);
 });
 
 test('Redis profile uses the generated Redis Proxy config only after an explicit allowlisted switch', () => {
