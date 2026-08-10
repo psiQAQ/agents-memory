@@ -84,7 +84,7 @@ refine-memory/
 git submodule update --init submodules/TencentDB-Agent-Memory
 ```
 
-当前 gitlink 指向尚未 push 的本地 public fork 提交 `69fd8b31e3fd4362af6c65407b92b26dfabebd0c`。从首个本地修复 `c75ef58` 起至当前修复，共 27 个本地 public commit。Windows 重启后 Docker engine 已恢复；完整所选镜像构建、无付费 Mock 两级 Gate、Hub health 与只读业务探针、Docker Claude `2.1.207` headless、TUI 启动和文本往返均已通过。独立 Windows run 又证明 Loopback Gateway 宿主 health、项目专用 config、原生 Claude `2.1.207` headless、Mock 增量与 Core owner oracle 均通过；全局 `.claude/settings.json` 元数据不变。Docker 与 Windows 结论来自两个独立 project，不能写成同一 project 的双客户端重跑。Windows TUI 仍等待用户确认；真实 DeepSeek、stream/tool/thinking、故障恢复或 Win11/LAN/WSL Claude 仍不在已通过范围。新的 clone 在该提交推送到 `psiQAQ/TencentDB-Agent-Memory` 前无法取得它；本任务没有 push 授权。
+当前 gitlink 指向尚未 push 的本地 public fork 提交 `69fd8b31e3fd4362af6c65407b92b26dfabebd0c`。从首个本地修复 `c75ef58` 起至当前修复，共 27 个本地 public commit。Windows 重启后 Docker engine 已恢复；完整所选镜像构建、无付费 Mock 两级 Gate、Hub health 与只读业务探针、Docker Claude `2.1.207` headless、TUI 启动和文本往返均已通过。独立 Windows run 又证明 Loopback Gateway 宿主 health、项目专用 config、原生 Claude `2.1.207` headless、Mock 增量与 Core owner oracle 均通过；用户随后确认 Windows TUI 界面、输入与 `mock text` 往返，post-confirmation Mock 计数由 headless baseline 6 增至 8 且四项泄漏布尔均为 false。全局 `.claude/settings.json` 元数据不变。Docker 与 Windows 结论来自两个独立 project，不能写成同一 project 的双客户端重跑。真实 DeepSeek、stream/tool/thinking、故障恢复或 Win11/LAN/WSL Claude 仍不在已通过范围。新的 clone 在该提交推送到 `psiQAQ/TencentDB-Agent-Memory` 前无法取得它；本任务没有 push 授权。
 
 ## 当前执行顺序
 
@@ -100,11 +100,10 @@ git submodule update --init submodules/TencentDB-Agent-Memory
 | `docker-mock-20260810-030443` | Gate 1 通过；Gate 2 暴露 B session 未初始化，并推断 C 需要同类前置条件 | [Session 前置条件失败](docs/reproduction/2026-08-10-docker-mock-20260810-030443-session-precondition-failed.md) |
 | `docker-mock-20260810-033636` | 两级 Gate、Hub 只读业务探针、Docker Claude headless、TUI 启动和 Mock 文本往返通过 | [无付费运行通过](docs/reproduction/2026-08-10-docker-mock-20260810-033636-no-paid-runtime-passed.md)、[TUI 用户确认](docs/reproduction/2026-08-10-docker-mock-20260810-033636-tui-user-confirmed.md)、[TUI 文本往返](docs/reproduction/2026-08-10-docker-mock-20260810-033636-tui-message-passed.md) |
 | `windows-mock-20260810-093140-a664249f` | 两级 Gate 与 agent config 通过；宿主 loopback 阻塞，Windows config/headless/TUI 未运行 | [宿主 Loopback 阻塞](docs/reproduction/2026-08-10-windows-mock-20260810-093140-loopback-blocked.md) |
-| `windows-mock-20260810-111850-93778ced` | Gateway 宿主 health、项目专用 config、Windows Claude headless 与 Mock/Core oracle 通过；TUI 待用户确认 | [Windows Claude Mock 运行通过](docs/reproduction/windows-mock-20260810-111850-93778ced-windows-claude-mock-passed.md) |
+| `windows-mock-20260810-111850-93778ced` | Gateway、项目专用 config、Windows Claude headless 与 Mock/Core oracle 通过；TUI 界面、输入和 Mock 文本往返已由用户确认 | [Windows Claude Mock 运行通过](docs/reproduction/windows-mock-20260810-111850-93778ced-windows-claude-mock-passed.md)、[Windows TUI 用户确认](docs/reproduction/windows-mock-20260810-111850-93778ced-windows-tui-user-confirmed.md) |
 
-1. 由用户在本次 run-specific `CLAUDE_CONFIG_DIR` 中确认 Windows TUI 界面和 `mock text`；确认前不声明 G5 Windows UX Passed。
-2. 分别引用本次 Windows run 与 `docker-mock-20260810-033636`，再验证两个独立客户端的身份隔离、共享读取和写入治理。
-3. 仅在用户提供工作区外的新 secret 文件且真实 Gate 通过后，显式加载 real profile 验证 DeepSeek；Codex、WSL Claude、Win11、LAN、备份恢复与故障注入后置；public fork 的可复现通用修复独立提交，不混入私有编排。
+1. 分别引用本次 Windows run 与 `docker-mock-20260810-033636`，再验证两个独立客户端的身份隔离、共享读取和写入治理。
+2. 仅在用户提供工作区外的新 secret 文件且真实 Gate 通过后，显式加载 real profile 验证 DeepSeek；Codex、WSL Claude、Win11、LAN、备份恢复与故障注入后置；public fork 的可复现通用修复独立提交，不混入私有编排。
 
 现有企业改造计划先作为需求清单，不在原样复现前执行。尤其不能直接使用其中不存在的 `services/*`、`packages/*` 路径。
 
