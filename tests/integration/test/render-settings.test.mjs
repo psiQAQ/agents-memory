@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { link, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { link, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -162,6 +162,19 @@ test('renderer concurrent calls use distinct same-directory temporary files', as
     const output = JSON.parse(await readFile(join(f.config, 'settings.json'), 'utf8'));
     assert.ok([key, otherKey].includes(output.env.ANTHROPIC_AUTH_TOKEN));
     assert.deepEqual((await readdir(f.config)).filter((name) => name.startsWith('.settings.') && name.endsWith('.tmp')), []);
+  } finally { await rm(f.directory, { recursive: true, force: true }); }
+});
+
+test('renderer rejects a config directory symlink before writing a private key outside home', async () => {
+  const f = await fixture();
+  const workspace = join(f.directory, 'workspace');
+  try {
+    await mkdir(workspace);
+    await symlink(workspace, f.config, 'junction');
+    const result = run(['--target', 'docker', '--template', f.template, '--config-dir', f.config, '--agent-bundle-file', f.bundleFile]);
+    assert.notEqual(result.status, 0);
+    assert.equal(await readFile(join(workspace, 'settings.json'), 'utf8').catch(() => undefined), undefined);
+    assert.doesNotMatch(`${result.stdout}${result.stderr}`, new RegExp(key));
   } finally { await rm(f.directory, { recursive: true, force: true }); }
 });
 

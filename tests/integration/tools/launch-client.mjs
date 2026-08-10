@@ -14,7 +14,7 @@ export async function launchClient({ client, homeDir, bundleFile, spaceId, args 
   const definition = clients[client];
   if (!definition) throw new Error('invalid client');
   if (![homeDir, bundleFile].every((path) => isAbsolute(path ?? '')) || !Array.isArray(args) || args.some((argument) => typeof argument !== 'string') || (client === 'claude' && !isAbsolute(template ?? ''))) throw new Error('invalid launcher arguments');
-  const rendered = await renderSettings({ target: definition.target, template, configDir: join(homeDir, ...definition.config), bundleFile, spaceId });
+  const rendered = await renderSettings({ target: definition.target, template, configDir: join(homeDir, ...definition.config), bundleFile, homeDir, spaceId });
   const environment = { ...parentEnvironment };
   for (const name of privateEnvironment) delete environment[name];
   Object.assign(environment, rendered.environment);

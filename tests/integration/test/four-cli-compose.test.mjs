@@ -21,7 +21,7 @@ function composeConfig(selectedFiles = files, profiles = ['*']) {
   args.push('config', '--format', 'json');
   const result = spawnSync('docker', args, {
     encoding: 'utf8',
-    env: { ...process.env, COMPOSE_PROJECT_NAME: 'task4-static', ACTIVE_CLIENTS: 'claude,opencode,pi' },
+    env: { ...process.env, COMPOSE_PROJECT_NAME: 'task4-static', ACTIVE_CLIENTS: 'claude,opencode,pi', MEMORY_CORE_GATEWAY_API_KEY: 'task4-static-gateway-key' },
   });
   assert.equal(result.status, 0, result.stderr);
   return { parsed: JSON.parse(result.stdout), text: result.stdout };
@@ -65,6 +65,7 @@ test('active client containers are non-root and receive only their private home 
       clientVolumes.add(volumes[target].source);
     }
     assert.doesNotMatch(JSON.stringify(service), /bootstrap-state|\/state|docker\.sock/i);
+    assert.equal(service.depends_on['memory-proxy'].condition, 'service_healthy');
 
     const prepare = parsed.services[`${client}-config`];
     assert.equal(prepare.user, '0:0');
@@ -76,8 +77,40 @@ test('active client containers are non-root and receive only their private home 
 });
 
 test('active base and every explicit profile overlay parse without a secret-bearing launcher', () => {
-  composeConfig(['compose.four-cli.yaml'], []);
+  const { parsed } = composeConfig(['compose.four-cli.yaml'], []);
+  assert.equal(parsed.services.bootstrap.depends_on['memory-core'].condition, 'service_healthy');
   for (const profile of ['mock', 'real', 'claude', 'opencode', 'pi', 'management']) {
     composeConfig(['compose.four-cli.yaml', `compose.four-cli.${profile}.yaml`], [profile]);
   }
+});
+
+test('active mock overlay renders runtime config and waits for healthy services', () => {
+  const { parsed } = composeConfig(['compose.four-cli.yaml', 'compose.four-cli.mock.yaml'], ['mock']);
+  const configInit = parsed.services['config-init'];
+  assert.deepEqual(configInit.profiles, ['mock']);
+  assert.ok(configInit.command.includes('config/render-config.mjs'));
+  assert.ok(configInit.volumes.some((volume) => volume.source === 'runtime-config' && volume.target === '/out'));
+
+  const core = parsed.services['memory-core'];
+  assert.equal(core.depends_on['config-init'].condition, 'service_completed_successfully');
+  assert.equal(core.depends_on['mock-llm'].condition, 'service_healthy');
+  assert.equal(core.environment.TDAI_GATEWAY_CONFIG, '/runtime-config/core/tdai-gateway.yaml');
+  assert.ok(core.volumes.some((volume) => volume.source === 'runtime-config' && volume.target === '/runtime-config' && volume.read_only));
+
+  const proxy = parsed.services['memory-proxy'];
+  assert.equal(proxy.depends_on['config-init'].condition, 'service_completed_successfully');
+  assert.equal(proxy.depends_on['memory-core'].condition, 'service_healthy');
+  assert.equal(proxy.depends_on['mock-llm'].condition, 'service_healthy');
+  assert.deepEqual(proxy.entrypoint, ['/bin/sh', '/opt/memory-lab/run-proxy.sh']);
+  assert.ok(proxy.volumes.some((volume) => volume.source === 'runtime-config' && volume.target === '/runtime-config' && volume.read_only));
+
+  const hub = parsed.services['memory-hub'];
+  assert.equal(hub.environment.REMOTE_INSTANCE_URL, 'http://memory-core:8420');
+  assert.equal(hub.environment.REMOTE_INSTANCE_KEY, 'task4-static-gateway-key');
+  assert.equal(hub.depends_on['memory-core'].condition, 'service_healthy');
+
+  const bootstrap = parsed.services.bootstrap;
+  assert.equal(bootstrap.depends_on['memory-core'].condition, 'service_healthy');
+  assert.equal(bootstrap.environment.MEMORY_CORE_SERVICE_TOKEN_FILE, '/runtime-config/gateway.token');
+  assert.ok(bootstrap.volumes.some((volume) => volume.source === 'runtime-config' && volume.target === '/runtime-config' && volume.read_only));
 });

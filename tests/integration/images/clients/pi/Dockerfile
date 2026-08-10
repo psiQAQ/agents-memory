@@ -1,4 +1,4 @@
-FROM node:22-bookworm-slim
+FROM node:22-bookworm-slim@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436
 
 RUN node -e "const fs=require('node:fs');fetch(process.argv[1]).then(r=>{if(!r.ok)throw new Error('download failed');return r.arrayBuffer()}).then(b=>fs.writeFileSync('/tmp/pi-linux-x64.tar.gz',Buffer.from(b)))" https://github.com/earendil-works/pi/releases/download/v0.84.1/pi-linux-x64.tar.gz \
  && echo "5634d7ebd18274b63af3371e942f342d74bea012389575c1d1ff15ce6ca80c2f  /tmp/pi-linux-x64.tar.gz" | sha256sum -c - \

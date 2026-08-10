@@ -26,7 +26,7 @@ services:
     <<: *tools-service
     depends_on:
       memory-core:
-        condition: service_started
+        condition: service_healthy
     environment:
       ACTIVE_CLIENTS: ${ACTIVE_CLIENTS:-claude,opencode,pi}
     command:
@@ -51,6 +51,7 @@ networks:
     internal: true
 
 volumes:
+  runtime-config: {}
   core-data: {}
   proxy-data: {}
   proxy-logs: {}

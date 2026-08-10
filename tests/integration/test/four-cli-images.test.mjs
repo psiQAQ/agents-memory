@@ -17,7 +17,7 @@ test('Task 4 client images pin official artifacts, verify installs, and end as u
   assert.match(pi, /ln -s \/opt\/pi\/pi \/usr\/local\/bin\/pi/);
   assert.match(pi, /pi --version/);
   for (const dockerfile of [claude, opencode, pi]) {
-    assert.match(dockerfile, /^FROM node:22-bookworm-slim$/m);
+    assert.match(dockerfile, /^FROM node:22-bookworm-slim@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436$/m);
     assert.match(dockerfile, /useradd[^\n]*--uid 10001/);
     assert.match(dockerfile, /^USER agent$/m);
     assert.match(dockerfile, /launch-client\.mjs/);

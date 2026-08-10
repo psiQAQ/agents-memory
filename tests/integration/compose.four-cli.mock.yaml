@@ -1,12 +1,75 @@
 services:
+  config-init:
+    image: refine-memory-integration-tools:task4
+    build:
+      context: .
+      dockerfile: images/tools/Dockerfile
+    profiles: ["mock"]
+    command: ["config/render-config.mjs", "--out", "/out", "--mode", "mock"]
+    environment:
+      MEMORY_CORE_GATEWAY_API_KEY: ${MEMORY_CORE_GATEWAY_API_KEY:?set a disposable non-LLM gateway key}
+      MEMORY_SPACE_ID: ${MEMORY_SPACE_ID:-default}
+    volumes: ["runtime-config:/out"]
+    restart: "no"
+
   memory-core:
     profiles: ["mock"]
+    depends_on:
+      config-init:
+        condition: service_completed_successfully
+      mock-llm:
+        condition: service_healthy
+    environment:
+      TDAI_GATEWAY_API_KEY: ${MEMORY_CORE_GATEWAY_API_KEY:?set a disposable non-LLM gateway key}
+      TDAI_GATEWAY_CONFIG: /runtime-config/core/tdai-gateway.yaml
+    volumes:
+      - runtime-config:/runtime-config:ro
   memory-proxy:
     profiles: ["mock"]
+    depends_on:
+      config-init:
+        condition: service_completed_successfully
+      memory-core:
+        condition: service_healthy
+      mock-llm:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "/opt/memory-lab/run-proxy.sh"]
+    command: []
+    environment:
+      MEMORY_PROXY_CONFIG: config.yaml
+    volumes:
+      - runtime-config:/runtime-config:ro
+      - ./runtime/run-proxy.sh:/opt/memory-lab/run-proxy.sh:ro
   memory-hub:
     profiles: ["mock"]
+    depends_on:
+      memory-core:
+        condition: service_healthy
+      mock-llm:
+        condition: service_healthy
+    environment:
+      REMOTE_INSTANCE_ID: ${MEMORY_SPACE_ID:-default}
+      REMOTE_INSTANCE_NAME: ${MEMORY_SPACE_ID:-default}
+      REMOTE_INSTANCE_URL: http://memory-core:8420
+      REMOTE_INSTANCE_KEY: ${MEMORY_CORE_GATEWAY_API_KEY:?set a disposable non-LLM gateway key}
+      REMOTE_INSTANCE_PROXY_URL: http://memory-proxy:8096
+      KNOWLEDGE_PUBLIC_BASE_URL: http://memory-hub:8424/v3
+      KNOWLEDGE_LLM_PROXY_BASE_URL: ""
+      LLM_MODE: custom
+      LLM_PROTOCOL: openai
+      LLM_PROVIDER: custom
+      LLM_BASE_URL: http://mock-llm:8080/openai/v1
+      LLM_API_KEY: mock-key
+      LLM_MODEL: mock-model
   bootstrap:
     profiles: ["mock"]
+    depends_on:
+      memory-core:
+        condition: service_healthy
+    environment:
+      MEMORY_CORE_SERVICE_TOKEN_FILE: /runtime-config/gateway.token
+    volumes:
+      - runtime-config:/runtime-config:ro
   mock-llm:
     image: refine-memory-integration-tools:task4
     build:
@@ -18,3 +81,9 @@ services:
       MOCK_HOST: 0.0.0.0
       MOCK_PORT: "8080"
     expose: ["8080"]
+    healthcheck:
+      test: ["CMD", "node", "tools/healthcheck.mjs", "http://127.0.0.1:8080/health"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+      start_period: 2s

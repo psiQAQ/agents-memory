@@ -1,5 +1,5 @@
-import { chmod, lstat, mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
-import { isAbsolute, join } from 'node:path';
+import { chmod, lstat, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { isMain } from './runtime-lib.mjs';
 
@@ -34,12 +34,32 @@ function hasCredential(value) {
   return Object.entries(value).some(([name, child]) => /(?:auth.*token|api.*key|deepseek|credential|secret|(?:^|_)key$)/i.test(name) || hasCredential(child));
 }
 
+async function ensureNoFollowDirectory(path) {
+  const directories = [];
+  for (let current = resolve(path), parent = dirname(current); current !== parent; current = parent, parent = dirname(current)) directories.push(current);
+  for (const directory of directories.reverse()) {
+    let metadata;
+    try {
+      metadata = await lstat(directory);
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw new Error('unsafe config directory');
+      try { await mkdir(directory, { mode: 0o700 }); } catch (mkdirError) { if (mkdirError.code !== 'EEXIST') throw new Error('unsafe config directory'); }
+      try { metadata = await lstat(directory); } catch { throw new Error('unsafe config directory'); }
+    }
+    if (metadata.isSymbolicLink() || !metadata.isDirectory()) throw new Error('unsafe config directory');
+  }
+}
+
 export async function renderSettings(options) {
-  const { target, template, configDir, bundleFile, spaceId = 'default' } = options;
+  const { target, template, configDir, bundleFile, homeDir, spaceId = 'default' } = options;
   const claudeTarget = Boolean(urls[target]);
   if (!claudeTarget && !['opencode', 'pi'].includes(target)) throw new Error('invalid target');
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(spaceId) || spaceId.includes('..')) throw new Error('invalid space-id');
   if (![configDir, bundleFile, ...(claudeTarget ? [template] : [])].every((path) => isAbsolute(path ?? ''))) throw new Error('invalid path');
+  if (homeDir !== undefined) {
+    if (!isAbsolute(homeDir) || relative(resolve(homeDir), resolve(configDir)).startsWith('..') || isAbsolute(relative(resolve(homeDir), resolve(configDir)))) throw new Error('invalid path');
+    await ensureNoFollowDirectory(homeDir);
+  }
   let source;
   let parsed;
   if (claudeTarget) {
@@ -121,9 +141,7 @@ export async function renderSettings(options) {
   const destination = join(configDir, filename);
   const temporary = join(configDir, `.${filename}.${process.pid}.${randomUUID()}.tmp`);
   try {
-    await mkdir(configDir, { recursive: true, mode: 0o700 }).catch(async () => {
-      if (!(await stat(configDir)).isDirectory()) throw new Error('not a directory');
-    });
+    await ensureNoFollowDirectory(configDir);
     const previous = writes.get(destination) ?? Promise.resolve();
     const write = previous.catch(() => {}).then(async () => {
       await writeFile(temporary, JSON.stringify(output, null, 2), { encoding: 'utf8', mode: 0o600 });
