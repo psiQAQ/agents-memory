@@ -270,7 +270,7 @@
     if ($LASTEXITCODE -ne 0 -or $version -notmatch '^2\.1\.207(?:\s|$)') { throw 'claude-version' }
     if (-not $env:WINDOWS_PROBE_MARKER) { throw 'probe-marker' }
     $reply = & claude -p "$env:WINDOWS_PROBE_MARKER Reply exactly mock text; no tools" --max-turns 1
-    if ($LASTEXITCODE -ne 0 -or $reply -notmatch '^\\s*mock text\\s*$') { throw 'claude-headless' }
+    if ($LASTEXITCODE -ne 0 -or $reply -notmatch '^\s*mock text\s*$') { throw 'claude-headless' }
   }
   finally {
     foreach ($name in $isolatedNames) {
