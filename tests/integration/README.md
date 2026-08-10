@@ -26,7 +26,9 @@
 
 > **User Confirmed**：用户直接观察并确认界面结果；这是人工验收证据，但不能替代消息请求或服务端观察。
 
-> **Static Integrated**：独立复审通过的 public fork 精确 SHA 已写入根 gitlink、镜像标签和静态测试；不代表镜像、服务或业务流已经运行。
+> **Static Integrated**：目标变更已写入当前仓库受跟踪的源码或 Compose，并通过相关静态契约测试；不代表镜像、服务或业务流已经运行。
+
+> **Public fork Static Integrated**：在通用 Static Integrated 条件之外，public fork 的精确 SHA 还必须写入根 gitlink、镜像标签和对应静态测试。
 
 > **Loopback Gateway**：只在本机 `127.0.0.1` 接收 TCP 连接，再把字节原样转发到 internal 网络中 MemoryProxy 的轻量容器；它不解析请求，也不保存凭证。
 

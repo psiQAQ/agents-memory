@@ -52,7 +52,9 @@
 
 > **Runtime Not Run**：尚未执行服务启动、业务探针、故障恢复、Claude TUI 或真实模型请求。
 
-> **Static Integrated**：独立复审通过的 public fork 精确 SHA 已写入根 gitlink、镜像标签和静态测试；不代表镜像、服务或业务流已经运行。
+> **Static Integrated**：目标变更已写入当前仓库受跟踪的源码或 Compose，并通过相关静态契约测试；不代表镜像、服务或业务流已经运行。
+
+> **Public fork Static Integrated**：在通用 Static Integrated 条件之外，public fork 的精确 SHA 还必须写入根 gitlink、镜像标签和对应静态测试。
 
 > **Loopback Gateway**：只在 Windows 本机 `127.0.0.1` 接收 TCP 连接，再把字节原样转发到 internal 网络中 MemoryProxy 的轻量容器。
 
@@ -217,7 +219,7 @@ flowchart LR
 
 **No-Go（公司试点/部署）：** 安全与可靠性是硬门槛。无付费 Mock/Standalone/Hub/headless 与 Docker Claude TUI 文本往返已经运行通过；但真实 DeepSeek 协议与 secret 隔离、Windows Claude、stream/tool/thinking、服务故障恢复、备份还原和旧库离线 scrub 均未验证。真实协议和安全 Gate 未通过前仍为 No-Go。任何总分都不能覆盖这些缺口。
 
-**Conditional Go（继续本机开发）：** 可以继续锁定 `69fd8b31e3fd4362af6c65407b92b26dfabebd0c`、默认 Mock、无付费、internal network 的本地开发，并使用保留的 `mem-it-20260810-033636` project 验证 Windows Claude。不得加载真实 secret，不得把受限 Mock Runtime Passed 扩写为真实 DeepSeek、Windows、可靠性或企业部署通过。该 SHA 未 push，当前只在本工作区可复现。
+**Conditional Go（继续本机开发）：** 可以继续锁定 `69fd8b31e3fd4362af6c65407b92b26dfabebd0c`、默认 Mock、无付费、internal network 的本地开发。Windows Claude 验证必须创建唯一的新 Windows Mock run/project，不复用旧 project、volume 或 evidence，并确保同一时刻只有该 project 占用固定的 `127.0.0.1:8096`。保留的 `mem-it-20260810-033636` 只作为 Docker Claude 已通过范围的独立历史证据。不得加载真实 secret，不得把受限 Mock Runtime Passed 扩写为真实 DeepSeek、Windows、可靠性或企业部署通过。该 SHA 未 push，当前只在本工作区可复现。
 
 **Recommendation：** 下一步创建唯一 Windows Mock project，只启动最小服务并显式包含 Loopback Gateway；先以 `curl.exe --noproxy '*'` 证明宿主入口，再使用工作区外项目专用配置目录验证 Windows 10 原生 Claude，不覆盖用户全局 `.claude`。真实 DeepSeek 仍等待工作区外新 secret 与用户单独批准，并须单独验证 Anthropic/OpenAI、stream/tool/thinking、secret 不泄漏和费用记录。故障恢复、Win11、WSL Claude 与 LAN 另行排期。
 
