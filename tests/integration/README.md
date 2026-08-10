@@ -8,6 +8,8 @@
 
 **Fact**：本轮没有执行任何 Docker workload、Mock、真实 API、TUI 或端口探针；它们均为 Not Run。既有 Windows + Claude 命令、Compose 路径和运行证据是 Legacy，不能直接复用到四 CLI 路线。
 
+**Fact**：legacy ref `codex/legacy-proxy-hardening-69fd8b@69fd8b31e3fd4362af6c65407b92b26dfabebd0c` 是 local-only、未 push；fresh clone 不可取得，未经授权不得 push。跨 clone 可重建保全需要 push 或外部归档授权，在此之前仍未完成。
+
 **Constraint**：不得读取/复制/输出 Tencent `.env`、settings、secret、home、`.runtime/` 或原始 evidence。未经明确授权，不运行 Docker workload、真实 API、push、PR、remote 修改、`down -v` 或 prune。
 
 ## 静态验证
@@ -30,9 +32,18 @@ node --test tests/integration/test/*.test.mjs
 
 每次运行使用唯一 run、Compose project 与 evidence 路径。失败项目保留诊断；只有脱敏证据已归档且负责人明确要求销毁该精确项目时，才可精确清理。
 
+## Task 2–6 继续适用的安全决策
+
+四 CLI 拓扑变更不会取消以下安全边界；实现时必须先核对并按新架构补充测试，不能用 Legacy fixture 代替：
+
+- [宿主路径根绑定与持久目录 no-follow ADR](../../docs/decisions/2026-08-09-host-path-and-no-follow-hardening.md)：canonical host path、仓库外配置目录和 link/junction fail-closed。
+- [Attestation 信任边界](../../docs/decisions/2026-08-09-attestation-trust-boundary.md)：attestation 防误配置和过期复用，不保护可同时改写宿主环境与记录的操作者。
+- [凭证 fan-out 与 Paid Gate ADR](../../docs/decisions/2026-08-09-credential-fanout-and-paid-attestation.md)：客户端只读自己的凭证；真实运行先做 host attestation，再由容器复核。
+- [Standalone memory static contract](../../docs/reproduction/2026-08-09-standalone-memory-static-contract.md)：证据归档前保留精确 run 的卷和目录；敏感卷不因普通停止或删除宿主 secret 而失效，禁止全局 prune。
+
 ## Legacy archive
 
-旧 Windows + Claude SOP 和记录均未删除。需要审计历史时，使用 [旧 Docker runtime report](../../docs/reproduction/2026-08-10-docker-mock-20260810-033636-no-paid-runtime-passed.md)、[旧 Windows runtime report](../../docs/reproduction/windows-mock-20260810-111850-93778ced-windows-claude-mock-passed.md) 与旧 ADR；不得把其中的 Runtime Passed 复制到当前 Stage 1/2。
+旧 specs/ADR/reproduction 原文未改；旧 active SOP 已退出 HEAD，可从根基线 commit `a949ca305550693c30abb3f2a3f84ab76d4e101c` 追溯。需要审计历史时，使用 [旧 Docker runtime report](../../docs/reproduction/2026-08-10-docker-mock-20260810-033636-no-paid-runtime-passed.md)、[旧 Windows runtime report](../../docs/reproduction/windows-mock-20260810-111850-93778ced-windows-claude-mock-passed.md) 与旧 ADR；不得把其中的 Runtime Passed 复制到当前 Stage 1/2。
 
 ## 2. Legacy Node-contract fixture（不是 active SOP）
 

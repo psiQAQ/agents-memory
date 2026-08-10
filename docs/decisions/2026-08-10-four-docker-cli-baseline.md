@@ -17,7 +17,7 @@
 ## Decision
 
 1. 根 gitlink 固定为 Tencent upstream default `feat/server_team@0a568c328ea1aae3f22ed3656e7900da7ea565c1`；upstream 前移前先审查，不批量迁移 legacy 修复。
-2. 以 `codex/legacy-proxy-hardening-69fd8b@69fd8b31e3fd4362af6c65407b92b26dfabebd0c` 作为 legacy preservation ref；旧 specs/plans/ADR/reproduction 保持原文。
+2. 以 `codex/legacy-proxy-hardening-69fd8b@69fd8b31e3fd4362af6c65407b92b26dfabebd0c` 作为 local-only legacy ref；它尚未 push，fresh clone 不可取得，未经授权不得 push。跨 clone 可重建保全需要 push 或外部归档授权，在此之前仍未完成；旧 specs/plans/ADR/reproduction 保持原文。
 3. Stage 1 依次使用 Claude Code `2.1.226`、OpenCode `1.18.16`、Pi `0.84.1` 的原生身份和 Anthropic Messages 路由；Stage 2 才支持 Codex `0.147.0` 的 `/codex/<space>/v1/responses`。
 4. 缺失、格式非法或未绑定的 source 必须 fail closed；OpenCode、Pi、Codex 不得伪装成 `claude-code`、`openai` 或其他平台身份。
 5. 模型 key 仅在服务端：Proxy 持有 DeepSeek Pro，Core/Hub 持有 DeepSeek Flash；客户端只持有各自 Memory user key。真实 API 必须在完整 Mock Gate 后并得到明确授权。

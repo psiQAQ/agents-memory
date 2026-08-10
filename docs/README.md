@@ -18,7 +18,7 @@
 
 `specs/`、早期 `superpowers/` 计划、既有 `decisions/` 与 `reproduction/` 完整保留为 Legacy 历史。特别是 2026-08-09 至 2026-08-10 的 Docker/Windows Claude 记录只能说明其各自的旧 run，不能升级为 Claude/OpenCode/Pi/Codex 四 CLI 的通过证据。需要追溯时，从 [旧 standalone Gate ADR](decisions/2026-08-09-standalone-memory-gate.md) 和 [旧 Docker 运行记录](reproduction/2026-08-10-docker-mock-20260810-033636-no-paid-runtime-passed.md) 开始，并保持其原文结论。
 
-历史 public fork 修复分支为 `codex/legacy-proxy-hardening-69fd8b@69fd8b31e3fd4362af6c65407b92b26dfabebd0c`；它是保全 ref，不是 active upstream 基线。
+历史 public fork 修复 ref 为 `codex/legacy-proxy-hardening-69fd8b@69fd8b31e3fd4362af6c65407b92b26dfabebd0c`；它仅存在于当前本地对象库，尚未 push，fresh clone 不可取得，未经授权不得 push。跨 clone 可重建保全需要 push 或外部归档授权，在此之前仍未完成；它不是 active upstream 基线。
 
 ## 其他资料
 

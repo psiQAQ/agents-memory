@@ -9,6 +9,7 @@
 - 根仓库基线：`a949ca305550693c30abb3f2a3f84ab76d4e101c`（Task 1 开始时）
 - Tencent active gitlink：`feat/server_team@0a568c328ea1aae3f22ed3656e7900da7ea565c1`
 - Legacy preservation ref：`codex/legacy-proxy-hardening-69fd8b@69fd8b31e3fd4362af6c65407b92b26dfabebd0c`
+- Legacy ref 边界：local-only、未 push；fresh clone 不可取得，未经授权不得 push。跨 clone 可重建保全需要 push 或外部归档授权，在此之前仍未完成。
 - 固定客户端版本：Claude Code `2.1.226`；Codex `0.147.0`；OpenCode `1.18.16`；Pi `0.84.1`
 - 结论：Static baseline；Docker/Mock/真实 API/TUI Not Run
 

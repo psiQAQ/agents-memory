@@ -11,7 +11,7 @@
 | 项目 | 值 | 证据边界 |
 | --- | --- | --- |
 | Tencent active source | upstream default `feat/server_team@0a568c328ea1aae3f22ed3656e7900da7ea565c1` | 根 gitlink 固定此 SHA；upstream 前移前必须审查 |
-| Legacy preservation | `codex/legacy-proxy-hardening-69fd8b@69fd8b31e3fd4362af6c65407b92b26dfabebd0c` | 历史 ref，不迁移 27 个提交 |
+| Legacy preservation | `codex/legacy-proxy-hardening-69fd8b@69fd8b31e3fd4362af6c65407b92b26dfabebd0c` | local-only、未 push；fresh clone 不可取得，未经授权不得 push；跨 clone 可重建保全仍未完成 |
 | Claude Code | `2.1.226` | 固定版本；Not Run |
 | OpenCode | `1.18.16` | 固定版本；Not Run |
 | Pi | `0.84.1` | 固定版本；Not Run |
@@ -21,11 +21,17 @@
 
 ```mermaid
 flowchart LR
-  C["Claude Code"] --> P["MemoryProxy"]
-  O["OpenCode"] --> P
-  I["Pi"] --> P
-  X["Codex - Stage 2"] --> P
-  P --> K["MemoryCore / Hub"]
+  subgraph DP["Client data plane"]
+    C["Claude Code"] --> P["MemoryProxy"]
+    O["OpenCode"] --> P
+    I["Pi"] --> P
+    X["Codex - Stage 2"] --> P
+  end
+  P --> K["MemoryCore"]
+  subgraph MP["Management plane"]
+    H["Memory Hub (Panel / Knowledge)"]
+  end
+  H --> K
   K --> T["Explicit team-visible memory"]
 ```
 
