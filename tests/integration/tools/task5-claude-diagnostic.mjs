@@ -9,6 +9,7 @@ import { stage1OperationHash } from './task5-contract.mjs';
 
 const mainPath = '/anthropic/v1/messages';
 const allowedPaths = new Set([mainPath, '/openai/v1/chat/completions']);
+const clients = new Set(['claude', 'opencode']);
 const optionNames = new Set([
   '--client', '--run-id', '--home-dir', '--bundle-file', '--space-id', '--template', '--evidence-dir',
 ]);
@@ -215,7 +216,7 @@ function parse(argv, environment) {
   }
   const homeDir = values['--home-dir'];
   const spaceId = values['--space-id'];
-  if (values['--client'] !== 'claude' || environment.STAGE1_CLIENT_SCENARIO !== 'write'
+  if (!clients.has(values['--client']) || environment.STAGE1_CLIENT_SCENARIO !== 'write'
     || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(values['--run-id'])
     || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(spaceId) || spaceId.includes('..')
     || homeDir !== '/home/agent' || values['--bundle-file'] !== posix.join(homeDir, '.memory', 'agent-bundle.json')
@@ -237,10 +238,11 @@ async function fetchAggregate(mockUrl) {
   }
 }
 
-export async function runClaudeDiagnostic(argv, environment = process.env, dependencies = {}) {
+export async function runClientDiagnostic(argv, environment = process.env, dependencies = {}) {
   const values = parse(argv, environment);
+  const client = values['--client'];
   const runId = values['--run-id'];
-  const expectedHash = stage1OperationHash(runId, 'write', 'claude');
+  const expectedHash = stage1OperationHash(runId, 'write', client);
   const aggregate = dependencies.aggregate ?? (() => fetchAggregate(environment.MOCK_BASE_URL));
   const launch = dependencies.launch ?? diagnoseClientLaunch;
   let before;
@@ -262,14 +264,14 @@ export async function runClaudeDiagnostic(argv, environment = process.env, depen
   } catch {}
   const proxy = { proxy_dns_ok: proxyDnsOk, proxy_tcp_ok: proxyTcpOk };
 
-  const invocation = headlessInvocation('claude', 'write', runId);
-  const marker = stage1Marker(runId, 'claude');
+  const invocation = headlessInvocation(client, 'write', runId);
+  const marker = stage1Marker(runId, client);
   const expectedMarkerHash = createHash('sha256').update(marker).digest('hex');
   const operation = `STAGE1_OP_${invocation.operation_digest.toUpperCase()}`;
   let launchStatus;
   try {
     launchStatus = launchFields(await launch({
-      client: 'claude',
+      client,
       homeDir: values['--home-dir'],
       bundleFile: values['--bundle-file'],
       spaceId: values['--space-id'],
@@ -288,9 +290,15 @@ export async function runClaudeDiagnostic(argv, environment = process.env, depen
   }
 }
 
+export async function runClaudeDiagnostic(argv, environment = process.env, dependencies = {}) {
+  const clientIndex = Array.isArray(argv) ? argv.indexOf('--client') : -1;
+  if (clientIndex < 0 || argv[clientIndex + 1] !== 'claude') throw new Error('invalid diagnostic arguments');
+  return runClientDiagnostic(argv, environment, dependencies);
+}
+
 if (isMain(import.meta)) {
   try {
-    process.stdout.write(`${JSON.stringify(await runClaudeDiagnostic(process.argv.slice(2)))}\n`);
+    process.stdout.write(`${JSON.stringify(await runClientDiagnostic(process.argv.slice(2)))}\n`);
   } catch {
     process.stdout.write(`${JSON.stringify(fixedResult())}\n`);
     process.exitCode = 1;

@@ -4,11 +4,12 @@ import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { runTask5ClaudeDiagnostic } from '../tools/run-task5-claude-diagnostic.mjs';
+import { runTask5ClaudeDiagnostic, runTask5OpenCodeDiagnostic } from '../tools/run-task5-claude-diagnostic.mjs';
 
 const runId = 'task5-diagnostic-host';
 const project = `refine-memory-${runId}`;
 const fixedFailure = 'Task 5 Claude diagnostic coordinator failed';
+const opencodeFixedFailure = 'Task 5 OpenCode diagnostic coordinator failed';
 const result = {
   status: 'classified',
   launch: 'code0',
@@ -73,6 +74,23 @@ function businessArgs(integrationRoot) {
   ];
 }
 
+function opencodeBusinessArgs(integrationRoot) {
+  const prefix = [
+    'compose', '--project-directory', integrationRoot,
+    '--profile', 'mock', '--profile', 'opencode',
+    '-f', join(integrationRoot, 'compose.four-cli.yaml'),
+    '-f', join(integrationRoot, 'compose.four-cli.mock.yaml'),
+    '-f', join(integrationRoot, 'compose.four-cli.opencode.yaml'),
+    '-f', join(integrationRoot, 'compose.four-cli.opencode-diagnostic.yaml'),
+  ];
+  return [
+    [...prefix, 'up', '-d', '--wait', '--wait-timeout', '180', '--no-build', 'mock-llm', 'memory-core', 'memory-proxy', 'memory-hub'],
+    [...prefix, 'run', '--rm', '--no-deps', 'bootstrap'],
+    [...prefix, 'run', '--rm', '--no-deps', 'opencode-config'],
+    [...prefix, 'run', '--rm', '--no-deps', 'opencode-headless'],
+  ];
+}
+
 async function fixture(prefix) {
   const directory = await mkdtemp(join(tmpdir(), prefix));
   return {
@@ -121,6 +139,50 @@ test('Claude diagnostic coordinator fixes four bounded steps and forwards only a
     assert.equal(calls.slice(3, 6).every(({ options }) => options.env.STAGE1_CLIENT_SCENARIO === undefined), true);
     assert.equal(calls[6].options.env.STAGE1_CLIENT_SCENARIO, 'write');
     assert.equal(await readFile(value.evidenceDir).catch((error) => error.code), 'EISDIR');
+  } finally { await rm(value.directory, { recursive: true, force: true }); }
+});
+
+test('OpenCode diagnostic coordinator fixes the corresponding four bounded steps', async () => {
+  const value = await fixture('task5-opencode-coordinator-');
+  const calls = [];
+  try {
+    const output = await runTask5OpenCodeDiagnostic({
+      environment: environment(value.evidenceDir),
+      integrationRoot: value.integrationRoot,
+      spawnCompose: async (args, options) => {
+        calls.push({ args, options });
+        if (args[0] !== 'compose') return { status: 0, stdout: '', stderr: '' };
+        return { status: 0, stdout: args.at(-1) === 'opencode-headless' ? `${canonical}\n` : 'ignored child output', stderr: 'ignored child error' };
+      },
+    });
+    assert.equal(output, canonical);
+    assert.deepEqual(calls.slice(0, 3).map(({ args }) => args), probeArgs());
+    assert.deepEqual(calls.slice(3).map(({ args }) => args), opencodeBusinessArgs(value.integrationRoot));
+    assert.equal(calls.length, 7);
+    assert.equal(calls.slice(3, 6).every(({ options }) => options.env.STAGE1_CLIENT_SCENARIO === undefined), true);
+    assert.equal(calls[6].options.env.STAGE1_CLIENT_SCENARIO, 'write');
+    assert.equal(calls.every(({ args }) => !/(?:^| )build(?: |$)|\bdown\b|\bprune\b|\bcleanup\b/.test(args.join(' '))), true);
+    for (const { options } of calls) assert.equal(options.env.PROXY_UPSTREAM_API_KEY, undefined);
+  } finally { await rm(value.directory, { recursive: true, force: true }); }
+});
+
+test('OpenCode diagnostic coordinator fail-stops with its fixed error', async () => {
+  const value = await fixture('task5-opencode-failstop-');
+  let businessCalls = 0;
+  try {
+    const error = await runTask5OpenCodeDiagnostic({
+      environment: environment(value.evidenceDir), integrationRoot: value.integrationRoot,
+      spawnCompose: async (args) => {
+        if (args[0] !== 'compose') return { status: 0, stdout: '', stderr: '' };
+        const index = businessCalls++;
+        return index === 2
+          ? { status: 23, stdout: 'raw stdout', stderr: 'raw stderr' }
+          : { status: 0, stdout: '', stderr: '' };
+      },
+    }).then(() => undefined, (failure) => failure);
+    assert.equal(error.message, opencodeFixedFailure);
+    assert.equal(businessCalls, 3);
+    assert.doesNotMatch(error.message, /raw|stdout|stderr/i);
   } finally { await rm(value.directory, { recursive: true, force: true }); }
 });
 
@@ -234,4 +296,12 @@ test('Claude diagnostic coordinator CLI emits only the fixed failure', () => {
   assert.notEqual(child.status, 0);
   assert.equal(child.stdout, '');
   assert.equal(child.stderr, `${fixedFailure}\n`);
+});
+
+test('OpenCode diagnostic coordinator uses its fixed CLI failure without raw output', () => {
+  const tool = join(import.meta.dirname, '..', 'tools', 'run-task5-opencode-diagnostic.mjs');
+  const child = spawnSync(process.execPath, [tool], { encoding: 'utf8', env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot } });
+  assert.notEqual(child.status, 0);
+  assert.equal(child.stdout, '');
+  assert.equal(child.stderr, `${opencodeFixedFailure}\n`);
 });

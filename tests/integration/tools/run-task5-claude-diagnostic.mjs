@@ -3,13 +3,23 @@ import { chmod, lstat, mkdir } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { isMain } from './runtime-lib.mjs';
 
-const failureMessage = 'Task 5 Claude diagnostic coordinator failed';
-const composeFiles = [
-  'compose.four-cli.yaml',
-  'compose.four-cli.mock.yaml',
-  'compose.four-cli.claude.yaml',
-  'compose.four-cli.diagnostic.yaml',
-];
+const configurations = {
+  claude: {
+    failureMessage: 'Task 5 Claude diagnostic coordinator failed',
+    profiles: ['mock', 'claude'],
+    composeFiles: ['compose.four-cli.yaml', 'compose.four-cli.mock.yaml', 'compose.four-cli.claude.yaml', 'compose.four-cli.diagnostic.yaml'],
+    configService: 'claude-config',
+    headlessService: 'claude-headless',
+  },
+  opencode: {
+    failureMessage: 'Task 5 OpenCode diagnostic coordinator failed',
+    profiles: ['mock', 'opencode'],
+    composeFiles: ['compose.four-cli.yaml', 'compose.four-cli.mock.yaml', 'compose.four-cli.opencode.yaml', 'compose.four-cli.opencode-diagnostic.yaml'],
+    configService: 'opencode-config',
+    headlessService: 'opencode-headless',
+  },
+};
+const failureMessage = configurations.claude.failureMessage;
 const resultKeys = [
   'status', 'launch', 'launch_phase', 'launch_category', 'output_present',
   'proxy_dns_ok', 'proxy_tcp_ok', 'continuity', 'sequence_delta', 'total_delta',
@@ -73,12 +83,12 @@ function childEnvironment(environment) {
   return result;
 }
 
-function fixedActions() {
+function fixedActions(configuration) {
   return [
     { args: ['up', '-d', '--wait', '--wait-timeout', '180', '--no-build', 'mock-llm', 'memory-core', 'memory-proxy', 'memory-hub'], environment: {} },
     { args: ['run', '--rm', '--no-deps', 'bootstrap'], environment: {} },
-    { args: ['run', '--rm', '--no-deps', 'claude-config'], environment: {} },
-    { args: ['run', '--rm', '--no-deps', 'claude-headless'], environment: { STAGE1_CLIENT_SCENARIO: 'write' } },
+    { args: ['run', '--rm', '--no-deps', configuration.configService], environment: {} },
+    { args: ['run', '--rm', '--no-deps', configuration.headlessService], environment: { STAGE1_CLIENT_SCENARIO: 'write' } },
   ];
 }
 
@@ -123,13 +133,14 @@ function canonicalResult(stdout) {
   return canonical;
 }
 
-async function run({ environment, integrationRoot, spawnCompose }) {
+async function run({ environment, integrationRoot, spawnCompose, configuration }) {
   await prepare(environment, integrationRoot, spawnCompose);
-  const prefix = ['compose', '--project-directory', integrationRoot, '--profile', 'mock', '--profile', 'claude'];
-  for (const file of composeFiles) prefix.push('-f', join(integrationRoot, file));
+  const prefix = ['compose', '--project-directory', integrationRoot];
+  for (const profile of configuration.profiles) prefix.push('--profile', profile);
+  for (const file of configuration.composeFiles) prefix.push('-f', join(integrationRoot, file));
   const baseEnvironment = childEnvironment(environment);
   let finalResult;
-  for (const [index, action] of fixedActions().entries()) {
+  for (const [index, action] of fixedActions(configuration).entries()) {
     const result = await spawnCompose([...prefix, ...action.args], spawnOptions({ ...baseEnvironment, ...action.environment }));
     if (result?.status !== 0) throw new Error();
     if (index === 3) finalResult = canonicalResult(result.stdout);
@@ -142,8 +153,18 @@ export async function runTask5ClaudeDiagnostic({
   integrationRoot = resolve(import.meta.dirname, '..'),
   spawnCompose = defaultSpawnCompose,
 } = {}) {
-  try { return await run({ environment, integrationRoot, spawnCompose }); }
+  try { return await run({ environment, integrationRoot, spawnCompose, configuration: configurations.claude }); }
   catch { throw new Error(failureMessage); }
+}
+
+export async function runTask5OpenCodeDiagnostic({
+  environment = process.env,
+  integrationRoot = resolve(import.meta.dirname, '..'),
+  spawnCompose = defaultSpawnCompose,
+} = {}) {
+  const configuration = configurations.opencode;
+  try { return await run({ environment, integrationRoot, spawnCompose, configuration }); }
+  catch { throw new Error(configuration.failureMessage); }
 }
 
 if (isMain(import.meta)) {

@@ -5,15 +5,17 @@ import { EventEmitter } from 'node:events';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import test from 'node:test';
-import { stage1Marker } from '../tools/task5-headless-client.mjs';
+import { headlessInvocation, stage1Marker } from '../tools/task5-headless-client.mjs';
 import { stage1OperationHash } from '../tools/task5-contract.mjs';
-import { runClaudeDiagnostic } from '../tools/task5-claude-diagnostic.mjs';
+import { runClaudeDiagnostic, runClientDiagnostic } from '../tools/task5-claude-diagnostic.mjs';
 
 const integrationRoot = join(import.meta.dirname, '..');
 const diagnosticTool = join(integrationRoot, 'tools', 'task5-claude-diagnostic.mjs');
 const runId = 'task5-diagnostic';
 const operationHash = stage1OperationHash(runId, 'write', 'claude');
 const markerHash = createHash('sha256').update(stage1Marker(runId, 'claude')).digest('hex');
+const opencodeOperationHash = stage1OperationHash(runId, 'write', 'opencode');
+const opencodeMarkerHash = createHash('sha256').update(stage1Marker(runId, 'opencode')).digest('hex');
 const epoch = '00000000-0000-4000-8000-000000000001';
 const args = [
   '--client', 'claude', '--run-id', runId,
@@ -21,6 +23,7 @@ const args = [
   '--space-id', 'default', '--template', '/opt/memory-client/settings.template.json',
   '--evidence-dir', '/client-evidence',
 ];
+const opencodeArgs = args.map((value) => value === 'claude' ? 'opencode' : value);
 const environment = { MOCK_BASE_URL: 'http://mock-llm:8080', STAGE1_CLIENT_SCENARIO: 'write' };
 
 function aggregate({ sequence = 0, total = 0, paths = {}, fixtures = {}, operations = {}, dropped = 0, truncated = false, sticky = {} } = {}) {
@@ -114,6 +117,55 @@ test('Claude diagnostic classifies structured launch outcomes with one connectiv
     assert.equal(value.launches[0].capture.sensitiveValues.length, 3);
     assert.doesNotMatch(JSON.stringify(result), /MEMORY_|STAGE1_|sentinel|prompt|identity|key|epoch|hash|path\//i);
   });
+});
+
+test('client diagnostic classifies one OpenCode write with the fixed-title invocation', async () => {
+  const before = aggregate();
+  const after = aggregate({
+    sequence: 1, total: 1,
+    paths: { '/anthropic/v1/messages': { requests: 1, sequences: [1] } },
+    operations: {
+      [opencodeOperationHash]: operation(1, 1, {
+        '/anthropic/v1/messages': { requests: 1, sequences: [1], marker_hashes: [opencodeMarkerHash] },
+      }),
+    },
+  });
+  const value = harness(before, after, launchResult('cli-nonzero', 'unknown', true));
+  const result = await runClientDiagnostic(opencodeArgs, environment, value.dependencies);
+
+  assert.equal(result.launch, 'nonzero');
+  assert.equal(result.launch_phase, 'cli-nonzero');
+  assert.equal(result.launch_category, 'unknown');
+  assert.equal(result.output_present, true);
+  assert.equal(result.continuity, 'ok');
+  assert.equal(result.expected_operation_present, true);
+  assert.equal(result.expected_operation_valid, true);
+  assert.equal(result.expected_main_count, 1);
+  assert.equal(value.launches.length, 1);
+  assert.equal(value.launches[0].client, 'opencode');
+  assert.deepEqual(value.launches[0].args.slice(0, 7), [
+    'run', '--model', 'memory-anthropic/deepseek-v4-pro', '--format', 'json', '--title', 'Task 5 Stage 1',
+  ]);
+  assert.equal(value.launches[0].args.length, 8);
+  const invocation = headlessInvocation('opencode', 'write', runId);
+  assert.deepEqual(value.launches[0].args, invocation.args);
+  assert.deepEqual(value.launches[0].capture.sensitiveValues, [
+    invocation.args.at(-1),
+    stage1Marker(runId, 'opencode'),
+    `STAGE1_OP_${invocation.operation_digest.toUpperCase()}`,
+  ]);
+  assert.doesNotMatch(JSON.stringify(result), /STAGE1_|prompt|marker|identity|key|epoch|hash/i);
+});
+
+test('client diagnostic rejects Pi and unknown clients before observation or launch', async () => {
+  for (const client of ['pi', 'unknown']) {
+    const invalidArgs = [...opencodeArgs];
+    invalidArgs[invalidArgs.indexOf('--client') + 1] = client;
+    const value = harness(aggregate(), aggregate(), launchResult('cli-zero'));
+    await assert.rejects(runClientDiagnostic(invalidArgs, environment, value.dependencies), /invalid diagnostic arguments/);
+    assert.equal(value.launches.length, 0);
+    assert.equal(value.probes, 0);
+  }
 });
 
 test('Claude diagnostic probes memory-proxy DNS and TCP once with fixed bounds and only returns booleans', async () => {
@@ -428,4 +480,40 @@ test('diagnostic overlay changes only the Claude headless entrypoint and adds on
     ...activeFiles.map((file) => readFile(join(integrationRoot, file), 'utf8')),
   ]).then((values) => values.join('\n'));
   assert.doesNotMatch(activeRuntime, /task5-claude-diagnostic|compose\.four-cli\.diagnostic/);
+});
+
+test('OpenCode diagnostic overlay changes only the OpenCode headless entrypoint and adds one read-only script bind', async () => {
+  const staticEnvironment = {
+    ...process.env,
+    COMPOSE_PROJECT_NAME: 'task5-opencode-diagnostic-static', RUN_ID: runId,
+    EVIDENCE_DIR: join(integrationRoot, '.static-evidence', runId),
+    ACTIVE_CLIENTS: 'claude,opencode,pi', MEMORY_CORE_GATEWAY_API_KEY: 'task5-diagnostic-not-llm',
+  };
+  const render = (selected) => {
+    const command = ['compose', '--project-directory', integrationRoot, '--profile', 'mock', '--profile', 'opencode'];
+    for (const file of selected) command.push('-f', join(integrationRoot, file));
+    command.push('config', '--format', 'json');
+    const result = spawnSync('docker', command, { encoding: 'utf8', env: staticEnvironment });
+    assert.equal(result.status, 0, result.stderr);
+    return JSON.parse(result.stdout);
+  };
+  const activeFiles = ['compose.four-cli.yaml', 'compose.four-cli.mock.yaml', 'compose.four-cli.opencode.yaml'];
+  const active = render(activeFiles);
+  const diagnostic = render([...activeFiles, 'compose.four-cli.opencode-diagnostic.yaml']);
+  const base = structuredClone(active.services['opencode-headless']);
+  const service = structuredClone(diagnostic.services['opencode-headless']);
+  assert.deepEqual(service.entrypoint, ['node', '/opt/memory-client/task5-claude-diagnostic.mjs']);
+  const script = service.volumes.find((volume) => volume.target === '/opt/memory-client/task5-claude-diagnostic.mjs');
+  assert.equal(script.type, 'bind');
+  assert.equal(script.source.replaceAll('\\', '/'), diagnosticTool.replaceAll('\\', '/'));
+  assert.equal(script.read_only, true);
+  delete base.entrypoint;
+  delete service.entrypoint;
+  service.volumes = service.volumes.filter((volume) => volume.target !== '/opt/memory-client/task5-claude-diagnostic.mjs');
+  assert.deepEqual(service, base);
+  const activeRuntime = await Promise.all([
+    readFile(join(integrationRoot, 'tools', 'run-task5-mock.mjs'), 'utf8'),
+    ...activeFiles.map((file) => readFile(join(integrationRoot, file), 'utf8')),
+  ]).then((values) => values.join('\n'));
+  assert.doesNotMatch(activeRuntime, /task5-claude-diagnostic|opencode-diagnostic/);
 });
