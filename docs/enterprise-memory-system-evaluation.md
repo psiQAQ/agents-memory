@@ -2,7 +2,7 @@
 
 ## 结论
 
-当前 active 目标是四 Docker CLI 共享记忆实验。Task 5 的 Proxy→Core auth service-token 缺口已在产品提交 `9e456a5` 完成 TDD 修复与独立 review；root `bfb3839a` 的 tools fixture fix 与唯一 `sha256:8ca1a2a8...` replacement image 继续保持 Ready（build/assets only）。历史 Blocked records 均 append-only。replacement Claude image `sha256:058eccaf...` 已完成 TDD、构建和 active digest pin。全新 tuple `92204e33` 的单次 canonical diagnostic 证明 Claude child nonzero、bounded output present、Proxy DNS/TCP 可达且 Mock delta 为 `0`，但 classifier category 仍为 `unknown`，因此当前为 **Blocked / cli-unknown-before-mock**。该 project 已 exact cleanup：5 containers / 1 network / 9 volumes → `0/0/0`，active images retained。后续两写、六读、final、真实 headless、TUI 与真实 API/模型均为 **Not Run**。
+当前 active 目标是四 Docker CLI 共享记忆实验。Task 5 的 Proxy→Core auth service-token 缺口已在产品提交 `9e456a5` 完成 TDD 修复与独立 review；root `bfb3839a` 的 tools fixture fix 与唯一 `sha256:8ca1a2a8...` replacement image 继续保持 Ready（build/assets only）。历史 Blocked records 均 append-only。`92204e33` 的 `cli-nonzero / unknown` 已由固定 Claude 2.1.226 source 静态闭合到 pre-API `/tmp/claude-10001` 创建遇 `EROFS`；classifier 与 bounded hardened tmpfs 已 RED→GREEN，replacement Claude image `sha256:261a917...` 完成单次 build、assets/runtime probe、exact pin 与独立 review。全新 tuple `113ca669` 已通过 freshness/image/tmpfs/overlay/coordinator preflight，当前为 **Ready / diagnostic Not Run**。后续两写、六读、final、真实 headless、TUI 与真实 API/模型均为 **Not Run**。
 
 旧 Windows 原生 Claude + Docker Claude 证据一律是 **Legacy**：保留原文供追溯，但不用于推断新的四 CLI 架构已通过。
 
@@ -18,7 +18,7 @@
 | Container user metadata | Core/Hub root-default（UID 0）；Proxy `app`（UID 10001） | source-build evidence；本轮不扩大为权限改造 |
 | Legacy preservation | `codex/legacy-proxy-hardening-69fd8b@69fd8b31e3fd4362af6c65407b92b26dfabebd0c` | local-only、未 push；fresh clone 不可取得，未经授权不得 push；跨 clone 可重建保全仍未完成 |
 | Legacy runtime lifecycle | 3 projects / 20 containers / 4 networks / 27 volumes / 6 image candidates absent | 2026-08-10 Runtime Cleanup Passed；旧栈需从 Git 历史重新构建并创建新资源 |
-| Claude Code | `2.1.226` / image `sha256:058eccaf56507941c27fd1ce57e69cb6ae5cff20680e7a36ed80bddb22ec946b` | classifier rebuild、version/help、UID 10001、host/image hash/export、headless assets Passed；diagnostic/TUI Not Run |
+| Claude Code | `2.1.226` / image `sha256:261a917376f791d9b5e092040c2f488f23588b7103a27606226426f273b040dd` | EROFS classifier、version/help、UID10001、host/image hash/export、64MiB hardened tmpfs runtime probe Passed；diagnostic/TUI Not Run |
 | OpenCode | `1.18.16` / image `sha256:42bc38ead4c3de8ecd75152eeffe23f10f81c580d00e8a816e7b657cf7c57e9b` | rebuild、version/help、UID 10001、evidence ownership/writability、headless assets Passed；prompt/TUI Not Run |
 | Pi | `0.84.1` / image `sha256:56582fd216db259342f4414ebdc6c9c9188229678d77eb2f360959c9af2e4538` | rebuild、version/help、UID 10001、evidence ownership/writability、headless assets Passed；prompt/TUI Not Run |
 | Codex | `0.147.0` | 固定版本；Not Run |
@@ -56,7 +56,7 @@ flowchart LR
 | Stage 1 client Compose/bootstrap/config/images | Runtime Passed | tools 与三 client 串行各 build 一次；version/help、UID 10001、evidence ownership/writability、headless assets；仅 client build/config assets |
 | Stage 1 Task 5 root harness | Static/contract Passed | root Node 152/152 与 Compose config 7/7；fixture array text-block 识别的 RED→GREEN、固定 epoch/path、strict fixture、逐 operation oracle、outsider、exact project freshness、run/build/evidence 与 request-local credential 合同，不是业务运行 |
 | Stage 1 Proxy privacy/build | Runtime Passed | reviewed `9e456a5` auth service-token fix、38/38 suites / 276/276 tests、exact six baseline typecheck errors、Proxy `sha256:55fedae3...`；replacement image Ready，product tests + build/assets only |
-| Stage 1 Mock identity/share/isolation/leak | Blocked / cli-unknown-before-mock | `92204e33` 单次 canonical diagnostic：child nonzero、output present、Proxy DNS/TCP true、continuity ok、Mock deltas 0、category unknown。project 已 exact cleanup 5/1/9 → 0/0/0；业务 Gate 仍 Not Run |
+| Stage 1 Mock identity/share/isolation/leak | Ready / diagnostic Not Run | `92204e33` project 已 exact cleanup；EROFS/tmpfs fix + replacement image/runtime asset Passed。全新 `113ca669` freshness/image/tmpfs/overlay/coordinator preflight Passed，仅一次 canonical diagnostic 待执行；业务 Gate 仍 Not Run |
 | Stage 1 TUI | Not Run | 仅在 headless Gate 通过后由用户确认 |
 | Stage 1 真实模型 | Not Run | 需完整 Mock Gate 与明确授权 |
 | Stage 2 Codex Responses | Not Run | 在 Stage 1 后执行 |
@@ -80,4 +80,4 @@ flowchart LR
 
 ## 下一 Gate
 
-Task 5 `auth.serviceToken` 与 Mock fixture fixes/replacement images 均保持 **Ready（build/assets only）**。[92204e33 CLI unknown-before-Mock](reproduction/2026-08-12-task5-diag-claude-p-20260812-92204e33-cli-unknown-before-mock-blocked.md) 固定单次 canonical 结果，[92204e33 exact cleanup](reproduction/2026-08-12-task5-diag-claude-p-20260812-92204e33-exact-cleanup-passed.md) 已 Passed。下一 Gate 只能先对固定 Claude image/source 与 classifier 做无 secret 静态审计和 TDD，不能读取 raw child output、logs 或 evidence；若确需 runtime，必须使用全新 tuple。后续两次写入、六次有序跨 owner 读取、final oracle 与三个真实 headless 均为 Not Run；真实 API、TUI 与 Codex Stage 2 仍为 Not Run。active gitlink 在获得独立 push/归档授权前仍无法由 fresh clone 获取。
+Task 5 `auth.serviceToken`、Mock fixture 与 [Claude EROFS/tmpfs fix](reproduction/2026-08-12-task5-claude-erofs-tmpfs-fix-passed.md) 均已完成 TDD、固定 image/assets 与 scoped review。[113ca669 diagnostic Ready](reproduction/2026-08-12-task5-diag-claude-p-20260812-113ca669-ready.md) 固定全新 project/evidence、新 Claude digest 与 hardened tmpfs；freshness/overlay/coordinator preflight 已 Passed。下一 Gate 只允许 tracked coordinator 对该 tuple 执行一次 canonical 18-key diagnostic，不 retry、TUI 或真实模型。后续两次写入、六次有序跨 owner 读取、final oracle 与三个真实 headless 均为 Not Run；真实 API、TUI 与 Codex Stage 2 仍为 Not Run。active gitlink 在获得独立 push/归档授权前仍无法由 fresh clone 获取。

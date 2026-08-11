@@ -6,7 +6,7 @@
 
 **Fact**：upstream base 锁定 `feat/server_team@0a568c328ea1aae3f22ed3656e7900da7ea565c1`，active fork/gitlink 为 reviewed Task 5 auth service-token fix `9e456a5b7bb47ae40596237d0f0b87c1edfc098f`。该 commit 是 local-only；`origin/codex/four-agent-memory-upstream` 仍为 `38ced16f46fed640bcb7360fb1ca45f9f9918628`，未经单独授权不得 push，fresh clone 暂不可取得。Stage 1 是 Claude Code `2.1.226`、OpenCode `1.18.16`、Pi `0.84.1`，Stage 2 是 Codex `0.147.0`。
 
-**Fact**：Task 5 auth service-token fix、root `bfb3839a` tools fixture fix 与 Proxy/tools replacement images 均为 Ready（build/assets only）。历史 Blocked records 继续 append-only。`92204e33` 的单次 canonical diagnostic 为 child nonzero、output present、Proxy DNS/TCP true、continuity ok、Mock deltas 0、category unknown，因此当前是 Blocked / cli-unknown-before-mock；该 project 已 exact cleanup：5 containers / 1 network / 9 volumes → `0/0/0`，active images retained。后续两写、六读、final、真实 headless、TUI 与真实/Paid 模型均为 Not Run。
+**Fact**：Task 5 auth service-token fix、root `bfb3839a` tools fixture fix 与 Proxy/tools replacement images 均为 Ready（build/assets only）。历史 Blocked records 继续 append-only。`92204e33` 已由 source/static 闭合为 Claude pre-API `/tmp` EROFS；classifier/tmpfs fix、replacement image `sha256:261a917...`、active exact pin 与 hardened tmpfs runtime probe 均 Passed。全新 tuple `113ca669` freshness/image/tmpfs/overlay/coordinator preflight Passed，当前是 Ready / diagnostic Not Run。后续两写、六读、final、真实 headless、TUI 与真实/Paid 模型均为 Not Run。
 
 **Fact**：legacy ref `codex/legacy-proxy-hardening-69fd8b@69fd8b31e3fd4362af6c65407b92b26dfabebd0c` 是 local-only、未 push；fresh clone 不可取得，未经授权不得 push。跨 clone 可重建保全需要 push 或外部归档授权，在此之前仍未完成。
 
@@ -78,7 +78,7 @@ client 容器只挂自己的 home/workspace，不挂 bootstrap-state、模型 ke
 
 | Client | 固定 image ID | 已验证边界 |
 | --- | --- | --- |
-| Claude Code `2.1.226` | `sha256:058eccaf56507941c27fd1ce57e69cb6ae5cff20680e7a36ed80bddb22ec946b` | classifier rebuild、version/help、UID 10001、host/image hash/export、headless assets |
+| Claude Code `2.1.226` | `sha256:261a917376f791d9b5e092040c2f488f23588b7103a27606226426f273b040dd` | EROFS classifier、version/help、UID10001、host/image hash/export、hardened tmpfs runtime probe、headless assets |
 | OpenCode `1.18.16` | `sha256:42bc38ead4c3de8ecd75152eeffe23f10f81c580d00e8a816e7b657cf7c57e9b` | rebuild、version/help、UID 10001、evidence ownership/writability、headless assets |
 | Pi `0.84.1` | `sha256:56582fd216db259342f4414ebdc6c9c9188229678d77eb2f360959c9af2e4538` | rebuild、version/help、UID 10001、evidence ownership/writability、headless assets |
 
@@ -97,15 +97,15 @@ formal review 后，bootstrap 在发布 private/public artifact 前验证三 own
 - 三个 active client Dockerfile 在 `USER agent` 前创建 `/client-evidence` 并归属 10001:10001；headless 仍以 `10001:10001` 运行且三个 evidence named volume 彼此独立。三镜像已验证该目录归属与 UID10001 写入；named volume 的业务流使用仍为 Not Run。
 - launcher 删除继承的所有私有 identity/key 变量，再从选定 private bundle 的同一 `memory_user_key` 设置 `MEMORY_USER_KEY` 与 product-required request-local `TDAI_MEMORY_USER_KEY`；值不进入 Compose、prompt、cache、log、evidence 或 tracked file。
 
-Root full Node 为 230/230，base + `mock`、`real`、`claude`、`opencode`、`pi`、`management` Compose config 为 7/7。fixture fix 的 mock `8/9` RED→`9/9` GREEN、runner `43/43` 与 root 静态合同均为 **Passed**。
+Root full Node 为 232/232，base + `mock`、`real`、`claude`、`opencode`、`pi`、`management` Compose config 为 7/7。fixture fix 的 mock `8/9` RED→`9/9` GREEN、runner `43/43` 与 root 静态合同均为 **Passed**。
 
 产品 auth service-token fix 固定为 `9e456a5b7bb47ae40596237d0f0b87c1edfc098f`；focused `3/3`、fresh full `38/38` suites / `276/276` tests、typecheck exact six baseline errors与最终 review `CLEAN`。Compose 固定使用 `local/refine-memory-proxy:9e456a5-auth-fix@sha256:55fedae3f6a3a0a45ac8be45461d8cab23c52f11cc089c1c1e54c7d236de764b`；replacement image 已完成唯一 build、离线 tests/assets 与 root exact pin，状态为 **Ready（build/assets only）**。旧 image 只保留历史证据，不得进入新的 Task 5 runtime。
 
-完整前置链见 [privacy/build Passed](../../docs/reproduction/2026-08-11-task5-proxy-privacy-build-passed.md)、[root static Passed](../../docs/reproduction/2026-08-11-task5-pre-runtime-review-round1-root-static-passed.md)、[classifier image build Passed](../../docs/reproduction/2026-08-12-task5-claude-classifier-image-build-passed.md)、[92204e33 diagnostic Ready](../../docs/reproduction/2026-08-12-task5-diag-claude-p-20260812-92204e33-ready.md)、[92204e33 CLI unknown-before-Mock](../../docs/reproduction/2026-08-12-task5-diag-claude-p-20260812-92204e33-cli-unknown-before-mock-blocked.md) 与 [92204e33 exact cleanup](../../docs/reproduction/2026-08-12-task5-diag-claude-p-20260812-92204e33-exact-cleanup-passed.md)。下一步只允许无 secret 静态审计/TDD；任何 runtime 必须使用全新 tuple，不 retry/TUI/real。
+完整前置链见 [privacy/build Passed](../../docs/reproduction/2026-08-11-task5-proxy-privacy-build-passed.md)、[92204e33 CLI unknown-before-Mock](../../docs/reproduction/2026-08-12-task5-diag-claude-p-20260812-92204e33-cli-unknown-before-mock-blocked.md)、[92204e33 exact cleanup](../../docs/reproduction/2026-08-12-task5-diag-claude-p-20260812-92204e33-exact-cleanup-passed.md)、[EROFS/tmpfs fix Passed](../../docs/reproduction/2026-08-12-task5-claude-erofs-tmpfs-fix-passed.md) 与 [113ca669 diagnostic Ready](../../docs/reproduction/2026-08-12-task5-diag-claude-p-20260812-113ca669-ready.md)。下一步仅为该 tuple 一次 canonical diagnostic；不得将 build/assets 扩写为 Claude/业务通过，不 retry/TUI/real。
 
-## Task 5 Mock runtime 启动器（CLI unknown-before-Mock Blocked）
+## Task 5 Mock runtime 启动器（113ca669 diagnostic Ready / Not Run）
 
-历史固定 Mock/diagnostic runs 均保持 append-only。最新 `92204e33` canonical diagnostic 只证明 Claude child nonzero、bounded output present、Proxy DNS/TCP true 与 Mock delta 0；category 为 `unknown`，不得扩写为 exit root cause、HTTP/auth/filesystem 结论。该 project 已按授权 exact cleanup，host evidence 与 active images 保留；下一 Gate 只允许固定 image/source 与 classifier 的无 secret 静态审计/TDD。任何新 runtime 都必须使用全新 tuple，不复用本现场，不提前进入 TUI/real。
+历史固定 Mock/diagnostic runs 均保持 append-only。`92204e33` 已 exact cleanup；EROFS/tmpfs fix 与 replacement image/assets Passed。`113ca669` 是当前唯一 Ready tuple，只允许 tracked coordinator 执行一次 canonical diagnostic；不复用旧现场，不读取 raw child/log/evidence，不提前进入 TUI/real。
 
 启动器不读取 Tencent `.env`、模型 key、settings、home 或旧 evidence；它只运行固定的 Mock 顺序，不接受任意命令，也不会执行 build、`down`、`down -v` 或 prune。以下命令保留为合同参考，不得用于覆盖或复用上述失败 tuple。
 
@@ -151,7 +151,7 @@ try {
 1. **Task 2（Passed，build/assets only）**：固定 image ID/digest 与不可变 RED→GREEN 已归档；不扩写为服务或业务通过。
 2. **Task 3（Passed，handler/route + build/assets only）**：三平台 literal Messages/`count_tokens` route、source/session fail-closed、Anthropic system context 与选定 console privacy 已固定；不扩写为服务业务或 comprehensive leak Gate 通过。
 3. **Task 4（Passed，client build/config assets only）**：active Compose、三客户端身份/config/image 已固定；不扩写为服务或业务流通过。
-4. **Task 5（92204e33 CLI unknown-before-Mock Blocked）**：历史 deterministic Mock/diagnostic failures 均保持 append-only；本 tuple 已 exact cleanup，active images retained。下一步只允许无 secret 静态审计/TDD；后续两写、六读、outsider、final oracle 与真实 headless 未运行，不得提前进入 TUI/real。
+4. **Task 5（113ca669 diagnostic Ready / Not Run）**：历史 deterministic Mock/diagnostic failures 均保持 append-only；EROFS/tmpfs fix + replacement image/runtime asset Passed。只允许当前全新 tuple 一次 canonical diagnostic；后续两写、六读、outsider、final oracle 与真实 headless 未运行，不得提前进入 TUI/real。
 5. **Task 6**：完整 Mock Gate 后且负责人明确授权，才可使用 host-only 双 key 与预算限制做真实 Stage 1。
 6. **Task 7–8**：在 Stage 1 后实现/验证 Codex Responses 与四客户端 binding 上限。
 
