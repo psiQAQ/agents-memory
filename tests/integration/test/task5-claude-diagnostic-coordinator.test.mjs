@@ -4,12 +4,13 @@ import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { runTask5ClaudeDiagnostic, runTask5OpenCodeDiagnostic } from '../tools/run-task5-claude-diagnostic.mjs';
+import { runTask5ClaudeDiagnostic, runTask5OpenCodeDiagnostic, runTask5OpenCodeHeadlessDiagnostic } from '../tools/run-task5-claude-diagnostic.mjs';
 
 const runId = 'task5-diagnostic-host';
 const project = `refine-memory-${runId}`;
 const fixedFailure = 'Task 5 Claude diagnostic coordinator failed';
 const opencodeFixedFailure = 'Task 5 OpenCode diagnostic coordinator failed';
+const headlessFixedFailure = 'Task 5 OpenCode headless diagnostic coordinator failed';
 const result = {
   status: 'classified',
   launch: 'code0',
@@ -31,6 +32,7 @@ const result = {
   truncated: false,
 };
 const canonical = JSON.stringify(result);
+const headlessCanonical = '{"status":"classified","phase":"success"}';
 
 function environment(evidenceDir) {
   return {
@@ -86,6 +88,26 @@ function opencodeBusinessArgs(integrationRoot) {
   return [
     [...prefix, 'up', '-d', '--wait', '--wait-timeout', '180', '--no-build', 'mock-llm', 'memory-core', 'memory-proxy', 'memory-hub'],
     [...prefix, 'run', '--rm', '--no-deps', 'bootstrap'],
+    [...prefix, 'run', '--rm', '--no-deps', 'opencode-config'],
+    [...prefix, 'run', '--rm', '--no-deps', 'opencode-headless'],
+  ];
+}
+
+function opencodeHeadlessBusinessArgs(integrationRoot) {
+  const prefix = [
+    'compose', '--project-directory', integrationRoot,
+    '--profile', 'mock', '--profile', 'claude', '--profile', 'opencode',
+    '-f', join(integrationRoot, 'compose.four-cli.yaml'),
+    '-f', join(integrationRoot, 'compose.four-cli.mock.yaml'),
+    '-f', join(integrationRoot, 'compose.four-cli.claude.yaml'),
+    '-f', join(integrationRoot, 'compose.four-cli.opencode.yaml'),
+    '-f', join(integrationRoot, 'compose.four-cli.opencode-headless-diagnostic.yaml'),
+  ];
+  return [
+    [...prefix, 'up', '-d', '--wait', '--wait-timeout', '180', '--no-build', 'mock-llm', 'memory-core', 'memory-proxy', 'memory-hub'],
+    [...prefix, 'run', '--rm', '--no-deps', 'bootstrap'],
+    [...prefix, 'run', '--rm', '--no-deps', 'claude-config'],
+    [...prefix, 'run', '--rm', '--no-deps', 'claude-headless'],
     [...prefix, 'run', '--rm', '--no-deps', 'opencode-config'],
     [...prefix, 'run', '--rm', '--no-deps', 'opencode-headless'],
   ];
@@ -184,6 +206,47 @@ test('OpenCode diagnostic coordinator fail-stops with its fixed error', async ()
     assert.equal(businessCalls, 3);
     assert.doesNotMatch(error.message, /raw|stdout|stderr/i);
   } finally { await rm(value.directory, { recursive: true, force: true }); }
+});
+
+test('OpenCode headless diagnostic coordinator fixes a prior Claude write and one classified OpenCode headless step', async () => {
+  const value = await fixture('task5-opencode-headless-coordinator-');
+  const calls = [];
+  try {
+    const output = await runTask5OpenCodeHeadlessDiagnostic({
+      environment: environment(value.evidenceDir), integrationRoot: value.integrationRoot,
+      spawnCompose: async (args, options) => {
+        calls.push({ args, options });
+        if (args[0] !== 'compose') return { status: 0, stdout: '', stderr: '' };
+        return { status: 0, stdout: args.at(-1) === 'opencode-headless' ? `${headlessCanonical}\n` : '', stderr: '' };
+      },
+    });
+    assert.equal(output, headlessCanonical);
+    assert.deepEqual(calls.slice(0, 3).map(({ args }) => args), probeArgs());
+    assert.deepEqual(calls.slice(3).map(({ args }) => args), opencodeHeadlessBusinessArgs(value.integrationRoot));
+    assert.equal(calls.length, 9);
+    assert.equal(calls.slice(3, 8).every(({ options }) => options.env.STAGE1_CLIENT_SCENARIO === undefined), true);
+    assert.equal(calls[8].options.env.STAGE1_CLIENT_SCENARIO, 'write');
+    assert.equal(calls.every(({ args }) => !/(?:^| )build(?: |$)|\bdown\b|\bprune\b|\bcleanup\b/.test(args.join(' '))), true);
+  } finally { await rm(value.directory, { recursive: true, force: true }); }
+});
+
+test('OpenCode headless diagnostic coordinator rejects noncanonical phases with one fixed failure', async (context) => {
+  for (const stdout of [
+    '{"status":"classified","phase":"other"}',
+    '{"phase":"success","status":"classified"}',
+    '{"status":"classified","phase":"success","extra":false}',
+    `${headlessCanonical}\n${headlessCanonical}\n`,
+  ]) await context.test(stdout.slice(0, 24), async () => {
+    const value = await fixture('task5-opencode-headless-output-');
+    try {
+      const error = await runTask5OpenCodeHeadlessDiagnostic({
+        environment: environment(value.evidenceDir), integrationRoot: value.integrationRoot,
+        spawnCompose: async (args) => ({ status: 0, stdout: args.at(-1) === 'opencode-headless' ? stdout : '', stderr: 'RAW_CHILD_SECRET' }),
+      }).then(() => undefined, (failure) => failure);
+      assert.equal(error.message, headlessFixedFailure);
+      assert.doesNotMatch(error.message, /RAW_|secret|json|phase/i);
+    } finally { await rm(value.directory, { recursive: true, force: true }); }
+  });
 });
 
 test('Claude diagnostic coordinator fail-stops on nonzero and thrown child results without raw output', async (context) => {
@@ -304,4 +367,12 @@ test('OpenCode diagnostic coordinator uses its fixed CLI failure without raw out
   assert.notEqual(child.status, 0);
   assert.equal(child.stdout, '');
   assert.equal(child.stderr, `${opencodeFixedFailure}\n`);
+});
+
+test('OpenCode headless diagnostic coordinator uses its fixed CLI failure without raw output', () => {
+  const tool = join(import.meta.dirname, '..', 'tools', 'run-task5-opencode-headless-diagnostic.mjs');
+  const child = spawnSync(process.execPath, [tool], { encoding: 'utf8', env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot } });
+  assert.notEqual(child.status, 0);
+  assert.equal(child.stdout, '');
+  assert.equal(child.stderr, `${headlessFixedFailure}\n`);
 });

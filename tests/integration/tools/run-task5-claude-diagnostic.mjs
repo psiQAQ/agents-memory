@@ -18,6 +18,24 @@ const configurations = {
     configService: 'opencode-config',
     headlessService: 'opencode-headless',
   },
+  opencodeHeadless: {
+    failureMessage: 'Task 5 OpenCode headless diagnostic coordinator failed',
+    profiles: ['mock', 'claude', 'opencode'],
+    composeFiles: [
+      'compose.four-cli.yaml', 'compose.four-cli.mock.yaml',
+      'compose.four-cli.claude.yaml', 'compose.four-cli.opencode.yaml',
+      'compose.four-cli.opencode-headless-diagnostic.yaml',
+    ],
+    actions: [
+      { args: ['up', '-d', '--wait', '--wait-timeout', '180', '--no-build', 'mock-llm', 'memory-core', 'memory-proxy', 'memory-hub'], environment: {} },
+      { args: ['run', '--rm', '--no-deps', 'bootstrap'], environment: {} },
+      { args: ['run', '--rm', '--no-deps', 'claude-config'], environment: {} },
+      { args: ['run', '--rm', '--no-deps', 'claude-headless'], environment: {} },
+      { args: ['run', '--rm', '--no-deps', 'opencode-config'], environment: {} },
+      { args: ['run', '--rm', '--no-deps', 'opencode-headless'], environment: { STAGE1_CLIENT_SCENARIO: 'write' } },
+    ],
+    parseResult: canonicalPhaseResult,
+  },
 };
 const failureMessage = configurations.claude.failureMessage;
 const resultKeys = [
@@ -84,12 +102,26 @@ function childEnvironment(environment) {
 }
 
 function fixedActions(configuration) {
+  if (configuration.actions) return configuration.actions;
   return [
     { args: ['up', '-d', '--wait', '--wait-timeout', '180', '--no-build', 'mock-llm', 'memory-core', 'memory-proxy', 'memory-hub'], environment: {} },
     { args: ['run', '--rm', '--no-deps', 'bootstrap'], environment: {} },
     { args: ['run', '--rm', '--no-deps', configuration.configService], environment: {} },
     { args: ['run', '--rm', '--no-deps', configuration.headlessService], environment: { STAGE1_CLIENT_SCENARIO: 'write' } },
   ];
+}
+
+function canonicalPhaseResult(stdout) {
+  if (typeof stdout !== 'string' || stdout.length === 0 || stdout.includes('\r')) throw new Error();
+  const text = stdout.endsWith('\n') ? stdout.slice(0, -1) : stdout;
+  if (text.length === 0 || text.includes('\n')) throw new Error();
+  const value = JSON.parse(text);
+  if (!value || typeof value !== 'object' || Array.isArray(value)
+    || JSON.stringify(Object.keys(value)) !== JSON.stringify(['status', 'phase'])
+    || value.status !== 'classified'
+    || !['success', 'client', 'observation', 'evidence', 'setup'].includes(value.phase)
+    || text !== JSON.stringify({ status: value.status, phase: value.phase })) throw new Error();
+  return text;
 }
 
 function canonicalResult(stdout) {
@@ -140,10 +172,11 @@ async function run({ environment, integrationRoot, spawnCompose, configuration }
   for (const file of configuration.composeFiles) prefix.push('-f', join(integrationRoot, file));
   const baseEnvironment = childEnvironment(environment);
   let finalResult;
-  for (const [index, action] of fixedActions(configuration).entries()) {
+  const actions = fixedActions(configuration);
+  for (const [index, action] of actions.entries()) {
     const result = await spawnCompose([...prefix, ...action.args], spawnOptions({ ...baseEnvironment, ...action.environment }));
     if (result?.status !== 0) throw new Error();
-    if (index === 3) finalResult = canonicalResult(result.stdout);
+    if (index === actions.length - 1) finalResult = (configuration.parseResult ?? canonicalResult)(result.stdout);
   }
   return finalResult;
 }
@@ -163,6 +196,16 @@ export async function runTask5OpenCodeDiagnostic({
   spawnCompose = defaultSpawnCompose,
 } = {}) {
   const configuration = configurations.opencode;
+  try { return await run({ environment, integrationRoot, spawnCompose, configuration }); }
+  catch { throw new Error(configuration.failureMessage); }
+}
+
+export async function runTask5OpenCodeHeadlessDiagnostic({
+  environment = process.env,
+  integrationRoot = resolve(import.meta.dirname, '..'),
+  spawnCompose = defaultSpawnCompose,
+} = {}) {
+  const configuration = configurations.opencodeHeadless;
   try { return await run({ environment, integrationRoot, spawnCompose, configuration }); }
   catch { throw new Error(configuration.failureMessage); }
 }
