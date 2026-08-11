@@ -161,6 +161,8 @@ test('Claude diagnostic coordinator rejects noncanonical or malformed diagnostic
     ['valid-without-present', JSON.stringify({ ...result, expected_operation_present: false })],
     ['main-without-present', JSON.stringify({ ...result, expected_operation_present: false, expected_operation_valid: false })],
     ['not-run-continuous', JSON.stringify({ ...result, launch: 'not_run' })],
+    ['unsafe-integer', JSON.stringify({ ...result, dropped: Number.MAX_SAFE_INTEGER + 1 })],
+    ['exponent-integer', JSON.stringify({ ...result, dropped: 1e100 })],
   ];
   for (const [name, stdout] of cases) await context.test(name, async () => {
     const value = await fixture('task5-claude-output-');
@@ -169,8 +171,8 @@ test('Claude diagnostic coordinator rejects noncanonical or malformed diagnostic
         environment: environment(value.evidenceDir), integrationRoot: value.integrationRoot,
         spawnCompose: async (args) => ({ status: 0, stdout: args.at(-1) === 'claude-headless' ? stdout : '', stderr: 'raw child error' }),
       }).then(() => undefined, (failure) => failure);
-      assert.equal(error.message, fixedFailure);
-      assert.doesNotMatch(error.message, /raw|child|json/i);
+      assert.equal(error?.message, fixedFailure);
+      assert.doesNotMatch(error?.message ?? '', /raw|child|json/i);
     } finally { await rm(value.directory, { recursive: true, force: true }); }
   });
 });

@@ -92,7 +92,7 @@ function canonicalResult(stdout) {
   if (value.status !== 'classified' || !['not_run', 'code0', 'nonzero', 'throw'].includes(value.launch)
     || !['ok', 'failed'].includes(value.continuity)) throw new Error();
   for (const name of ['sequence_delta', 'total_delta', 'expected_main_count', 'unexpected_operation_count', 'unexpected_path_count', 'dropped']) {
-    if (!Number.isInteger(value[name])) throw new Error();
+    if (!Number.isSafeInteger(value[name])) throw new Error();
   }
   for (const name of ['expected_operation_present', 'expected_operation_valid', 'unsafe', 'truncated']) {
     if (typeof value[name] !== 'boolean') throw new Error();
