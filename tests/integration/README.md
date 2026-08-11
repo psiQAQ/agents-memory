@@ -6,7 +6,7 @@
 
 **Fact**：upstream base 锁定 `feat/server_team@0a568c328ea1aae3f22ed3656e7900da7ea565c1`，active fork/gitlink 为 reviewed Task 5 auth service-token fix `9e456a5b7bb47ae40596237d0f0b87c1edfc098f`。该 commit 是 local-only；`origin/codex/four-agent-memory-upstream` 仍为 `38ced16f46fed640bcb7360fb1ca45f9f9918628`，未经单独授权不得 push，fresh clone 暂不可取得。Stage 1 是 Claude Code `2.1.226`、OpenCode `1.18.16`、Pi `0.84.1`，Stage 2 是 Codex `0.147.0`。
 
-**Fact**：Task 5 auth service-token、Mock fixture 与 Claude EROFS/tmpfs fixes/replacement images 均已 Passed；`113ca669` single Claude diagnostic Passed/cleaned。`e83748e2` generic failure 已归档并 exact cleanup；固定 step 输出 TDD/static review Passed。全新 `stepfix-2df660d8` 的 run/project/evidence freshness、7 exact images、merged config 与 port preflight Passed，当前是 full deterministic Mock Ready / Not Run。三写六读/final/三个正式 headless、TUI 与真实/Paid 模型仍无完整通过证明。
+**Fact**：Task 5 auth service-token、Mock fixture 与 Claude EROFS/tmpfs fixes/replacement images 均已 Passed；`113ca669` single Claude diagnostic Passed/cleaned。`stepfix-2df660d8` 单次 full Mock 在固定 step 9（首个 OpenCode write）fail-stop，steps 1–8 exit `0`，随后 exact cleanup。OpenCode fixed-title TDD 与 replacement build/assets 已 Passed；当前是 replacement Ready / fresh full Mock tuple Not Run。完整三写六读/final、TUI 与真实/Paid 模型仍无通过证明。
 
 **Fact**：legacy ref `codex/legacy-proxy-hardening-69fd8b@69fd8b31e3fd4362af6c65407b92b26dfabebd0c` 是 local-only、未 push；fresh clone 不可取得，未经授权不得 push。跨 clone 可重建保全需要 push 或外部归档授权，在此之前仍未完成。
 
@@ -79,7 +79,7 @@ client 容器只挂自己的 home/workspace，不挂 bootstrap-state、模型 ke
 | Client | 固定 image ID | 已验证边界 |
 | --- | --- | --- |
 | Claude Code `2.1.226` | `sha256:261a917376f791d9b5e092040c2f488f23588b7103a27606226426f273b040dd` | EROFS classifier、version/help、UID10001、host/image hash/export、hardened tmpfs runtime probe、headless assets |
-| OpenCode `1.18.16` | `sha256:42bc38ead4c3de8ecd75152eeffe23f10f81c580d00e8a816e7b657cf7c57e9b` | rebuild、version/help、UID 10001、evidence ownership/writability、headless assets |
+| OpenCode `1.18.16` | `sha256:263a6d0eade24b72b4b2627984a930fc69a3e621519b1ec050a0320398b890a1` | fixed-title TDD、单次 rebuild、version/help、UID10001、host/image hash、evidence ownership/writability、headless assets |
 | Pi `0.84.1` | `sha256:56582fd216db259342f4414ebdc6c9c9188229678d77eb2f360959c9af2e4538` | rebuild、version/help、UID 10001、evidence ownership/writability、headless assets |
 
 formal review 后，bootstrap 在发布 private/public artifact 前验证三 owner 的 user/key/Agent/Session/asset cardinality、outsider 身份与 Team/Task 隔离，并逐字段验证六条新增 binding 且保留全部既有 binding。renderer/launcher 只读取对应 home 的 `.memory/agent-bundle.json`，逐级拒绝 home/`.memory` symlink、junction 或非目录，并拒绝 linked final file。先前 review 的 Mock runtime config、只读挂载、healthy 依赖、config-dir no-follow 与固定 `node:22-bookworm-slim@sha256:d649c27...` 保持。`real` overlay 在 Task 4 仍只是 profile/config 静态入口，不含 `.env`/Paid launcher，不可当作 Task 6 运行 SOP。完整 RED 链与命令见 [Task 4 reproduction](../../docs/reproduction/2026-08-11-task4-three-client-compose-bootstrap-passed.md)。这些结果不证明 CLI prompt、服务健康、Mock 共享/ACL/leak、管理 CRUD、TUI 或真实 API。
@@ -97,15 +97,15 @@ formal review 后，bootstrap 在发布 private/public artifact 前验证三 own
 - 三个 active client Dockerfile 在 `USER agent` 前创建 `/client-evidence` 并归属 10001:10001；headless 仍以 `10001:10001` 运行且三个 evidence named volume 彼此独立。三镜像已验证该目录归属与 UID10001 写入；named volume 的业务流使用仍为 Not Run。
 - launcher 删除继承的所有私有 identity/key 变量，再从选定 private bundle 的同一 `memory_user_key` 设置 `MEMORY_USER_KEY` 与 product-required request-local `TDAI_MEMORY_USER_KEY`；值不进入 Compose、prompt、cache、log、evidence 或 tracked file。
 
-Root full Node 为 233/233，base + `mock`、`real`、`claude`、`opencode`、`pi`、`management` Compose config 为 7/7。fixture fix 的 mock `8/9` RED→`9/9` GREEN、固定 step 输出 `6/7` RED→`7/7` GREEN、runner `43/43` 与 root 静态合同均为 **Passed**。
+Root full Node 为 233/233，base + `mock`、`real`、`claude`、`opencode`、`pi`、`management` Compose config 为 7/7。fixture fix 的 mock `8/9` RED→`9/9` GREEN、固定 step 输出 `6/7` RED→`7/7` GREEN、OpenCode fixed-title runner `42/43` RED→`43/43` GREEN 与 root 静态合同均为 **Passed**。
 
 产品 auth service-token fix 固定为 `9e456a5b7bb47ae40596237d0f0b87c1edfc098f`；focused `3/3`、fresh full `38/38` suites / `276/276` tests、typecheck exact six baseline errors与最终 review `CLEAN`。Compose 固定使用 `local/refine-memory-proxy:9e456a5-auth-fix@sha256:55fedae3f6a3a0a45ac8be45461d8cab23c52f11cc089c1c1e54c7d236de764b`；replacement image 已完成唯一 build、离线 tests/assets 与 root exact pin，状态为 **Ready（build/assets only）**。旧 image 只保留历史证据，不得进入新的 Task 5 runtime。
 
-完整前置链见 [privacy/build Passed](../../docs/reproduction/2026-08-11-task5-proxy-privacy-build-passed.md)、[EROFS/tmpfs fix Passed](../../docs/reproduction/2026-08-12-task5-claude-erofs-tmpfs-fix-passed.md)、[113ca669 diagnostic Passed](../../docs/reproduction/2026-08-12-task5-diag-claude-p-20260812-113ca669-passed.md)、[e83748e2 generic failure](../../docs/reproduction/2026-08-12-task5-mock-20260812-e83748e2-generic-launcher-failure-blocked.md) 与 [e83748e2 exact cleanup](../../docs/reproduction/2026-08-12-task5-mock-20260812-e83748e2-exact-cleanup-passed.md)。下一步仅为全新 tuple 的完整 deterministic Mock；不得将 single diagnostic 或 generic failure 扩写为三写六读/final/TUI/real 通过。
+完整前置链见 [privacy/build Passed](../../docs/reproduction/2026-08-11-task5-proxy-privacy-build-passed.md)、[EROFS/tmpfs fix Passed](../../docs/reproduction/2026-08-12-task5-claude-erofs-tmpfs-fix-passed.md)、[113ca669 diagnostic Passed](../../docs/reproduction/2026-08-12-task5-diag-claude-p-20260812-113ca669-passed.md)、[stepfix-2df660d8 OpenCode write Blocked](../../docs/reproduction/2026-08-12-task5-mock-20260812-stepfix-2df660d8-opencode-write-blocked.md)、[stepfix-2df660d8 exact cleanup](../../docs/reproduction/2026-08-12-task5-mock-20260812-stepfix-2df660d8-exact-cleanup-passed.md) 与 [OpenCode fixed-title replacement image Passed](../../docs/reproduction/2026-08-12-task5-opencode-title-replacement-image-passed.md)。下一步仅为全新 tuple 的完整 deterministic Mock；不得将已退出 0 的前八步或 replacement build/assets 扩写为完整三写六读/final/TUI/real 通过。
 
-## Task 5 Mock runtime 启动器（stepfix-2df660d8 Ready / Not Run）
+## Task 5 Mock runtime 启动器（OpenCode replacement Ready / fresh tuple Not Run）
 
-历史固定 Mock/diagnostic runs 均保持 append-only。`e83748e2` 已单次 fail-stop、仅返回 generic failure且 step unknown，随后 exact cleanup；不得复用或 retry。`stepfix-2df660d8` 是当前唯一 Ready tuple。tracked `run-task5-mock.mjs` 只对完整匹配的 `step=1..17` 输出固定单行，任何其他异常仍为 generic，不转发 child stdout/stderr。失败保留现场，成功在 scoped review 与用户 TUI 决策前保留 project，不读取 raw logs/evidence。
+历史固定 Mock/diagnostic runs 均保持 append-only。`e83748e2` generic failure 与 `stepfix-2df660d8` fixed step 9 failure 均已 exact cleanup，不得复用或 retry。OpenCode replacement image 已 Ready，但新的 full Mock tuple 尚未创建或运行。tracked `run-task5-mock.mjs` 只对完整匹配的 `step=1..17` 输出固定单行，任何其他异常仍为 generic，不转发 child stdout/stderr。新 tuple 必须重新完成 freshness/image/config/port preflight；失败保留现场，成功在 scoped review 与用户 TUI 决策前保留 project，不读取 raw logs/evidence。
 
 启动器不读取 Tencent `.env`、模型 key、settings、home 或旧 evidence；它只运行固定的 Mock 顺序，不接受任意命令，也不会执行 build、`down`、`down -v` 或 prune。以下命令保留为合同参考，不得用于覆盖或复用上述失败 tuple。
 
@@ -151,7 +151,7 @@ try {
 1. **Task 2（Passed，build/assets only）**：固定 image ID/digest 与不可变 RED→GREEN 已归档；不扩写为服务或业务通过。
 2. **Task 3（Passed，handler/route + build/assets only）**：三平台 literal Messages/`count_tokens` route、source/session fail-closed、Anthropic system context 与选定 console privacy 已固定；不扩写为服务业务或 comprehensive leak Gate 通过。
 3. **Task 4（Passed，client build/config assets only）**：active Compose、三客户端身份/config/image 已固定；不扩写为服务或业务流通过。
-4. **Task 5（stepfix-2df660d8 Ready / Not Run）**：single Claude diagnostic Passed/cleaned；`e83748e2` generic failure/cleanup 保持历史；安全 step 分类 static Passed。下一步仅对当前唯一 fresh tuple 单次运行 tracked fixed 17-step launcher；不得提前进入 TUI/real。
+4. **Task 5（OpenCode replacement Ready / fresh full Mock Not Run）**：`stepfix-2df660d8` 在固定 step 9 fail-stop 并 exact cleanup；fixed-title TDD/build/assets Passed。下一步创建全新 tuple、固定新 OpenCode image ID 并完成 preflight 后，只运行一次 tracked fixed 17-step launcher；不得提前进入 TUI/real。
 5. **Task 6**：完整 Mock Gate 后且负责人明确授权，才可使用 host-only 双 key 与预算限制做真实 Stage 1。
 6. **Task 7–8**：在 Stage 1 后实现/验证 Codex Responses 与四客户端 binding 上限。
 
