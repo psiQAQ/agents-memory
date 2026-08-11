@@ -8,12 +8,12 @@
 
 | 阶段 | 客户端 | 协议与状态 |
 | --- | --- | --- |
-| Stage 1 | Claude Code `2.1.226`、OpenCode `1.18.16`、Pi `0.84.1` | auth/fixture/Claude/OpenCode replacements Ready；fresh full Mock/TUI/real Not Run |
+| Stage 1 | Claude Code `2.1.226`、OpenCode `1.18.16`、Pi `0.84.1` | `opentitle-4f056ee6` full Mock Ready/Not Run；TUI/real Not Run |
 | Stage 2 | Codex `0.147.0` | 原生身份，经 `/codex/<space>/v1/responses`；Not Run |
 
 **Fact**：upstream base 锁定 `feat/server_team@0a568c328ea1aae3f22ed3656e7900da7ea565c1`；active fork/gitlink 为 reviewed auth service-token fix `codex/four-agent-memory-upstream@9e456a5b7bb47ae40596237d0f0b87c1edfc098f`。产品 focused `3/3`、fresh full `38/38` suites / `276/276` tests、exact six baseline typecheck errors与最终 review `CLEAN`；replacement Proxy build/assets 已 Passed。该 gitlink 仍是 local-only：`origin/codex/four-agent-memory-upstream` 停在 `38ced16f46fed640bcb7360fb1ca45f9f9918628`，未经单独授权不得 push，fresh clone 暂不可取得 `9e456a5...`。Claude Code、OpenCode、Pi 的三条 literal Messages 与 `count_tokens` route 已通过真实 handler tests；unknown/unbound/conflict/missing/invalid source/session 在副作用前 fail closed，平台 source 保留到 session/Core record。每个 CLI 使用不同的 user、Agent、Session、user key、home、workspace 和 evidence；仅显式 team-visible memory 可在同一 Team/Task 中共享。
 
-**Boundary**：Task 5 Proxy `9e456a5/sha256:55fedae3...`、tools `sha256:8ca1a2a8...`、Claude `sha256:261a9173...` 与 OpenCode fixed-title `sha256:263a6d0e...` 均为 **Ready（build/assets only）**。历史 Blocked records 保持 append-only；[`stepfix-2df660d8` full Mock](docs/reproduction/2026-08-12-task5-mock-20260812-stepfix-2df660d8-opencode-write-blocked.md) 在固定 step 9 fail-stop、steps 1–8 exit `0`，随后 [exact cleanup](docs/reproduction/2026-08-12-task5-mock-20260812-stepfix-2df660d8-exact-cleanup-passed.md)。[OpenCode fixed-title replacement](docs/reproduction/2026-08-12-task5-opencode-title-replacement-image-passed.md) 已通过 TDD/build/assets；当前为 **Ready for fresh tuple / full Mock Not Run**。完整三写六读、final、TUI、真实模型与 Codex Stage 2 均为 **Not Run**。旧 Windows + Claude 方案及其运行记录均归档为 **Legacy**。
+**Boundary**：Task 5 Proxy `9e456a5/sha256:55fedae3...`、tools `sha256:8ca1a2a8...`、Claude `sha256:261a9173...` 与 OpenCode fixed-title `sha256:263a6d0e...` 均为 **Ready（build/assets only）**。历史 Blocked records 保持 append-only；[`stepfix-2df660d8` full Mock](docs/reproduction/2026-08-12-task5-mock-20260812-stepfix-2df660d8-opencode-write-blocked.md) 在固定 step 9 fail-stop 后已 [exact cleanup](docs/reproduction/2026-08-12-task5-mock-20260812-stepfix-2df660d8-exact-cleanup-passed.md)。全新 [`opentitle-4f056ee6`](docs/reproduction/2026-08-12-task5-mock-20260812-opentitle-4f056ee6-ready.md) 已通过 Git、labels/evidence、7 images、Compose 与 port preflight，当前为 **full Mock Ready / Not Run**。完整三写六读、final、TUI、真实模型与 Codex Stage 2 均为 **Not Run**。旧 Windows + Claude 方案及其运行记录均归档为 **Legacy**。
 
 ## 起点
 

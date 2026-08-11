@@ -2,7 +2,7 @@
 
 ## 结论
 
-当前 active 目标是四 Docker CLI 共享记忆实验。Task 5 的 Proxy→Core auth service-token、Mock fixture 与 Claude EROFS/tmpfs 缺口均已完成 TDD、固定 replacement images 与 scoped review；`113ca669` single Claude diagnostic Passed 并 exact cleanup。`stepfix-2df660d8` 单次 full Mock 在固定 step 9（首个 OpenCode write）fail-stop，steps 1–8 exit `0`，随后 exact cleanup。OpenCode fixed-title 修复、TDD 与 replacement build/assets 已 Passed；当前为 **OpenCode replacement Ready / fresh full Mock tuple Not Run**。完整三写六读、final、TUI 与真实 API/模型仍未获得通过证明。
+当前 active 目标是四 Docker CLI 共享记忆实验。Task 5 的 Proxy→Core auth service-token、Mock fixture、Claude EROFS/tmpfs 与 OpenCode fixed-title 缺口均已完成 TDD、replacement images 与 scoped review；`stepfix-2df660d8` step 9 failure 已 exact cleanup。全新 `opentitle-4f056ee6` 的 Git、labels/evidence、7 images、Compose 与 port preflight 已 Passed，当前为 **完整 deterministic Mock Ready / Not Run**。三写六读、final、TUI 与真实 API/模型仍未获得通过证明。
 
 旧 Windows 原生 Claude + Docker Claude 证据一律是 **Legacy**：保留原文供追溯，但不用于推断新的四 CLI 架构已通过。
 
@@ -14,7 +14,7 @@
 | --- | --- | --- |
 | Tencent upstream base | default `feat/server_team@0a568c328ea1aae3f22ed3656e7900da7ea565c1` | Task 2 的 pristine RED/基线；upstream 前移前必须审查 |
 | Tencent committed source | `codex/four-agent-memory-upstream@9e456a5b7bb47ae40596237d0f0b87c1edfc098f` | 当前根 gitlink；auth service-token fix review CLEAN；local-only，origin 仍为 `38ced16...`，fresh clone 暂不可取得 |
-| Fixed images | Core `sha256:fded9d48...`；Proxy `sha256:55fedae3...`；Hub `sha256:a6037724...`；tools `sha256:8ca1a2a8...`；OpenCode `sha256:263a6d0e...` | replacement Proxy/tools/OpenCode images Ready；`stepfix-2df660d8` step 9 Blocked/cleaned；fresh full Mock Not Run |
+| Fixed images | Core `sha256:fded9d48...`；Proxy `sha256:55fedae3...`；Hub `sha256:a6037724...`；tools `sha256:8ca1a2a8...`；OpenCode `sha256:263a6d0e...` | replacement images Ready；`opentitle-4f056ee6` exact image preflight 7/7；full Mock Not Run |
 | Container user metadata | Core/Hub root-default（UID 0）；Proxy `app`（UID 10001） | source-build evidence；本轮不扩大为权限改造 |
 | Legacy preservation | `codex/legacy-proxy-hardening-69fd8b@69fd8b31e3fd4362af6c65407b92b26dfabebd0c` | local-only、未 push；fresh clone 不可取得，未经授权不得 push；跨 clone 可重建保全仍未完成 |
 | Legacy runtime lifecycle | 3 projects / 20 containers / 4 networks / 27 volumes / 6 image candidates absent | 2026-08-10 Runtime Cleanup Passed；旧栈需从 Git 历史重新构建并创建新资源 |
@@ -56,7 +56,7 @@ flowchart LR
 | Stage 1 client Compose/bootstrap/config/images | Runtime Passed | tools 与三 client 原 build/assets、Claude EROFS replacement、OpenCode fixed-title replacement；version/help、UID10001、evidence ownership/writability、headless assets；仅 client build/config assets |
 | Stage 1 Task 5 root harness | Static/contract Passed | root Node 233/233 与 Compose config 7/7；fixture array text-block、固定 step allowlist、固定 epoch/path、strict fixture、逐 operation oracle、outsider、exact project freshness、run/build/evidence 与 request-local credential 合同，不是业务运行 |
 | Stage 1 Proxy privacy/build | Runtime Passed | reviewed `9e456a5` auth service-token fix、38/38 suites / 276/276 tests、exact six baseline typecheck errors、Proxy `sha256:55fedae3...`；replacement image Ready，product tests + build/assets only |
-| Stage 1 Mock identity/share/isolation/leak | Ready for fresh tuple / full Mock Not Run | `stepfix-2df660d8` 单次 launcher 在 step 9 fail-stop，steps 1–8 exit 0，随后 exact cleanup；OpenCode fixed-title replacement Ready；新 tuple 尚未创建或运行 |
+| Stage 1 Mock identity/share/isolation/leak | Ready / full Mock Not Run | `opentitle-4f056ee6` Git、labels/evidence、7 images、Compose 与 port preflight Passed；仅允许单次 tracked 17-step run |
 | Stage 1 TUI | Not Run | 仅在 headless Gate 通过后由用户确认 |
 | Stage 1 真实模型 | Not Run | 需完整 Mock Gate 与明确授权 |
 | Stage 2 Codex Responses | Not Run | 在 Stage 1 后执行 |
@@ -80,4 +80,4 @@ flowchart LR
 
 ## 下一 Gate
 
-[stepfix-2df660d8 full Mock](reproduction/2026-08-12-task5-mock-20260812-stepfix-2df660d8-opencode-write-blocked.md) 已在固定 step 9 fail-stop 并 [exact cleanup](reproduction/2026-08-12-task5-mock-20260812-stepfix-2df660d8-exact-cleanup-passed.md)。[OpenCode fixed-title replacement](reproduction/2026-08-12-task5-opencode-title-replacement-image-passed.md) 已完成 TDD、review 与唯一 build/assets 验证。下一 Gate 是创建全新的 run/project/evidence tuple，固定新 OpenCode image ID 后单次执行 tracked 17-step deterministic Mock：protocol/leak 24 cases → management/outsider → 三次 write → 六次 ordered cross-owner read → final oracle。不得复用旧 tuple、retry、TUI 或真实模型；失败必须 fail-stop 并另增 reproduction，成功 project 则保留到 scoped review 与用户 TUI 决策。真实 API、TUI 与 Codex Stage 2 仍为 Not Run。active gitlink 在获得独立 push/归档授权前仍无法由 fresh clone 获取。
+[opentitle-4f056ee6 full Mock Ready](reproduction/2026-08-12-task5-mock-20260812-opentitle-4f056ee6-ready.md) 固定全新 run/project/evidence 与 7 个 exact image IDs。下一 Gate 只允许单次执行 tracked 17-step deterministic Mock：protocol/leak 24 cases → management/outsider → 三次 write → 六次 ordered cross-owner read → final oracle。不得 build、retry、TUI 或真实模型；失败必须 fail-stop 并另增 reproduction，成功 project 则保留到 scoped review 与用户 TUI 决策。真实 API、TUI 与 Codex Stage 2 仍为 Not Run。active gitlink 在获得独立 push/归档授权前仍无法由 fresh clone 获取。
