@@ -71,7 +71,8 @@ function selectedFixture(request, body) {
   const header = request.headers['x-mock-fixture'];
   if (typeof header === 'string') return header;
   const messages = Array.isArray(body?.messages) ? body.messages : [];
-  const text = messages.map((message) => typeof message?.content === 'string' ? message.content : '').join('\n');
+  const text = messages.flatMap((message) => typeof message?.content === 'string' ? [message.content]
+    : Array.isArray(message?.content) ? message.content.filter((block) => block?.type === 'text' && typeof block.text === 'string').map((block) => block.text) : []).join('\n');
   const fixture = text.match(stage1FixturePattern)?.[1];
   return ['stream', 'count'].includes(fixture) ? 'text' : fixture ?? 'text';
 }

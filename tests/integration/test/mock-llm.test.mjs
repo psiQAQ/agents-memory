@@ -279,6 +279,39 @@ test('mock provides Anthropic text, streaming tool/thinking fixtures, and determ
   });
 });
 
+test('mock selects Stage 1 fixtures from Anthropic text blocks without a fixture header', async () => {
+  await withMock(async (baseUrl) => {
+    const toolResponse = await fetch(`${baseUrl}/anthropic/v1/messages`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-api-key': 'mock-key' },
+      body: JSON.stringify({
+        model: 'mock',
+        messages: [{ role: 'user', content: [
+          { type: 'text', text: 'STAGE1_FIXTURE_tool use the tool' },
+          { type: 'image', text: 'STAGE1_FIXTURE_http-500' },
+        ] }],
+        tools: [{ name: 'echo' }],
+      }),
+    });
+    assert.equal(toolResponse.status, 200);
+    assert.equal((await toolResponse.json()).content[0].type, 'tool_use');
+    let observation = await (await fetch(`${baseUrl}/__mock/requests`)).json();
+    assert.equal(observation.requests.at(-1).fixture, 'tool');
+
+    const errorResponse = await fetch(`${baseUrl}/anthropic/v1/messages`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-api-key': 'mock-key' },
+      body: JSON.stringify({
+        model: 'mock',
+        messages: [{ role: 'user', content: [{ type: 'text', text: 'STAGE1_FIXTURE_http-400 fail deterministically' }] }],
+      }),
+    });
+    assert.equal(errorResponse.status, 400);
+    observation = await (await fetch(`${baseUrl}/__mock/requests`)).json();
+    assert.equal(observation.requests.at(-1).fixture, 'http-400');
+  });
+});
+
 test('mock OpenAI stream supplies a tool call then resolves after a tool result', async () => {
   await withMock(async (baseUrl) => {
     const tool = await request(baseUrl, '/openai/v1/chat/completions', { model: 'mock', messages: [], tools: [{ type: 'function', function: { name: 'echo' } }], stream: true }, 'tool');
