@@ -10,6 +10,23 @@ import { buildLeakCases, isUnsafeObservation, runFinalizeGate, runManagementGate
 import { headlessInvocation, runHeadlessCli, runHeadlessClient, stage1Marker } from '../tools/task5-headless-client.mjs';
 
 const clients = ['claude', 'opencode', 'pi'];
+const epochA = '11111111-1111-4111-8111-111111111111';
+const epochB = '22222222-2222-4222-8222-222222222222';
+
+function aggregateSnapshot({ epoch = epochA, sequence = 40, total = 0, dropped = 0, truncated = false, paths = {}, operations = {}, sticky = {} } = {}) {
+  return {
+    epoch, sequence, total_requests: total, dropped_requests: dropped, truncated, paths, fixtures: {}, operations,
+    sticky_leaks: { credential: false, identity: false, sentinel: false, ...sticky },
+  };
+}
+
+function mainOperation(sequence, markerHashes = [], requests = 1) {
+  return {
+    requests,
+    marker_hashes: markerHashes,
+    paths: { '/anthropic/v1/messages': { requests, sequences: Array.from({ length: requests }, (_, index) => sequence + index), marker_hashes: markerHashes } },
+  };
+}
 
 test('Task 5 fixes 24 ordered Anthropic protocol and leak cases across the three native sources', () => {
   const cases = buildLeakCases();
@@ -80,7 +97,7 @@ test('Task 5 headless driver rejects unknown clients, scenarios, runs, and self 
   ]) assert.throws(call, /invalid/);
 });
 
-async function fixture({ unsafe = false, corruptTool = false } = {}) {
+async function fixture({ unsafe = false, corruptTool = false, mutateResponse } = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'task5-runner-'));
   const mock = createMockServer({ timeoutMs: 40 });
   await ensureFetchSafeServer(mock);
@@ -124,11 +141,17 @@ async function fixture({ unsafe = false, corruptTool = false } = {}) {
       },
       body,
     });
-    response.writeHead(upstream.status, { 'content-type': upstream.headers.get('content-type') ?? 'application/json' });
     const upstreamBody = Buffer.from(await upstream.arrayBuffer());
-    response.end(corruptTool && body.includes('STAGE1_FIXTURE_tool')
-      ? JSON.stringify({ id: 'msg_corrupt', type: 'message', role: 'assistant', content: [{ type: 'text', text: 'not a tool response' }] })
-      : upstreamBody);
+    const original = {
+      status: upstream.status,
+      contentType: upstream.headers.get('content-type') ?? 'application/json',
+      bytes: corruptTool && body.includes('STAGE1_FIXTURE_tool')
+        ? Buffer.from(JSON.stringify({ id: 'msg_corrupt', type: 'message', role: 'assistant', content: [{ type: 'text', text: 'not a tool response' }] }))
+        : upstreamBody,
+    };
+    const outgoing = mutateResponse?.({ ...original, request, requestBody: body }) ?? original;
+    response.writeHead(outgoing.status, { 'content-type': outgoing.contentType });
+    response.end(outgoing.bytes);
   });
   await ensureFetchSafeServer(proxy);
   return {
@@ -290,6 +313,70 @@ test('Task 5 protocol runner rejects a 200 response with the wrong Anthropic too
   } finally { await value.close(); }
 });
 
+test('Task 5 protocol runner rejects malformed content types and incomplete Anthropic JSON or SSE shapes', async (context) => {
+  const cases = [
+    {
+      name: 'text-content-type', fixture: 'text', passed: 0,
+      mutate: (value) => ({ ...value, contentType: 'text/plain' }),
+    },
+    {
+      name: 'text-usage', fixture: 'text', passed: 0,
+      mutate: (value) => { const body = JSON.parse(value.bytes); delete body.usage; return { ...value, bytes: Buffer.from(JSON.stringify(body)) }; },
+    },
+    {
+      name: 'stream-events', fixture: 'stream', passed: 1,
+      mutate: (value) => ({ ...value, bytes: Buffer.from(value.bytes.toString('utf8').replace(/event: message_delta[\s\S]*?\n\n/, '')) }),
+    },
+    {
+      name: 'tool-usage', fixture: 'tool', passed: 2,
+      mutate: (value) => { const body = JSON.parse(value.bytes); delete body.usage; return { ...value, bytes: Buffer.from(JSON.stringify(body)) }; },
+    },
+    {
+      name: 'count-content-type', fixture: 'count', passed: 3,
+      mutate: (value) => ({ ...value, contentType: 'text/plain' }),
+    },
+    {
+      name: 'error-shape', fixture: 'http-400', passed: 4,
+      mutate: (value) => { const body = JSON.parse(value.bytes); delete body.error.message; return { ...value, bytes: Buffer.from(JSON.stringify(body)) }; },
+    },
+  ];
+  for (const entry of cases) await context.test(entry.name, async () => {
+    const value = await fixture({ mutateResponse: (response) => response.requestBody.includes(`STAGE1_FIXTURE_${entry.fixture}`) ? entry.mutate(response) : response });
+    try {
+      const outputDir = join(value.directory, `malformed-${entry.name}`);
+      await assert.rejects(runProtocolLeakGate({ manifestPath: value.manifestPath, proxyUrl: value.proxyUrl, mockUrl: value.mockUrl, outputDir, timeoutMs: 20 }), new RegExp(`assertion=leak-claude-${entry.fixture}`));
+      assert.deepEqual(JSON.parse(await readFile(join(outputDir, 'stage1-mock.json'), 'utf8')), { status: 'failed', assertion: `leak-claude-${entry.fixture}`, passed: entry.passed });
+    } finally { await value.close(); }
+  });
+});
+
+test('Task 5 protocol runner scans response bytes in memory and never persists echoed credentials, identity, marker, prompt, or sentinel', async () => {
+  const value = await fixture({
+    mutateResponse: (response) => {
+      if (!response.requestBody.includes('STAGE1_FIXTURE_text')) return response;
+      const body = JSON.parse(response.bytes);
+      body.debug = [
+        response.request.headers.authorization,
+        response.request.headers['x-team-id'],
+        response.request.headers['x-agent-id'],
+        response.request.headers['x-task-id'],
+        response.request.headers['x-conversation-id'],
+        response.request.headers['x-claude-code-session-id'],
+        stage1Marker('task5-fixture', 'claude'),
+        JSON.parse(response.requestBody).messages[0].content,
+      ];
+      return { ...response, bytes: Buffer.from(JSON.stringify(body)) };
+    },
+  });
+  try {
+    const outputDir = join(value.directory, 'echoed-sensitive-response');
+    await assert.rejects(runProtocolLeakGate({ manifestPath: value.manifestPath, proxyUrl: value.proxyUrl, mockUrl: value.mockUrl, outputDir, timeoutMs: 20 }), /assertion=leak-claude-text/);
+    const evidence = await readFile(join(outputDir, 'stage1-mock.json'), 'utf8');
+    assert.deepEqual(JSON.parse(evidence), { status: 'failed', assertion: 'leak-claude-text', passed: 0 });
+    assert.doesNotMatch(evidence, /sk-mem-|team-shared|agent-claude|task-shared|session-claude|MEMORY_|STAGE1_FIXTURE_|prompt|body/i);
+  } finally { await value.close(); }
+});
+
 test('Task 5 headless runtime verifies the real CLI exit and redacted Mock operation aggregate', async () => {
   const runId = 'task5-fixture';
   const invocation = headlessInvocation('claude', 'read', runId, 'opencode');
@@ -297,9 +384,11 @@ test('Task 5 headless runtime verifies the real CLI exit and redacted Mock opera
   let reads = 0;
   const server = http.createServer((request, response) => {
     reads += 1;
-    const operations = reads === 1 ? {} : { [stage1OperationHash(runId, 'read', 'claude', 'opencode')]: { requests: 1, marker_hashes: [markerHash] } };
+    const operations = reads === 1 ? {} : { [stage1OperationHash(runId, 'read', 'claude', 'opencode')]: mainOperation(41, [markerHash]) };
     response.writeHead(200, { 'content-type': 'application/json' });
-    response.end(JSON.stringify({ total_requests: reads - 1, paths: {}, fixtures: {}, operations }));
+    response.end(JSON.stringify(reads === 1
+      ? aggregateSnapshot()
+      : aggregateSnapshot({ sequence: 41, total: 1, paths: { '/anthropic/v1/messages': { requests: 1, sequences: [41] } }, operations })));
   });
   await ensureFetchSafeServer(server);
   const calls = [];
@@ -319,7 +408,7 @@ test('Task 5 headless runtime rejects a replayed operation before launching the 
   const operation = stage1OperationHash(runId, 'write', 'pi');
   const server = http.createServer((request, response) => {
     response.writeHead(200, { 'content-type': 'application/json' });
-    response.end(JSON.stringify({ total_requests: 1, paths: {}, fixtures: {}, operations: { [operation]: { requests: 1, marker_hashes: [] } } }));
+    response.end(JSON.stringify(aggregateSnapshot({ total: 1, paths: { '/anthropic/v1/messages': { requests: 1, sequences: [40] } }, operations: { [operation]: mainOperation(40) } })));
   });
   await ensureFetchSafeServer(server);
   let launches = 0;
@@ -330,6 +419,41 @@ test('Task 5 headless runtime rejects a replayed operation before launching the 
     }), /observation failed/);
     assert.equal(launches, 0);
   } finally { await new Promise((resolve) => server.close(resolve)); }
+});
+
+test('Task 5 headless runtime rejects epoch changes, nonmonotonic or duplicate main calls, OpenAI-only markers, extra operations, and sticky or dropped observations', async (context) => {
+  const runId = 'task5-fixture';
+  const operation = stage1OperationHash(runId, 'read', 'claude', 'opencode');
+  const extra = stage1OperationHash(runId, 'write', 'pi');
+  const markerHash = (await import('node:crypto')).createHash('sha256').update(stage1Marker(runId, 'opencode')).digest('hex');
+  const good = aggregateSnapshot({
+    sequence: 41,
+    total: 1,
+    paths: { '/anthropic/v1/messages': { requests: 1, sequences: [41] } },
+    operations: { [operation]: mainOperation(41, [markerHash]) },
+  });
+  const cases = [
+    ['epoch-change', { ...good, epoch: epochB }],
+    ['nonmonotonic-main', aggregateSnapshot({ sequence: 41, total: 1, paths: { '/anthropic/v1/messages': { requests: 1, sequences: [39] } }, operations: { [operation]: mainOperation(39, [markerHash]) } })],
+    ['duplicate-main', aggregateSnapshot({ sequence: 42, total: 2, paths: { '/anthropic/v1/messages': { requests: 2, sequences: [41, 42] } }, operations: { [operation]: mainOperation(41, [markerHash], 2) } })],
+    ['openai-only-marker', aggregateSnapshot({ sequence: 42, total: 2, paths: { '/anthropic/v1/messages': { requests: 1, sequences: [41] }, '/openai/v1/chat/completions': { requests: 1, sequences: [42] } }, operations: { [operation]: { requests: 2, marker_hashes: [markerHash], paths: { '/anthropic/v1/messages': { requests: 1, sequences: [41], marker_hashes: [] }, '/openai/v1/chat/completions': { requests: 1, sequences: [42], marker_hashes: [markerHash] } } } } })],
+    ['extra-operation', { ...good, operations: { ...good.operations, [extra]: mainOperation(42) } }],
+    ['dropped-sticky', { ...good, dropped_requests: 1, truncated: true, sticky_leaks: { credential: true, identity: false, sentinel: false } }],
+  ];
+  for (const [name, after] of cases) await context.test(name, async () => {
+    let reads = 0;
+    const server = http.createServer((request, response) => {
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end(JSON.stringify(reads++ === 0 ? aggregateSnapshot() : after));
+    });
+    await ensureFetchSafeServer(server);
+    try {
+      await assert.rejects(runHeadlessClient({
+        client: 'claude', scenario: 'read', runId, owner: 'opencode', homeDir: '/home/agent', bundleFile: '/home/agent/.memory/agent-bundle.json', template: '/opt/memory-client/settings.template.json', spaceId: 'default', mockUrl: `http://127.0.0.1:${server.address().port}`,
+        launch: async () => 0,
+      }), /observation failed/);
+    } finally { await new Promise((resolve) => server.close(resolve)); }
+  });
 });
 
 test('Task 5 CLI dispatches only fixed protocol, owner, management, and finalize contracts without ambient options', async () => {

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import test from 'node:test';
 import { ensureFetchSafeServer, isFetchBlockedPort } from './helpers.mjs';
@@ -146,23 +147,76 @@ test('mock keeps a bounded redacted Stage 1 aggregate without raw prompts or mar
       headers: { 'content-type': 'application/json', 'x-api-key': 'mock-key' },
       body: JSON.stringify({ model: 'mock', messages: [{ role: 'user', content: `${operation} remember ${marker}` }] }),
     });
+    await fetch(`${baseUrl}/openai/v1/chat/completions`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer mock-key', 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'mock', messages: [{ role: 'user', content: operation }] }),
+    });
     const aggregate = await (await fetch(`${baseUrl}/__mock/aggregate`)).json();
-    assert.equal(aggregate.total_requests, 1);
-    assert.equal(aggregate.paths['/anthropic/v1/messages'], 1);
+    assert.match(aggregate.epoch, /^[a-f0-9-]{36}$/);
+    assert.equal(aggregate.sequence, 2);
+    assert.equal(aggregate.total_requests, 2);
+    assert.equal(aggregate.dropped_requests, 0);
+    assert.equal(aggregate.truncated, false);
+    assert.deepEqual(aggregate.paths['/anthropic/v1/messages'], { requests: 1, sequences: [1] });
+    assert.deepEqual(aggregate.paths['/openai/v1/chat/completions'], { requests: 1, sequences: [2] });
+    assert.deepEqual(aggregate.sticky_leaks, { credential: false, identity: false, sentinel: false });
     assert.equal(Object.keys(aggregate.operations).length, 1);
     const observed = Object.values(aggregate.operations)[0];
-    assert.equal(observed.requests, 1);
-    assert.equal(observed.marker_hashes.length, 1);
-    assert.match(observed.marker_hashes[0], /^[a-f0-9]{64}$/);
+    assert.equal(observed.requests, 2);
+    assert.deepEqual(observed.paths, {
+      '/anthropic/v1/messages': { requests: 1, sequences: [1], marker_hashes: [createHash('sha256').update(marker).digest('hex')] },
+      '/openai/v1/chat/completions': { requests: 1, sequences: [2], marker_hashes: [] },
+    });
+    assert.equal(observed.paths['/anthropic/v1/messages'].marker_hashes.length, 1);
+    assert.match(observed.paths['/anthropic/v1/messages'].marker_hashes[0], /^[a-f0-9]{64}$/);
+    assert.equal(observed.marker_hashes, undefined);
     assert.doesNotMatch(JSON.stringify(aggregate), /STAGE1_OP_|MEMORY_NONCE_|remember/i);
 
-    await fetch(`${baseUrl}/__mock/reset`, { method: 'POST' });
+    const reset = await (await fetch(`${baseUrl}/__mock/reset`, { method: 'POST' })).json();
+    assert.equal(reset.status, 'ok');
+    assert.match(reset.epoch, /^[a-f0-9-]{36}$/);
+    assert.notEqual(reset.epoch, aggregate.epoch);
+    assert.equal(reset.sequence, 2);
     assert.deepEqual(await (await fetch(`${baseUrl}/__mock/aggregate`)).json(), {
+      epoch: reset.epoch,
+      sequence: 2,
       total_requests: 0,
+      dropped_requests: 0,
+      truncated: false,
       paths: {},
       fixtures: {},
       operations: {},
+      sticky_leaks: { credential: false, identity: false, sentinel: false },
     });
+  });
+});
+
+test('mock keeps sticky leak flags and reports truncation after bounded observations drop the leaking request', async () => {
+  await withMock(async (baseUrl) => {
+    const sentinel = 'MEMORY_IDENTITY_LEAK_SENTINEL_STICKY123';
+    await fetch(`${baseUrl}/anthropic/v1/messages`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-team-id': 'unsafe-team', 'x-api-key': `sk-mem-${'Z'.repeat(32)}` },
+      body: JSON.stringify({ model: 'mock', messages: [{ role: 'user', content: sentinel }] }),
+    });
+    for (let index = 0; index < 100; index += 1) {
+      await fetch(`${baseUrl}/anthropic/v1/messages`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-api-key': 'mock-key' },
+        body: JSON.stringify({ model: 'mock', messages: [] }),
+      });
+    }
+    const aggregate = await (await fetch(`${baseUrl}/__mock/aggregate`)).json();
+    assert.match(aggregate.epoch, /^[a-f0-9-]{36}$/);
+    assert.equal(aggregate.sequence, 101);
+    assert.equal(aggregate.total_requests, 101);
+    assert.equal(aggregate.dropped_requests, 1);
+    assert.equal(aggregate.truncated, true);
+    assert.equal(aggregate.paths['/anthropic/v1/messages'].requests, 101);
+    assert.equal(aggregate.paths['/anthropic/v1/messages'].sequences.length, 100);
+    assert.deepEqual(aggregate.sticky_leaks, { credential: true, identity: true, sentinel: true });
+    assert.doesNotMatch(JSON.stringify(aggregate), /sk-mem-|unsafe-team|MEMORY_IDENTITY_LEAK_SENTINEL/i);
   });
 });
 

@@ -1,5 +1,5 @@
 import http from 'node:http';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { isMain } from './runtime-lib.mjs';
 
 const fixtures = new Set(['text', 'tool', 'thinking', 'thinking-missing', 'http-400', 'http-429', 'http-500', 'timeout']);
@@ -10,6 +10,13 @@ const memoryCredentialPattern = /sk-mem-[A-Za-z0-9_-]{32}/i;
 const stage1OperationPattern = /STAGE1_OP_[A-Z0-9_-]{6,128}/g;
 const stage1MarkerPattern = /MEMORY_NONCE_[A-Za-z0-9_-]{1,128}/g;
 const stage1FixturePattern = /\bSTAGE1_FIXTURE_(text|stream|tool|count|http-400|http-429|http-500|timeout)\b/;
+const identityHeaders = new Set([
+  'cookie', 'cf-access-jwt-assertion', 'x-agent-id', 'x-claude-code-session-id',
+  'x-conversation-id', 'x-forwarded-for', 'x-forwarded-host', 'x-task-id', 'x-tdai-agent-source',
+  'x-tdai-service-id', 'x-tdai-service-token', 'x-tdai-user-key', 'x-team-id',
+  'x-vertex-ai-session-id', 'x-wechat-work-id', 'x-wecom-id',
+]);
+const aggregateLimit = 100;
 
 function digest(value) {
   return createHash('sha256').update(value).digest('hex');
@@ -17,6 +24,22 @@ function digest(value) {
 
 function increment(record, key) {
   record[key] = (record[key] ?? 0) + 1;
+}
+
+function emptyAggregate(epoch, sequence) {
+  return {
+    epoch, sequence, total_requests: 0, dropped_requests: 0, truncated: false,
+    paths: {}, fixtures: {}, operations: {},
+    sticky_leaks: { credential: false, identity: false, sentinel: false },
+  };
+}
+
+function observePath(record, path, sequence) {
+  const entry = record[path] ??= { requests: 0, sequences: [] };
+  entry.requests += 1;
+  if (entry.sequences.length >= aggregateLimit) return true;
+  entry.sequences.push(sequence);
+  return false;
 }
 
 function sanitizeObservedNames(names) {
@@ -53,7 +76,7 @@ function selectedFixture(request, body) {
   return ['stream', 'count'].includes(fixture) ? 'text' : fixture ?? 'text';
 }
 
-function observe(observations, aggregate, request, body, fixture) {
+function observe(observations, aggregate, request, body, fixture, sequence) {
   const path = new URL(request.url, 'http://mock').pathname;
   const authorization = request.headers.authorization;
   const apiKey = request.headers['x-api-key'];
@@ -68,6 +91,8 @@ function observe(observations, aggregate, request, body, fixture) {
   const sensitiveValueSeen = observedValues.some((entry) => typeof entry === 'string' && leakPattern.test(entry));
   const memoryUserCredentialSeen = observedValues.some((entry) => typeof entry === 'string' && memoryCredentialPattern.test(entry));
   observations.push({
+    epoch: aggregate.epoch,
+    sequence,
     method: request.method,
     path,
     fixture,
@@ -77,27 +102,42 @@ function observe(observations, aggregate, request, body, fixture) {
     unexpected_credential_seen: unexpectedCredentialSeen,
     memory_user_credential_seen: memoryUserCredentialSeen,
   });
-  if (observations.length > 100) observations.shift();
+  let dropped = false;
+  if (observations.length > aggregateLimit) {
+    observations.shift();
+    dropped = true;
+  }
+  aggregate.sequence = sequence;
   aggregate.total_requests += 1;
-  increment(aggregate.paths, path);
+  dropped = observePath(aggregate.paths, path, sequence) || dropped;
   increment(aggregate.fixtures, fixture);
+  aggregate.sticky_leaks.credential ||= unexpectedCredentialSeen || memoryUserCredentialSeen;
+  aggregate.sticky_leaks.identity ||= Object.keys(request.headers).some((name) => identityHeaders.has(name.toLowerCase()));
+  aggregate.sticky_leaks.sentinel ||= sensitiveValueSeen;
   const bodyText = JSON.stringify(body);
   const operation = bodyText.match(stage1OperationPattern)?.[0];
   if (operation) {
     const operationHash = digest(operation);
     if (!aggregate.operations[operationHash] && Object.keys(aggregate.operations).length < 64) {
-      aggregate.operations[operationHash] = { requests: 0, marker_hashes: [] };
+      aggregate.operations[operationHash] = { requests: 0, paths: {} };
     }
     const entry = aggregate.operations[operationHash];
     if (entry) {
       entry.requests += 1;
+      dropped = observePath(entry.paths, path, sequence) || dropped;
+      const markerHashes = entry.paths[path].marker_hashes ??= [];
       for (const marker of bodyText.match(stage1MarkerPattern) ?? []) {
         const markerHash = digest(marker);
-        if (!entry.marker_hashes.includes(markerHash) && entry.marker_hashes.length < 16) entry.marker_hashes.push(markerHash);
+        if (!markerHashes.includes(markerHash)) {
+          if (markerHashes.length < 16) markerHashes.push(markerHash);
+          else dropped = true;
+        }
       }
-      entry.marker_hashes.sort();
-    }
+      markerHashes.sort();
+    } else dropped = true;
   }
+  if (dropped) aggregate.dropped_requests += 1;
+  aggregate.truncated ||= dropped;
 }
 
 function coreExtraction(body) {
@@ -180,7 +220,9 @@ function anthropicEvents(body, fixture) {
 export function createMockServer({ timeoutMs = Number(process.env.MOCK_TIMEOUT_MS) || 1000 } = {}) {
   const delay = Math.min(Math.max(Number(timeoutMs) || 1000, 1), 30000);
   const observations = [];
-  const aggregate = { total_requests: 0, paths: {}, fixtures: {}, operations: {} };
+  let epoch = randomUUID();
+  let sequence = 0;
+  let aggregate = emptyAggregate(epoch, sequence);
   return http.createServer(async (request, response) => {
     const path = new URL(request.url, 'http://mock').pathname;
     if (request.method === 'GET' && path === '/healthz') return sendJson(response, 200, { status: 'ok' });
@@ -188,11 +230,9 @@ export function createMockServer({ timeoutMs = Number(process.env.MOCK_TIMEOUT_M
     if (request.method === 'GET' && path === '/__mock/aggregate') return sendJson(response, 200, aggregate);
     if (request.method === 'POST' && path === '/__mock/reset') {
       observations.length = 0;
-      aggregate.total_requests = 0;
-      aggregate.paths = {};
-      aggregate.fixtures = {};
-      aggregate.operations = {};
-      return sendJson(response, 200, { status: 'ok' });
+      epoch = randomUUID();
+      aggregate = emptyAggregate(epoch, sequence);
+      return sendJson(response, 200, { status: 'ok', epoch, sequence });
     }
     const isProtocol = ['/openai/v1/chat/completions', '/anthropic/v1/messages', '/anthropic/v1/messages/count_tokens'].includes(path);
     if (!isProtocol) return sendJson(response, 404, { error: { type: 'not_found' } });
@@ -200,7 +240,8 @@ export function createMockServer({ timeoutMs = Number(process.env.MOCK_TIMEOUT_M
     let body;
     try { body = await readJson(request); } catch (error) { return sendJson(response, error.message === 'body-too-large' ? 413 : 400, { error: { type: error.message } }); }
     const fixture = selectedFixture(request, body);
-    observe(observations, aggregate, request, body, fixtures.has(fixture) ? fixture : 'invalid');
+    sequence += 1;
+    observe(observations, aggregate, request, body, fixtures.has(fixture) ? fixture : 'invalid', sequence);
     if (!fixtures.has(fixture)) return sendJson(response, 400, { error: { type: 'unknown_fixture' } });
     if (fixture in errorStatus) {
       const error = { type: 'mock_error', message: 'mock fixture error' };

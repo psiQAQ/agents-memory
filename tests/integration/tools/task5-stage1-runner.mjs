@@ -145,18 +145,68 @@ function expectedStatus(fixture) {
   return 200;
 }
 
-function validProtocolResponse(fixture, status, contentType, bytes) {
+function record(value) {
+  return value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function integer(value, minimum = 0) {
+  return Number.isInteger(value) && value >= minimum;
+}
+
+function messageEnvelope(data, stopReason) {
+  return record(data) && typeof data.id === 'string' && data.id.length > 0 && data.type === 'message' && data.role === 'assistant'
+    && typeof data.model === 'string' && data.model.length > 0 && data.stop_reason === stopReason && data.stop_sequence === null
+    && record(data.usage) && integer(data.usage.input_tokens, 1) && integer(data.usage.output_tokens, 1);
+}
+
+function parseAnthropicSse(text) {
+  if (!text.endsWith('\n\n')) return undefined;
+  try {
+    return text.slice(0, -2).split('\n\n').map((frame) => {
+      const lines = frame.split('\n');
+      if (lines.length !== 2 || !lines[0].startsWith('event: ') || !lines[1].startsWith('data: ')) throw new Error();
+      return { event: lines[0].slice(7), data: JSON.parse(lines[1].slice(6)) };
+    });
+  } catch { return undefined; }
+}
+
+function validAnthropicStream(text) {
+  const events = parseAnthropicSse(text);
+  const names = ['message_start', 'content_block_start', 'content_block_delta', 'content_block_stop', 'message_delta', 'message_stop'];
+  if (!events || events.length !== names.length || events.some((entry, index) => entry.event !== names[index] || entry.data?.type !== names[index])) return false;
+  const start = events[0].data.message;
+  const blockStart = events[1].data;
+  const blockDelta = events[2].data;
+  const blockStop = events[3].data;
+  const messageDelta = events[4].data;
+  return record(start) && typeof start.id === 'string' && start.id.length > 0 && start.type === 'message' && start.role === 'assistant'
+    && typeof start.model === 'string' && start.model.length > 0 && Array.isArray(start.content) && start.content.length === 0
+    && record(start.usage) && integer(start.usage.input_tokens, 1) && start.usage.output_tokens === 0
+    && blockStart.index === 0 && blockStart.content_block?.type === 'text' && blockStart.content_block.text === ''
+    && blockDelta.index === 0 && blockDelta.delta?.type === 'text_delta' && typeof blockDelta.delta.text === 'string' && blockDelta.delta.text.length > 0
+    && blockStop.index === 0 && messageDelta.delta?.stop_reason === 'end_turn'
+    && record(messageDelta.usage) && integer(messageDelta.usage.output_tokens, 1);
+}
+
+function validProtocolResponse(fixture, status, contentType, bytes, sensitiveValues) {
   if (fixture === 'timeout') return status === 0 && bytes === undefined;
   if (!(bytes instanceof ArrayBuffer)) return false;
   const text = Buffer.from(bytes).toString('utf8');
-  if (fixture === 'stream') return /^text\/event-stream(?:;|$)/i.test(contentType) && text.includes('event: message_start') && text.includes('event: message_stop');
+  if (sensitiveValues.some((value) => typeof value === 'string' && value.length > 0 && text.includes(value))) return false;
+  if (fixture === 'stream') return /^text\/event-stream(?:;|$)/i.test(contentType) && validAnthropicStream(text.replace(/\r\n/g, '\n'));
+  if (!/^application\/json(?:;|$)/i.test(contentType)) return false;
   let data;
   try { data = JSON.parse(text); } catch { return false; }
-  if (fixture.startsWith('http-')) return data?.type === 'error' && data?.error?.type === 'mock_error';
-  if (fixture === 'count') return Number.isInteger(data?.input_tokens) && data.input_tokens > 0;
-  if (data?.type !== 'message' || !Array.isArray(data.content)) return false;
-  if (fixture === 'tool') return data.content.some((block) => block?.type === 'tool_use' && block.name === 'stage1_echo');
-  return data.content.some((block) => block?.type === 'text' && typeof block.text === 'string');
+  if (fixture.startsWith('http-')) return data?.type === 'error' && data?.error?.type === 'mock_error' && data.error.message === 'mock fixture error';
+  if (fixture === 'count') return record(data) && Object.keys(data).length === 1 && integer(data.input_tokens, 1);
+  if (!Array.isArray(data?.content) || data.content.length !== 1) return false;
+  if (fixture === 'tool') {
+    const block = data.content[0];
+    return messageEnvelope(data, 'tool_use') && block?.type === 'tool_use' && typeof block.id === 'string' && block.id.length > 0
+      && block.name === 'stage1_echo' && record(block.input);
+  }
+  const block = data.content[0];
+  return messageEnvelope(data, 'end_turn') && block?.type === 'text' && typeof block.text === 'string' && block.text.length > 0;
 }
 
 export async function runProtocolLeakGate({ manifestPath, proxyUrl, mockUrl, outputDir, timeoutMs = 100 }) {
@@ -182,6 +232,14 @@ export async function runProtocolLeakGate({ manifestPath, proxyUrl, mockUrl, out
         ...(entry.fixture === 'tool' ? { tools: [{ name: 'stage1_echo', description: 'deterministic fixture', input_schema: { type: 'object', properties: {} } }] } : {}),
         messages: [{ role: 'user', content: `STAGE1_FIXTURE_${entry.fixture} Run the deterministic Stage 1 protocol check.` }],
       };
+      const responseSensitiveValues = [
+        ...Object.values(keys), sentinel, body.messages[0].content,
+        ...clients.flatMap((client) => {
+          const identity = manifest.clients[client];
+          return [identity.user_id, identity.agent_id, identity.session_id, stage1Marker(manifest.run_id, client)];
+        }),
+        manifest.team_id, manifest.task_id,
+      ];
       let status;
       let contentType = '';
       let responseBytes;
@@ -202,7 +260,7 @@ export async function runProtocolLeakGate({ manifestPath, proxyUrl, mockUrl, out
       const observed = await json(new URL('/__mock/requests', mockUrl));
       const targetPath = `/anthropic/v1/messages${count ? '/count_tokens' : ''}`;
       const requests = Array.isArray(observed.data?.requests) ? observed.data.requests.filter((request) => request?.path === targetPath) : [];
-      if (status !== expectedStatus(entry.fixture) || !validProtocolResponse(entry.fixture, status, contentType, responseBytes) || requests.length !== 1 || requests.some(isUnsafeObservation)) throw new Error();
+      if (status !== expectedStatus(entry.fixture) || !validProtocolResponse(entry.fixture, status, contentType, responseBytes, responseSensitiveValues) || requests.length !== 1 || requests.some(isUnsafeObservation)) throw new Error();
       assertions.push({ name, status, model_requests: requests.length });
     } catch {
       const failed = { status: 'failed', assertion: name, passed: assertions.length };

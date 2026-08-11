@@ -4,8 +4,82 @@ import { isMain } from './runtime-lib.mjs';
 import { stage1Marker, stage1OperationDigest, stage1OperationHash } from './task5-contract.mjs';
 
 const clients = new Set(['claude', 'opencode', 'pi']);
+const mainPath = '/anthropic/v1/messages';
+const allowedOperationPaths = new Set([mainPath, '/openai/v1/chat/completions']);
 
 export { stage1Marker };
+
+function record(value) {
+  return value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function cleanAggregate(value) {
+  const sticky = value?.sticky_leaks;
+  if (!record(value) || typeof value.epoch !== 'string' || value.epoch.length === 0
+    || !Number.isInteger(value.sequence) || value.sequence < 0
+    || !Number.isInteger(value.total_requests) || value.total_requests < 0
+    || value.dropped_requests !== 0 || value.truncated !== false
+    || !record(value.paths) || !record(value.operations) || !record(value.fixtures)
+    || !record(sticky) || sticky.credential !== false || sticky.identity !== false || sticky.sentinel !== false) {
+    throw new Error('Stage 1 observation failed');
+  }
+  return value;
+}
+
+function pathEntry(value, path) {
+  const entry = value.paths[path];
+  if (entry === undefined) return { requests: 0, sequences: [] };
+  if (!record(entry) || !Number.isInteger(entry.requests) || entry.requests < 0
+    || !Array.isArray(entry.sequences) || entry.sequences.length !== entry.requests
+    || entry.sequences.some((sequence) => !Number.isInteger(sequence) || sequence < 1)) {
+    throw new Error('Stage 1 observation failed');
+  }
+  return entry;
+}
+
+function verifyAggregateDelta(beforeValue, afterValue, operationHash, markerHash) {
+  const before = cleanAggregate(beforeValue);
+  const after = cleanAggregate(afterValue);
+  if (after.epoch !== before.epoch || after.sequence <= before.sequence
+    || after.total_requests - before.total_requests !== after.sequence - before.sequence) {
+    throw new Error('Stage 1 observation failed');
+  }
+  const beforeMain = pathEntry(before, mainPath);
+  const afterMain = pathEntry(after, mainPath);
+  const newMainSequences = afterMain.sequences.slice(beforeMain.sequences.length);
+  if (afterMain.requests !== beforeMain.requests + 1
+    || beforeMain.sequences.some((sequence, index) => afterMain.sequences[index] !== sequence)
+    || newMainSequences.length !== 1 || newMainSequences[0] <= before.sequence || newMainSequences[0] > after.sequence) {
+    throw new Error('Stage 1 observation failed');
+  }
+  const beforeOperations = Object.keys(before.operations);
+  const afterOperations = Object.keys(after.operations);
+  const added = afterOperations.filter((key) => !Object.hasOwn(before.operations, key));
+  if (Object.hasOwn(before.operations, operationHash) || added.length !== 1 || added[0] !== operationHash
+    || beforeOperations.some((key) => JSON.stringify(before.operations[key]) !== JSON.stringify(after.operations[key]))) {
+    throw new Error('Stage 1 observation failed');
+  }
+  const operation = after.operations[operationHash];
+  if (!record(operation) || !Number.isInteger(operation.requests) || operation.requests < 1 || !record(operation.paths)) {
+    throw new Error('Stage 1 observation failed');
+  }
+  const operationPaths = Object.keys(operation.paths);
+  if (!operationPaths.includes(mainPath) || operationPaths.some((path) => !allowedOperationPaths.has(path))) {
+    throw new Error('Stage 1 observation failed');
+  }
+  let requestTotal = 0;
+  for (const path of operationPaths) {
+    const entry = pathEntry({ paths: operation.paths }, path);
+    requestTotal += entry.requests;
+  }
+  const main = operation.paths[mainPath];
+  if (requestTotal !== operation.requests || main.requests !== 1
+    || main.sequences.length !== 1 || main.sequences[0] !== newMainSequences[0]
+    || !Array.isArray(main.marker_hashes) || !main.marker_hashes.includes(markerHash)) {
+    throw new Error('Stage 1 observation failed');
+  }
+  return main.marker_hashes.length;
+}
 
 export function headlessInvocation(client, scenario, runId, owner) {
   const operation_digest = stage1OperationDigest(runId, scenario, client, owner);
@@ -34,14 +108,14 @@ export async function runHeadlessClient({ client, scenario, runId, owner, homeDi
     } catch { throw new Error('Stage 1 observation failed'); }
   };
   const before = await aggregate();
-  if (before?.operations?.[operationHash]) throw new Error('Stage 1 observation failed');
+  cleanAggregate(before);
+  if (before.operations[operationHash]) throw new Error('Stage 1 observation failed');
   const code = await launch({ client, homeDir, bundleFile, template, spaceId, args: invocation.args });
   if (code !== 0) throw new Error('Stage 1 client failed');
   const after = await aggregate();
-  const operation = after?.operations?.[operationHash];
   const expectedMarker = createHash('sha256').update(stage1Marker(runId, scenario === 'write' ? client : owner)).digest('hex');
-  if (!operation || !Number.isInteger(operation.requests) || operation.requests < 1 || !Array.isArray(operation.marker_hashes) || !operation.marker_hashes.includes(expectedMarker)) throw new Error('Stage 1 observation failed');
-  return { status: 'ok', scenario, observed_marker_count: operation.marker_hashes.length };
+  const observedMarkerCount = verifyAggregateDelta(before, after, operationHash, expectedMarker);
+  return { status: 'ok', scenario, observed_marker_count: observedMarkerCount };
 }
 
 function parse(argv) {
