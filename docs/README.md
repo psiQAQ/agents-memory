@@ -6,7 +6,7 @@
 
 | 入口 | 用途 | 当前状态 |
 | --- | --- | --- |
-| [企业智能体记忆系统评估](enterprise-memory-system-evaluation.md) | 当前范围、风险、下一 Gate | Task 5 `a72ae725` host-native-stderr-during-up Blocked；`7186820a` preflight Ready/Not Run；TUI/real Not Run |
+| [企业智能体记忆系统评估](enterprise-memory-system-evaluation.md) | 当前范围、风险、下一 Gate | Task 5 `7186820a` claude-cli-nonzero-before-mock Blocked；TUI/real Not Run |
 | [四 Docker CLI 实施计划](superpowers/plans/2026-08-10-four-docker-cli-memory.md) | 任务顺序与验收边界 | 计划，不是运行证据 |
 | [架构 ADR](decisions/2026-08-10-four-docker-cli-baseline.md) | 四 CLI 分阶段与身份隔离决策 | Accepted；runtime Not Run |
 | [baseline reproduction](reproduction/2026-08-10-four-docker-cli-baseline.md) | 固定版本、gitlink 与本轮未运行边界 | Append-only；Static baseline |
@@ -43,8 +43,9 @@
 | [Task 5 Claude -p diagnostic a72ae725 Ready](reproduction/2026-08-11-task5-diag-claude-p-20260811-a72ae725-ready.md) | 新唯一 tuple 的 freshness 与 diagnostic overlay preflight | Ready/Not Run；仅一次 long-lived async/direct-parser diagnostic 待授权 |
 | [Task 5 Claude -p diagnostic a72ae725 Blocked during Compose up](reproduction/2026-08-11-task5-diag-claude-p-20260811-a72ae725-host-native-stderr-during-up-blocked.md) | 单次 workload attempt 的 host native-stderr 中止与精确盘点 | Blocked；bootstrap/config/headless/JSON/classification 未执行；新 tuple 待 TDD |
 | [Task 5 Claude -p diagnostic 7186820a Ready](reproduction/2026-08-12-task5-diag-claude-p-20260812-7186820a-ready.md) | 新 tuple、tracked coordinator TDD/review 与 freshness/overlay preflight | Ready/Not Run；仅一次 fixed runtime/canonical JSON diagnostic 待授权 |
+| [Task 5 Claude -p diagnostic 7186820a Blocked before Mock](reproduction/2026-08-12-task5-diag-claude-p-20260812-7186820a-claude-cli-nonzero-before-mock-blocked.md) | canonical result 的 Claude child pre-Mock nonzero 边界 | Blocked；不区分 settings/CLI/auth/onboarding/capture/Proxy-before-Mock；新 tuple 待 TDD |
 | [Legacy Docker 运行资源精确清理](reproduction/2026-08-10-legacy-docker-resources-cleanup.md) | 旧 Compose projects、容器、网络、卷和镜像的不可恢复清理审计 | Runtime Cleanup Passed；不改变四 CLI 业务 Gate |
-| [集成实验 SOP](../tests/integration/README.md) | 后续静态验证与受控运行入口 | a72ae725 host-native-stderr-during-up Blocked；7186820a preflight Ready/Not Run；TUI/real Not Run |
+| [集成实验 SOP](../tests/integration/README.md) | 后续静态验证与受控运行入口 | 7186820a claude-cli-nonzero-before-mock Blocked；phase/category TDD/new tuple 待执行；TUI/real Not Run |
 
 建议阅读顺序：先读 [负责人思想](repo-author-comment/comment.md)，再读当前评估和本轮 ADR/reproduction；需要执行实验时才读 SOP 及相应产品源码/测试。负责人思想与企业设计草案分别位于 `repo-author-comment/` 和 [design/2026-08-06-enterprise-memory-design.md](design/2026-08-06-enterprise-memory-design.md)，不能当作本机运行证明。
 
