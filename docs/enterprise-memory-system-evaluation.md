@@ -2,7 +2,7 @@
 
 ## 结论
 
-当前 active 目标是四 Docker CLI 共享记忆实验。Task 5 的 Proxy→Core auth service-token、Mock fixture、Claude EROFS/tmpfs 与 OpenCode fixed-title 缺口均已完成 TDD、replacement images 与 scoped review。`opentitle-4f056ee6` 的单次 full Mock launcher 在 fixed step 9 fail-stop 并已 exact cleanup。全新 OpenCode typed diagnostic `89398d1d` 单次 exit `0`：render/spawn/capture/CLI code0，预期 operation/main 精确一次，且无 unexpected/leak/drop/truncation；其 exact project 随后 cleanup 为 `0/0/0`，active images 保留 `7/7`。该诊断仍不覆盖普通 headless exact verifier/evidence publish，当前业务 Gate 为 **Blocked**；下一 Gate 是 TDD normal headless fixed-phase diagnostic。三写六读、final、TUI 与真实 API/模型仍未获得通过证明。
+当前 active 目标是四 Docker CLI 共享记忆实验。Task 5 的 Proxy→Core auth service-token、Mock fixture、Claude EROFS/tmpfs 与 OpenCode fixed-title 缺口均已完成 TDD、replacement images 与 scoped review。`opentitle-4f056ee6` 的单次 full Mock launcher 在 fixed step 9 fail-stop 并已 exact cleanup；typed diagnostic `89398d1d` 随后证明 render/spawn/capture/CLI code0 与 exact single Mock operation，并已 cleanup。normal headless fixed-phase diagnostic 已在 `cbd1a27...` 完成 TDD、root `254/254`、Compose `8/8` 与独立 `C0/I0/M0` review；全新 `a666e597` tuple 已通过 freshness preflight，状态为 **Ready / Not Run**。当前业务 Gate 仍为 **Blocked**；三写六读、final、TUI 与真实 API/模型仍未获得通过证明。
 
 旧 Windows 原生 Claude + Docker Claude 证据一律是 **Legacy**：保留原文供追溯，但不用于推断新的四 CLI 架构已通过。
 
@@ -54,9 +54,9 @@ flowchart LR
 | Stage 1 upstream source-build | Runtime Passed | 全部 tracked/image shell、Core/Proxy 新构建与必要 runtime assets Passed；Hub 保持原 Passed 镜像；不等于服务/业务 Runtime Passed |
 | Stage 1 Claude/OpenCode/Pi 原生路由 | Runtime Passed | Task 3 route 证据保持；active product auth fix 的 fresh full 为 38/38 suites / 276/276 tests，仍不等于服务/客户端业务流 Passed |
 | Stage 1 client Compose/bootstrap/config/images | Runtime Passed | tools 与三 client 原 build/assets、Claude EROFS replacement、OpenCode fixed-title replacement；version/help、UID10001、evidence ownership/writability、headless assets；仅 client build/config assets |
-| Stage 1 Task 5 root harness | Static/contract Passed | root Node 239/239、active Compose config 7/7 与 OpenCode diagnostic overlay 1/1；fixture array text-block、固定 step allowlist、typed client diagnostic、固定 epoch/path、strict fixture、逐 operation oracle、outsider、exact project freshness、run/build/evidence 与 request-local credential 合同，不是业务运行 |
+| Stage 1 Task 5 root harness | Static/contract Passed | root Node 254/254、active Compose config 7/7 与 normal headless diagnostic overlay 1/1；fixture、固定 step/phase、typed client diagnostic、exact verifier/evidence、outsider、freshness 与 request-local credential 合同，不是业务运行 |
 | Stage 1 Proxy privacy/build | Runtime Passed | reviewed `9e456a5` auth service-token fix、38/38 suites / 276/276 tests、exact six baseline typecheck errors、Proxy `sha256:55fedae3...`；replacement image Ready，product tests + build/assets only |
-| Stage 1 Mock identity/share/isolation/leak | Blocked | `opentitle-4f056ee6` 单次 launcher fixed step 9 fail-stop且 exact cleanup；typed diagnostic `89398d1d` 已证明 render/spawn/capture/CLI code0 与 exact single Mock operation 并完成 cleanup，但普通 headless exact verifier/evidence publish 仍未定位 |
+| Stage 1 Mock identity/share/isolation/leak | Blocked / phase diagnostic Ready | `opentitle-4f056ee6` 单次 launcher fixed step 9 fail-stop且 exact cleanup；`a666e597` normal headless phase diagnostic Ready/Not Run，仅用于区分 client、observation、evidence、setup 与 success |
 | Stage 1 TUI | Not Run | 仅在 headless Gate 通过后由用户确认 |
 | Stage 1 真实模型 | Not Run | 需完整 Mock Gate 与明确授权 |
 | Stage 2 Codex Responses | Not Run | 在 Stage 1 后执行 |
@@ -81,4 +81,4 @@ flowchart LR
 
 ## 下一 Gate
 
-[opentitle-4f056ee6 OpenCode write Blocked](reproduction/2026-08-12-task5-mock-20260812-opentitle-4f056ee6-opencode-write-blocked.md) 固定单次 step 9 fail-stop 与脱敏 aggregate 边界；[exact cleanup](reproduction/2026-08-12-task5-mock-20260812-opentitle-4f056ee6-exact-cleanup-passed.md) 已使该 project 为 `0/0/0`。[OpenCode typed diagnostic `89398d1d` Ready](reproduction/2026-08-12-task5-diag-opencode-20260812-89398d1d-ready.md) 后续单次运行已 [Passed](reproduction/2026-08-12-task5-diag-opencode-20260812-89398d1d-passed.md) 并完成 [exact cleanup](reproduction/2026-08-12-task5-diag-opencode-20260812-89398d1d-exact-cleanup-passed.md)。下一 Gate 是先按 TDD 为 normal headless 增加固定阶段诊断，区分 exact verifier 与 evidence publish；在此之前不得重跑 full Mock、复用旧 tuple、读取 raw logs/evidence、进入 TUI 或真实模型。真实 API、TUI 与 Codex Stage 2 仍为 Not Run。active gitlink 在获得独立 push/归档授权前仍无法由 fresh clone 获取。
+[opentitle-4f056ee6 OpenCode write Blocked](reproduction/2026-08-12-task5-mock-20260812-opentitle-4f056ee6-opencode-write-blocked.md) 与 [typed diagnostic `89398d1d` Passed](reproduction/2026-08-12-task5-diag-opencode-20260812-89398d1d-passed.md) 均保持 append-only且对应 project 已清理。下一 Gate 唯一允许对 [normal headless phase diagnostic `a666e597` Ready](reproduction/2026-08-12-task5-diag-opencode-headless-20260812-a666e597-ready.md) tuple 执行一次 tracked coordinator；禁止 build、retry、复用旧 tuple、读取 raw logs/evidence、进入 TUI 或真实模型。freshness 失败保留资源审计；只有本次创建 exact project 后才执行 exact cleanup。真实 API、TUI 与 Codex Stage 2 仍为 Not Run。active gitlink 在获得独立 push/归档授权前仍无法由 fresh clone 获取。
