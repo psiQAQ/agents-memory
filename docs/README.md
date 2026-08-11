@@ -45,8 +45,9 @@
 | [Task 5 Claude -p diagnostic 7186820a Ready](reproduction/2026-08-12-task5-diag-claude-p-20260812-7186820a-ready.md) | 新 tuple、tracked coordinator TDD/review 与 freshness/overlay preflight | Ready/Not Run；仅一次 fixed runtime/canonical JSON diagnostic 待授权 |
 | [Task 5 Claude -p diagnostic 7186820a Blocked before Mock](reproduction/2026-08-12-task5-diag-claude-p-20260812-7186820a-claude-cli-nonzero-before-mock-blocked.md) | canonical result 的 Claude child pre-Mock nonzero 边界 | Blocked；不区分 settings/CLI/auth/onboarding/capture/Proxy-before-Mock；新 tuple 待 TDD |
 | [Task 5 Claude -p diagnostic 7186820a exact cleanup Passed](reproduction/2026-08-12-task5-diag-claude-p-20260812-7186820a-exact-cleanup-passed.md) | 仅清理该 project 的 containers/network/volumes，保留 host evidence/images | Runtime Cleanup Passed；业务 Gate 仍 Blocked；bounded classifier 已 TDD、待复审/新 tuple |
+| [Task 5 Claude classifier replacement image Passed](reproduction/2026-08-12-task5-claude-classifier-image-build-passed.md) | timeout/官方错误分类 TDD、单次 Claude build、离线 assets 与 exact digest pin | Build/Assets Passed；follow-up 独立复审受额度限制；新 diagnostic tuple Not Run |
 | [Legacy Docker 运行资源精确清理](reproduction/2026-08-10-legacy-docker-resources-cleanup.md) | 旧 Compose projects、容器、网络、卷和镜像的不可恢复清理审计 | Runtime Cleanup Passed；不改变四 CLI 业务 Gate |
-| [集成实验 SOP](../tests/integration/README.md) | 后续静态验证与受控运行入口 | 7186820a 已精确 cleanup；claude-cli-nonzero-before-mock 仍 Blocked；bounded classifier 待复审/new tuple |
+| [集成实验 SOP](../tests/integration/README.md) | 后续静态验证与受控运行入口 | 7186820a 已精确 cleanup；classifier image Ready；新 diagnostic tuple Not Run |
 
 建议阅读顺序：先读 [负责人思想](repo-author-comment/comment.md)，再读当前评估和本轮 ADR/reproduction；需要执行实验时才读 SOP 及相应产品源码/测试。负责人思想与企业设计草案分别位于 `repo-author-comment/` 和 [design/2026-08-06-enterprise-memory-design.md](design/2026-08-06-enterprise-memory-design.md)，不能当作本机运行证明。
 
