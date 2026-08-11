@@ -6,7 +6,7 @@
 
 **Fact**：upstream base 锁定 `feat/server_team@0a568c328ea1aae3f22ed3656e7900da7ea565c1`，active fork/gitlink 为 reviewed Task 5 auth service-token fix `9e456a5b7bb47ae40596237d0f0b87c1edfc098f`。该 commit 是 local-only；`origin/codex/four-agent-memory-upstream` 仍为 `38ced16f46fed640bcb7360fb1ca45f9f9918628`，未经单独授权不得 push，fresh clone 暂不可取得。Stage 1 是 Claude Code `2.1.226`、OpenCode `1.18.16`、Pi `0.84.1`，Stage 2 是 Codex `0.147.0`。
 
-**Fact**：Task 5 产品、replacement images、typed diagnostic 与 normal headless phase diagnostic 已通过对应 Gate并完成 exact cleanup。全新 full-Mock tuple `full-6449fcf8` 已通过 root/product、labels、evidence、port、images `7/7` 与 Compose freshness preflight，状态为 Ready/Not Run。只允许单次 tracked 17-step launcher；完整三写六读/final、TUI 与真实/Paid 模型仍无通过证明。
+**Fact**：Task 5 产品、replacement images 与前置 diagnostics 已通过对应 Gate并完成 cleanup。`full-6449fcf8` 的单次 17-step launcher在 fixed step 11 fail-stop；steps 1–10 exit `0`，protocol/leak、management 与三客户端 write 已通过；首个 Claude cross-owner read、后续五读与 final 未通过。exact project 已从 `5/1/15` cleanup 为 `0/0/0`，active images `7/7` 保留。业务 Gate 为 Blocked；下一 Gate 是 TDD Claude read fixed-phase diagnostic。
 
 **Fact**：legacy ref `codex/legacy-proxy-hardening-69fd8b@69fd8b31e3fd4362af6c65407b92b26dfabebd0c` 是 local-only、未 push；fresh clone 不可取得，未经授权不得 push。跨 clone 可重建保全需要 push 或外部归档授权，在此之前仍未完成。
 
@@ -103,11 +103,11 @@ Root full Node 为 254/254，base + `mock`、`real`、`claude`、`opencode`、`p
 
 完整前置链见 [privacy/build Passed](../../docs/reproduction/2026-08-11-task5-proxy-privacy-build-passed.md)、[OpenCode fixed-title replacement image Passed](../../docs/reproduction/2026-08-12-task5-opencode-title-replacement-image-passed.md)、[OpenCode typed diagnostic `89398d1d` Passed](../../docs/reproduction/2026-08-12-task5-diag-opencode-20260812-89398d1d-passed.md)、[normal headless phase diagnostic `a666e597` Passed](../../docs/reproduction/2026-08-12-task5-diag-opencode-headless-20260812-a666e597-passed.md) 与 [exact cleanup](../../docs/reproduction/2026-08-12-task5-diag-opencode-headless-20260812-a666e597-exact-cleanup-passed.md)。不得把 diagnostics、single Mock request、static contract 或 build/assets 扩写为完整三写六读/final/TUI/real 通过。
 
-## Task 5 Mock runtime 启动器（`full-6449fcf8` Ready/Not Run）
+## Task 5 Mock runtime 启动器（`full-6449fcf8` step 11 Blocked/cleaned）
 
 历史固定 Mock/diagnostic runs 均保持 append-only。`e83748e2`、`stepfix-2df660d8`、`opentitle-4f056ee6`、typed diagnostic `89398d1d` 与 phase diagnostic `a666e597` 均已 exact cleanup，不得复用或 retry。`a666e597` 已证明 prior Claude operation 后的 normal OpenCode client、exact aggregate verifier 与 atomic evidence publish 路径成功，但不覆盖完整 17-step baseline。
 
-下一 Gate 只允许对 `full-6449fcf8` 单次执行 tracked `tests/integration/tools/run-task5-mock.mjs`。禁止 build、retry、复用旧 tuple、读取 raw child/log/evidence、进入 TUI 或真实模型。失败必须 fail-stop并只使用固定 step；本次创建 exact project 后，无论成功失败都先做脱敏计数盘点，再使用 base/mock/claude/opencode/pi/management overlays exact cleanup。不得使用 `--rmi` 或全局 prune。
+下一 Gate 只允许先按 TDD 扩展 fixed-phase wrapper 的 read success 合同，再使用全新唯一 tuple 运行“三 writes → Claude read(owner=opencode)”脱敏诊断。禁止重跑 full Mock、retry、旧 tuple、raw child/log/evidence、TUI 或真实模型。任何新 project 仍须 freshness、append-only result 与 exact cleanup；不得使用 `--rmi` 或全局 prune。
 
 `COMPOSE_PROJECT_NAME` 必须由 launcher 验证为 `refine-memory-${RUN_ID}`，不能复用无关 project 名。创建 evidence 目录或执行首个 Compose step 前，launcher 内部实际执行以下只读探针：
 
@@ -151,7 +151,7 @@ try {
 1. **Task 2（Passed，build/assets only）**：固定 image ID/digest 与不可变 RED→GREEN 已归档；不扩写为服务或业务通过。
 2. **Task 3（Passed，handler/route + build/assets only）**：三平台 literal Messages/`count_tokens` route、source/session fail-closed、Anthropic system context 与选定 console privacy 已固定；不扩写为服务业务或 comprehensive leak Gate 通过。
 3. **Task 4（Passed，client build/config assets only）**：active Compose、三客户端身份/config/image 已固定；不扩写为服务或业务流通过。
-4. **Task 5（Ready/Not Run）**：`full-6449fcf8` 已通过 freshness preflight；下一步只允许单次 17-step Mock，不得进入 TUI/real。
+4. **Task 5（Blocked；step 11）**：steps 1–10/三 writes Passed，首个 Claude read Blocked；下一步只允许 TDD read phase diagnostic，不得进入 TUI/real。
 5. **Task 6**：完整 Mock Gate 后且负责人明确授权，才可使用 host-only 双 key 与预算限制做真实 Stage 1。
 6. **Task 7–8**：在 Stage 1 后实现/验证 Codex Responses 与四客户端 binding 上限。
 

@@ -2,7 +2,7 @@
 
 ## 结论
 
-当前 active 目标是四 Docker CLI 共享记忆实验。Task 5 的产品、replacement images、typed diagnostic 与 normal headless phase diagnostic 均已通过对应 TDD/static/runtime Gate并完成 exact cleanup。全新 full-Mock tuple `full-6449fcf8` 已通过 root/product clean、labels `0/0/0`、evidence absent、port empty、images `7/7` 与合并 Compose config preflight，状态为 **Ready / Not Run**。下一 Gate 唯一允许单次执行 tracked 17-step deterministic Mock launcher；三写六读、final、TUI 与真实 API/模型仍未获得通过证明。
+当前 active 目标是四 Docker CLI 共享记忆实验。Task 5 产品、replacement images 与前置 diagnostics 均已通过对应 Gate并完成 cleanup。全新 `full-6449fcf8` 的单次 17-step launcher在 fixed step 11 fail-stop：steps 1–10 exit `0`，所以 protocol/leak、management 与 Claude/OpenCode/Pi 三 writes 已通过；首个 Claude cross-owner read 失败，后续五读与 final 未运行。exact project 已从 `5/1/15` cleanup 为 `0/0/0`，active images `7/7` 保留。当前业务状态为 **Blocked**；下一 Gate 是 TDD Claude read fixed-phase diagnostic，TUI 与真实 API/模型仍未获得通过证明。
 
 旧 Windows 原生 Claude + Docker Claude 证据一律是 **Legacy**：保留原文供追溯，但不用于推断新的四 CLI 架构已通过。
 
@@ -56,7 +56,7 @@ flowchart LR
 | Stage 1 client Compose/bootstrap/config/images | Runtime Passed | tools 与三 client 原 build/assets、Claude EROFS replacement、OpenCode fixed-title replacement；version/help、UID10001、evidence ownership/writability、headless assets；仅 client build/config assets |
 | Stage 1 Task 5 root harness | Static/contract Passed | root Node 254/254、active Compose config 7/7 与 normal headless diagnostic overlay 1/1；fixture、固定 step/phase、typed client diagnostic、exact verifier/evidence、outsider、freshness 与 request-local credential 合同，不是业务运行 |
 | Stage 1 Proxy privacy/build | Runtime Passed | reviewed `9e456a5` auth service-token fix、38/38 suites / 276/276 tests、exact six baseline typecheck errors、Proxy `sha256:55fedae3...`；replacement image Ready，product tests + build/assets only |
-| Stage 1 Mock identity/share/isolation/leak | Ready / Not Run | `full-6449fcf8` 已通过 freshness preflight；只允许单次 tracked 17-step Mock，未运行前不得扩写为 Passed |
+| Stage 1 Mock identity/share/isolation/leak | Blocked | `full-6449fcf8` fixed step 11；steps 1–10/三 writes Passed，首个 Claude read Blocked，后续五读/final Not Run；exact cleanup complete |
 | Stage 1 TUI | Not Run | 仅在 headless Gate 通过后由用户确认 |
 | Stage 1 真实模型 | Not Run | 需完整 Mock Gate 与明确授权 |
 | Stage 2 Codex Responses | Not Run | 在 Stage 1 后执行 |
@@ -81,4 +81,4 @@ flowchart LR
 
 ## 下一 Gate
 
-[normal headless phase diagnostic `a666e597` Passed](reproduction/2026-08-12-task5-diag-opencode-headless-20260812-a666e597-passed.md) 与 [exact cleanup](reproduction/2026-08-12-task5-diag-opencode-headless-20260812-a666e597-exact-cleanup-passed.md) 已关闭普通 verifier/evidence 路径候选。[full Mock `full-6449fcf8` Ready](reproduction/2026-08-12-task5-mock-20260812-full-6449fcf8-ready.md) 固定下一次唯一 tuple；只允许单次 tracked 17-step launcher，禁止 build、retry、旧 tuple、raw logs/evidence、TUI 或真实模型。失败须 fail-stop并保留固定 step；本次创建 project 后无论成功失败都只做脱敏盘点与 exact cleanup，不使用 `--rmi`/prune。真实 API、TUI 与 Codex Stage 2 仍为 Not Run。
+[full Mock `full-6449fcf8` Claude read Blocked](reproduction/2026-08-12-task5-mock-20260812-full-6449fcf8-claude-read-blocked.md) 固定 step 11 与 steps 1–10 的通过边界；[exact cleanup](reproduction/2026-08-12-task5-mock-20260812-full-6449fcf8-exact-cleanup-passed.md) 已使 project 为 `0/0/0`。下一 Gate 是按 TDD 扩展 fixed-phase wrapper 支持 read success，并以全新 tuple 固定“三 writes → Claude read(owner=opencode)”路径；禁止重跑 full Mock、复用旧 tuple、raw logs/evidence、TUI 或真实模型。真实 API 与 Codex Stage 2 仍为 Not Run。

@@ -6,7 +6,7 @@
 
 | 入口 | 用途 | 当前状态 |
 | --- | --- | --- |
-| [企业智能体记忆系统评估](enterprise-memory-system-evaluation.md) | 当前范围、风险、下一 Gate | normal headless phase diagnostic `a666e597` Passed/cleaned；full Mock `full-6449fcf8` Ready/Not Run；TUI/real Not Run |
+| [企业智能体记忆系统评估](enterprise-memory-system-evaluation.md) | 当前范围、风险、下一 Gate | full Mock `full-6449fcf8` step 11 Blocked/cleaned；Claude read phase diagnostic next；TUI/real Not Run |
 | [四 Docker CLI 实施计划](superpowers/plans/2026-08-10-four-docker-cli-memory.md) | 任务顺序与验收边界 | 计划，不是运行证据 |
 | [架构 ADR](decisions/2026-08-10-four-docker-cli-baseline.md) | 四 CLI 分阶段与身份隔离决策 | Accepted；runtime Not Run |
 | [baseline reproduction](reproduction/2026-08-10-four-docker-cli-baseline.md) | 固定版本、gitlink 与本轮未运行边界 | Append-only；Static baseline |
@@ -70,8 +70,10 @@
 | [Task 5 OpenCode normal headless phase diagnostic a666e597 Passed](reproduction/2026-08-12-task5-diag-opencode-headless-20260812-a666e597-passed.md) | prior Claude baseline 后的 normal OpenCode client、exact verifier 与 atomic evidence publish | Runtime Passed（single phase diagnostic only）；full Mock Not Run |
 | [Task 5 OpenCode normal headless phase diagnostic a666e597 exact cleanup Passed](reproduction/2026-08-12-task5-diag-opencode-headless-20260812-a666e597-exact-cleanup-passed.md) | exact profiled project cleanup 与独立 after-query | Runtime Cleanup Passed；5/1/12 → 0/0/0；active images 7/7 retained |
 | [Task 5 deterministic Mock full-6449fcf8 Ready](reproduction/2026-08-12-task5-mock-20260812-full-6449fcf8-ready.md) | full 17-step launcher 的新唯一 tuple 与 Git/labels/evidence/port/images/config freshness | Ready/Not Run；仅允许一次 tracked full Mock |
+| [Task 5 deterministic Mock full-6449fcf8 Claude read Blocked](reproduction/2026-08-12-task5-mock-20260812-full-6449fcf8-claude-read-blocked.md) | single launcher fixed step 11；steps 1–10、三 writes 与未运行边界 | Blocked；首个 Claude cross-owner read；后续五读/final Not Run |
+| [Task 5 deterministic Mock full-6449fcf8 exact cleanup Passed](reproduction/2026-08-12-task5-mock-20260812-full-6449fcf8-exact-cleanup-passed.md) | exact profiled cleanup 与独立 after-query | Runtime Cleanup Passed；5/1/15 → 0/0/0；active images 7/7 retained |
 | [Legacy Docker 运行资源精确清理](reproduction/2026-08-10-legacy-docker-resources-cleanup.md) | 旧 Compose projects、容器、网络、卷和镜像的不可恢复清理审计 | Runtime Cleanup Passed；不改变四 CLI 业务 Gate |
-| [集成实验 SOP](../tests/integration/README.md) | 后续静态验证与受控运行入口 | full Mock `full-6449fcf8` Ready/Not Run；TUI/real Not Run |
+| [集成实验 SOP](../tests/integration/README.md) | 后续静态验证与受控运行入口 | step 11 Blocked/cleaned；Claude read fixed-phase diagnostic next |
 
 建议阅读顺序：先读 [负责人思想](repo-author-comment/comment.md)，再读当前评估和本轮 ADR/reproduction；需要执行实验时才读 SOP 及相应产品源码/测试。负责人思想与企业设计草案分别位于 `repo-author-comment/` 和 [design/2026-08-06-enterprise-memory-design.md](design/2026-08-06-enterprise-memory-design.md)，不能当作本机运行证明。
 
