@@ -11,17 +11,21 @@ function result(phase) {
 export async function runHeadlessPhaseDiagnostic(argv, environment = process.env, dependencies = {}) {
   const run = dependencies.run ?? runHeadlessClient;
   const launch = dependencies.launch ?? launchClient;
+  let requestedScenario;
   try {
     const value = await runHeadlessCli(argv, environment, {
-      run: (options) => run({
-        ...options,
-        launch: async (launchOptions) => {
-          try { return await launch(launchOptions); }
-          catch { throw clientFailure; }
-        },
-      }),
+      run: (options) => {
+        requestedScenario = options.scenario;
+        return run({
+          ...options,
+          launch: async (launchOptions) => {
+            try { return await launch(launchOptions); }
+            catch { throw clientFailure; }
+          },
+        });
+      },
     });
-    return value?.status === 'ok' && value?.scenario === 'write' ? result('success') : result('setup');
+    return value?.status === 'ok' && value?.scenario === requestedScenario ? result('success') : result('setup');
   } catch (error) {
     if (error === clientFailure || error?.message === 'Stage 1 client failed') return result('client');
     if (error?.message === 'Stage 1 observation failed') return result('observation');

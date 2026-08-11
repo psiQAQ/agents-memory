@@ -4,13 +4,14 @@ import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { runTask5ClaudeDiagnostic, runTask5OpenCodeDiagnostic, runTask5OpenCodeHeadlessDiagnostic } from '../tools/run-task5-claude-diagnostic.mjs';
+import { runTask5ClaudeDiagnostic, runTask5ClaudeReadDiagnostic, runTask5OpenCodeDiagnostic, runTask5OpenCodeHeadlessDiagnostic } from '../tools/run-task5-claude-diagnostic.mjs';
 
 const runId = 'task5-diagnostic-host';
 const project = `refine-memory-${runId}`;
 const fixedFailure = 'Task 5 Claude diagnostic coordinator failed';
 const opencodeFixedFailure = 'Task 5 OpenCode diagnostic coordinator failed';
 const headlessFixedFailure = 'Task 5 OpenCode headless diagnostic coordinator failed';
+const claudeReadFixedFailure = 'Task 5 Claude read diagnostic coordinator failed';
 const result = {
   status: 'classified',
   launch: 'code0',
@@ -110,6 +111,30 @@ function opencodeHeadlessBusinessArgs(integrationRoot) {
     [...prefix, 'run', '--rm', '--no-deps', 'claude-headless'],
     [...prefix, 'run', '--rm', '--no-deps', 'opencode-config'],
     [...prefix, 'run', '--rm', '--no-deps', 'opencode-headless'],
+  ];
+}
+
+function claudeReadBusinessArgs(integrationRoot) {
+  const prefix = [
+    'compose', '--project-directory', integrationRoot,
+    '--profile', 'mock', '--profile', 'management', '--profile', 'claude', '--profile', 'opencode', '--profile', 'pi',
+    '-f', join(integrationRoot, 'compose.four-cli.yaml'),
+    '-f', join(integrationRoot, 'compose.four-cli.mock.yaml'),
+    '-f', join(integrationRoot, 'compose.four-cli.claude.yaml'),
+    '-f', join(integrationRoot, 'compose.four-cli.opencode.yaml'),
+    '-f', join(integrationRoot, 'compose.four-cli.pi.yaml'),
+    '-f', join(integrationRoot, 'compose.four-cli.management.yaml'),
+  ];
+  const run = (service) => [...prefix, 'run', '--rm', '--no-deps', service];
+  const diagnosticRun = (service) => [
+    ...prefix, '-f', join(integrationRoot, 'compose.four-cli.claude-read-diagnostic.yaml'),
+    'run', '--rm', '--no-deps', service,
+  ];
+  return [
+    [...prefix, 'up', '-d', '--wait', '--wait-timeout', '180', '--no-build', 'mock-llm', 'memory-core', 'memory-proxy', 'memory-hub'],
+    run('bootstrap'), run('claude-config'), run('opencode-config'), run('pi-config'),
+    run('stage1-gate'), run('stage1-gate'),
+    run('claude-headless'), run('opencode-headless'), run('pi-headless'), diagnosticRun('claude-headless'),
   ];
 }
 
@@ -249,6 +274,33 @@ test('OpenCode headless diagnostic coordinator rejects noncanonical phases with 
   });
 });
 
+test('Claude read diagnostic coordinator replays steps 1 through 10 before one classified read', async () => {
+  const value = await fixture('task5-claude-read-coordinator-');
+  const calls = [];
+  try {
+    const output = await runTask5ClaudeReadDiagnostic({
+      environment: environment(value.evidenceDir), integrationRoot: value.integrationRoot,
+      spawnCompose: async (args, options) => {
+        calls.push({ args, options });
+        if (args[0] !== 'compose') return { status: 0, stdout: '', stderr: '' };
+        return { status: 0, stdout: args.at(-1) === 'claude-headless' && options.env.STAGE1_CLIENT_SCENARIO === 'read' ? `${headlessCanonical}\n` : '', stderr: '' };
+      },
+    });
+    assert.equal(output, headlessCanonical);
+    assert.deepEqual(calls.slice(0, 3).map(({ args }) => args), probeArgs());
+    assert.deepEqual(calls.slice(3).map(({ args }) => args), claudeReadBusinessArgs(value.integrationRoot));
+    assert.equal(calls.length, 14);
+    assert.equal(calls[8].options.env.STAGE1_SCENARIO, 'protocol-leak');
+    assert.equal(calls[9].options.env.STAGE1_SCENARIO, 'management');
+    assert.deepEqual(calls.slice(10, 13).map(({ options }) => options.env.STAGE1_CLIENT_SCENARIO), ['write', 'write', 'write']);
+    assert.equal(calls[13].options.env.STAGE1_CLIENT_SCENARIO, 'read');
+    assert.equal(calls[13].options.env.STAGE1_OWNER, 'opencode');
+    assert.equal(calls.slice(3, 13).every(({ args }) => !args.some((arg) => arg.endsWith('compose.four-cli.claude-read-diagnostic.yaml'))), true);
+    assert.equal(calls[13].args.some((arg) => arg.endsWith('compose.four-cli.claude-read-diagnostic.yaml')), true);
+    assert.equal(calls.every(({ args }) => !/(?:^| )build(?: |$)|\bdown\b|\bprune\b|\bcleanup\b/.test(args.join(' '))), true);
+  } finally { await rm(value.directory, { recursive: true, force: true }); }
+});
+
 test('Claude diagnostic coordinator fail-stops on nonzero and thrown child results without raw output', async (context) => {
   for (const [name, businessIndex, outcome] of [
     ['up-nonzero', 0, { status: 23, stdout: 'raw stdout', stderr: 'raw stderr' }],
@@ -375,4 +427,12 @@ test('OpenCode headless diagnostic coordinator uses its fixed CLI failure withou
   assert.notEqual(child.status, 0);
   assert.equal(child.stdout, '');
   assert.equal(child.stderr, `${headlessFixedFailure}\n`);
+});
+
+test('Claude read diagnostic coordinator uses its fixed CLI failure without raw output', () => {
+  const tool = join(import.meta.dirname, '..', 'tools', 'run-task5-claude-read-diagnostic.mjs');
+  const child = spawnSync(process.execPath, [tool], { encoding: 'utf8', env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot } });
+  assert.notEqual(child.status, 0);
+  assert.equal(child.stdout, '');
+  assert.equal(child.stderr, `${claudeReadFixedFailure}\n`);
 });

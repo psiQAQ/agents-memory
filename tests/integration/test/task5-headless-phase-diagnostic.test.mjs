@@ -46,6 +46,15 @@ function argv(evidenceDir) {
   ];
 }
 
+function readArgv(evidenceDir, readRunId) {
+  return [
+    '--client', 'claude', '--run-id', readRunId, '--owner', 'opencode',
+    '--home-dir', '/home/agent', '--bundle-file', '/home/agent/.memory/agent-bundle.json',
+    '--space-id', 'default', '--template', '/opt/memory-client/settings.template.json',
+    '--evidence-dir', evidenceDir,
+  ];
+}
+
 async function fixture(prefix) {
   const directory = await mkdtemp(join(tmpdir(), prefix));
   const before = aggregate(40, { [previousHash]: operation(40, previousMarker) });
@@ -74,6 +83,43 @@ test('headless phase diagnostic traverses the exact verifier and atomic evidence
     assert.deepEqual(result, { status: 'classified', phase: 'success' });
     assert.equal(await readFile(join(value.evidenceDir, 'write.json'), 'utf8'), '{"status":"ok","scenario":"write","owner":null}\n');
   } finally { await value.close(); }
+});
+
+test('headless phase diagnostic requires and publishes the requested read scenario', async () => {
+  const readRunId = 'task5-headless-read-phase';
+  const ownerMarker = createHash('sha256').update(stage1Marker(readRunId, 'opencode')).digest('hex');
+  const writeHash = stage1OperationHash(readRunId, 'write', 'opencode');
+  const readHash = stage1OperationHash(readRunId, 'read', 'claude', 'opencode');
+  const before = aggregate(40, { [writeHash]: operation(40, ownerMarker) });
+  const after = aggregate(41, {
+    [writeHash]: operation(40, ownerMarker),
+    [readHash]: operation(41, ownerMarker),
+  });
+  let reads = 0;
+  const server = http.createServer((request, response) => {
+    response.writeHead(200, { 'content-type': 'application/json' });
+    response.end(JSON.stringify(reads++ === 0 ? before : after));
+  });
+  await ensureFetchSafeServer(server);
+  const directory = await mkdtemp(join(tmpdir(), 'task5-headless-phase-read-'));
+  const evidenceDir = join(directory, 'evidence');
+  const environment = {
+    MOCK_BASE_URL: `http://127.0.0.1:${server.address().port}`,
+    STAGE1_CLIENT_SCENARIO: 'read',
+  };
+  try {
+    const result = await runHeadlessPhaseDiagnostic(readArgv(evidenceDir, readRunId), environment, { launch: async () => 0 });
+    assert.deepEqual(result, { status: 'classified', phase: 'success' });
+    assert.equal(await readFile(join(evidenceDir, 'read-opencode.json'), 'utf8'), '{"status":"ok","scenario":"read","owner":"opencode"}\n');
+
+    const mismatch = await runHeadlessPhaseDiagnostic(readArgv(evidenceDir, readRunId), environment, {
+      run: async () => ({ status: 'ok', scenario: 'write' }),
+    });
+    assert.deepEqual(mismatch, { status: 'classified', phase: 'setup' });
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 
 test('headless phase diagnostic maps client, observation, evidence, and setup failures without details', async (context) => {
@@ -125,6 +171,39 @@ test('headless phase diagnostic overlay changes only the OpenCode entrypoint and
   ];
   const base = structuredClone(render(activeFiles).services['opencode-headless']);
   const service = structuredClone(render([...activeFiles, 'compose.four-cli.opencode-headless-diagnostic.yaml']).services['opencode-headless']);
+  assert.deepEqual(service.entrypoint, ['node', '/opt/memory-client/task5-headless-phase-diagnostic.mjs']);
+  const script = service.volumes.find((volume) => volume.target === '/opt/memory-client/task5-headless-phase-diagnostic.mjs');
+  assert.equal(script.type, 'bind');
+  assert.equal(script.source.replaceAll('\\', '/'), diagnosticTool.replaceAll('\\', '/'));
+  assert.equal(script.read_only, true);
+  delete base.entrypoint;
+  delete service.entrypoint;
+  service.volumes = service.volumes.filter((volume) => volume.target !== '/opt/memory-client/task5-headless-phase-diagnostic.mjs');
+  assert.deepEqual(service, base);
+});
+
+test('Claude read phase overlay changes only the Claude headless entrypoint and one read-only bind', () => {
+  const environment = {
+    ...process.env,
+    COMPOSE_PROJECT_NAME: 'task5-claude-read-phase-static', RUN_ID: runId,
+    EVIDENCE_DIR: join(integrationRoot, '.static-evidence', runId),
+    ACTIVE_CLIENTS: 'claude,opencode,pi', MEMORY_CORE_GATEWAY_API_KEY: 'task5-diagnostic-not-llm',
+  };
+  const render = (files) => {
+    const args = ['compose', '--project-directory', integrationRoot, '--profile', 'mock', '--profile', 'management', '--profile', 'claude', '--profile', 'opencode', '--profile', 'pi'];
+    for (const file of files) args.push('-f', join(integrationRoot, file));
+    args.push('config', '--format', 'json');
+    const child = spawnSync('docker', args, { encoding: 'utf8', env: environment });
+    assert.equal(child.status, 0, child.stderr);
+    return JSON.parse(child.stdout);
+  };
+  const activeFiles = [
+    'compose.four-cli.yaml', 'compose.four-cli.mock.yaml',
+    'compose.four-cli.claude.yaml', 'compose.four-cli.opencode.yaml',
+    'compose.four-cli.pi.yaml', 'compose.four-cli.management.yaml',
+  ];
+  const base = structuredClone(render(activeFiles).services['claude-headless']);
+  const service = structuredClone(render([...activeFiles, 'compose.four-cli.claude-read-diagnostic.yaml']).services['claude-headless']);
   assert.deepEqual(service.entrypoint, ['node', '/opt/memory-client/task5-headless-phase-diagnostic.mjs']);
   const script = service.volumes.find((volume) => volume.target === '/opt/memory-client/task5-headless-phase-diagnostic.mjs');
   assert.equal(script.type, 'bind');

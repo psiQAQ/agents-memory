@@ -1,0 +1,5 @@
+services:
+  claude-headless:
+    volumes:
+      - ./tools/task5-headless-phase-diagnostic.mjs:/opt/memory-client/task5-headless-phase-diagnostic.mjs:ro
+    entrypoint: ["node", "/opt/memory-client/task5-headless-phase-diagnostic.mjs"]

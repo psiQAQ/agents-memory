@@ -36,6 +36,33 @@ const configurations = {
     ],
     parseResult: canonicalPhaseResult,
   },
+  claudeRead: {
+    failureMessage: 'Task 5 Claude read diagnostic coordinator failed',
+    profiles: ['mock', 'management', 'claude', 'opencode', 'pi'],
+    composeFiles: [
+      'compose.four-cli.yaml', 'compose.four-cli.mock.yaml',
+      'compose.four-cli.claude.yaml', 'compose.four-cli.opencode.yaml',
+      'compose.four-cli.pi.yaml', 'compose.four-cli.management.yaml',
+    ],
+    actions: [
+      { args: ['up', '-d', '--wait', '--wait-timeout', '180', '--no-build', 'mock-llm', 'memory-core', 'memory-proxy', 'memory-hub'], environment: {} },
+      { args: ['run', '--rm', '--no-deps', 'bootstrap'], environment: {} },
+      { args: ['run', '--rm', '--no-deps', 'claude-config'], environment: {} },
+      { args: ['run', '--rm', '--no-deps', 'opencode-config'], environment: {} },
+      { args: ['run', '--rm', '--no-deps', 'pi-config'], environment: {} },
+      { args: ['run', '--rm', '--no-deps', 'stage1-gate'], environment: { STAGE1_SCENARIO: 'protocol-leak' } },
+      { args: ['run', '--rm', '--no-deps', 'stage1-gate'], environment: { STAGE1_SCENARIO: 'management' } },
+      { args: ['run', '--rm', '--no-deps', 'claude-headless'], environment: { STAGE1_CLIENT_SCENARIO: 'write' } },
+      { args: ['run', '--rm', '--no-deps', 'opencode-headless'], environment: { STAGE1_CLIENT_SCENARIO: 'write' } },
+      { args: ['run', '--rm', '--no-deps', 'pi-headless'], environment: { STAGE1_CLIENT_SCENARIO: 'write' } },
+      {
+        args: ['run', '--rm', '--no-deps', 'claude-headless'],
+        environment: { STAGE1_CLIENT_SCENARIO: 'read', STAGE1_OWNER: 'opencode' },
+        composeFiles: ['compose.four-cli.claude-read-diagnostic.yaml'],
+      },
+    ],
+    parseResult: canonicalPhaseResult,
+  },
 };
 const failureMessage = configurations.claude.failureMessage;
 const resultKeys = [
@@ -174,7 +201,9 @@ async function run({ environment, integrationRoot, spawnCompose, configuration }
   let finalResult;
   const actions = fixedActions(configuration);
   for (const [index, action] of actions.entries()) {
-    const result = await spawnCompose([...prefix, ...action.args], spawnOptions({ ...baseEnvironment, ...action.environment }));
+    const actionPrefix = [...prefix];
+    for (const file of action.composeFiles ?? []) actionPrefix.push('-f', join(integrationRoot, file));
+    const result = await spawnCompose([...actionPrefix, ...action.args], spawnOptions({ ...baseEnvironment, ...action.environment }));
     if (result?.status !== 0) throw new Error();
     if (index === actions.length - 1) finalResult = (configuration.parseResult ?? canonicalResult)(result.stdout);
   }
@@ -206,6 +235,16 @@ export async function runTask5OpenCodeHeadlessDiagnostic({
   spawnCompose = defaultSpawnCompose,
 } = {}) {
   const configuration = configurations.opencodeHeadless;
+  try { return await run({ environment, integrationRoot, spawnCompose, configuration }); }
+  catch { throw new Error(configuration.failureMessage); }
+}
+
+export async function runTask5ClaudeReadDiagnostic({
+  environment = process.env,
+  integrationRoot = resolve(import.meta.dirname, '..'),
+  spawnCompose = defaultSpawnCompose,
+} = {}) {
+  const configuration = configurations.claudeRead;
   try { return await run({ environment, integrationRoot, spawnCompose, configuration }); }
   catch { throw new Error(configuration.failureMessage); }
 }
