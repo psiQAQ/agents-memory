@@ -5,6 +5,7 @@ services:
       dockerfile: images/tools/Dockerfile
 
   claude-client:
+    image: refine-memory-claude-code:2.1.226
     build:
       context: images/clients/claude
       dockerfile: Dockerfile

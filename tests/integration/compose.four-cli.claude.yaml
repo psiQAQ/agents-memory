@@ -12,7 +12,7 @@ services:
       - claude-home:/agent-home
     restart: "no"
   claude-client:
-    image: refine-memory-claude-code:2.1.226
+    image: refine-memory-claude-code:2.1.226@sha256:058eccaf56507941c27fd1ce57e69cb6ae5cff20680e7a36ed80bddb22ec946b
     profiles: ["claude"]
     user: "10001:10001"
     init: true
@@ -34,7 +34,7 @@ services:
       - claude-workspace:/workspace
     command: ["--version"]
   claude-headless:
-    image: refine-memory-claude-code:2.1.226
+    image: refine-memory-claude-code:2.1.226@sha256:058eccaf56507941c27fd1ce57e69cb6ae5cff20680e7a36ed80bddb22ec946b
     profiles: ["claude"]
     user: "10001:10001"
     init: true
