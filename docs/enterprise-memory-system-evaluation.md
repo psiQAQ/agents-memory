@@ -2,7 +2,7 @@
 
 ## 结论
 
-当前 active 目标是四 Docker CLI 共享记忆实验。Task 5 的 Proxy→Core auth service-token 缺口已在产品提交 `9e456a5` 完成 TDD 修复与独立 review；root `bfb3839a` 的 tools fixture fix 与唯一 `sha256:8ca1a2a8...` replacement image 继续保持 Ready（build/assets only）。前三次 Blocked run 保持 append-only；新的 formal run `task5-mock-20260811-toolsfix-7e1031af` preflight PASS，protocol/leak `24/24` Passed、management ok，但在 step 8 `claude-write` fail-stop。Mock aggregate 为 BASELINE_UNCHANGED、Core L0 operation false、Claude version probe OK，当前只能收窄至 Claude `-p`/capture/CLI-before-Proxy 路径，不能虚构根因。因此 Task 5 为 **Blocked / Claude write diagnostic pending**；后续两写、六读、final、真实 headless、TUI 与真实 API/模型均为 **Not Run**。
+当前 active 目标是四 Docker CLI 共享记忆实验。Task 5 的 Proxy→Core auth service-token 缺口已在产品提交 `9e456a5` 完成 TDD 修复与独立 review；root `bfb3839a` 的 tools fixture fix 与唯一 `sha256:8ca1a2a8...` replacement image 继续保持 Ready（build/assets only）。前三次 Blocked run 与 `toolsfix-7e1031af` 的 Claude write fail-stop 均保持 append-only。其后 `6d6e9f6a` 最小 diagnostic 已产生 JSON，coordinator 验证 keys/types/enums，但 outer allowlist regex 转义错误过滤 classification values，进程结束后无法恢复。因此 Task 5 为 **Blocked / classification-forwarding-filter**；不得从该 diagnostic 声称 exit code、throw、Claude write 根因或业务 Gate 结论。后续两写、六读、final、真实 headless、TUI 与真实 API/模型均为 **Not Run**。
 
 旧 Windows 原生 Claude + Docker Claude 证据一律是 **Legacy**：保留原文供追溯，但不用于推断新的四 CLI 架构已通过。
 
@@ -56,7 +56,7 @@ flowchart LR
 | Stage 1 client Compose/bootstrap/config/images | Runtime Passed | tools 与三 client 串行各 build 一次；version/help、UID 10001、evidence ownership/writability、headless assets；仅 client build/config assets |
 | Stage 1 Task 5 root harness | Static/contract Passed | root Node 152/152 与 Compose config 7/7；fixture array text-block 识别的 RED→GREEN、固定 epoch/path、strict fixture、逐 operation oracle、outsider、exact project freshness、run/build/evidence 与 request-local credential 合同，不是业务运行 |
 | Stage 1 Proxy privacy/build | Runtime Passed | reviewed `9e456a5` auth service-token fix、38/38 suites / 276/276 tests、exact six baseline typecheck errors、Proxy `sha256:55fedae3...`；replacement image Ready，product tests + build/assets only |
-| Stage 1 Mock identity/share/isolation/leak | Blocked / Claude write diagnostic pending | `toolsfix-7e1031af` preflight PASS，protocol/leak `24/24` Passed、management ok，step 8 `claude-write` fail-stop。aggregate/Core/version 观测仅收窄 CLI-before-Proxy 边界；后续两写、六读、final 与真实 headless Not Run |
+| Stage 1 Mock identity/share/isolation/leak | Blocked / classification-forwarding-filter | `6d6e9f6a` JSON keys/types/enums 已验证，但 outer allowlist regex 转义错误过滤 classification values，结果不可恢复。不得声明 exit/throw/root cause；新 tuple/direct parser 诊断及后续业务 Gate Not Run |
 | Stage 1 TUI | Not Run | 仅在 headless Gate 通过后由用户确认 |
 | Stage 1 真实模型 | Not Run | 需完整 Mock Gate 与明确授权 |
 | Stage 2 Codex Responses | Not Run | 在 Stage 1 后执行 |
@@ -80,4 +80,4 @@ flowchart LR
 
 ## 下一 Gate
 
-Task 5 `auth.serviceToken` 与 Mock fixture fixes/replacement images 均保持 **Ready（build/assets only）**，但正式 run 已在 Claude write fail-stop。下一 Gate 不是重跑、TUI 或真实模型，而是按已登记的 [Claude -p diagnostic Ready preflight](reproduction/2026-08-11-task5-diag-claude-p-20260811-6d6e9f6a-ready.md) 先取得 Claude `-p`/capture/CLI-before-Proxy 路径的最小、无 secret 诊断证据并确定原因；当前 project/evidence 必须保留至脱敏归档与授权 cleanup。后续两次写入、六次有序跨 owner 读取、final oracle 与三个真实 headless 均为 Not Run；真实 API、TUI 与 Codex Stage 2 仍为 Not Run。active gitlink 在获得独立 push/归档授权前仍无法由 fresh clone 获取。
+Task 5 `auth.serviceToken` 与 Mock fixture fixes/replacement images 均保持 **Ready（build/assets only）**，但 Claude diagnostic 已因 [classification-forwarding-filter](reproduction/2026-08-11-task5-diag-claude-p-20260811-6d6e9f6a-blocked.md) Blocked。下一 Gate 不是重跑、TUI 或真实模型，而是使用新的 tuple 与 direct structured JSON parser 重做最小、无 secret Claude write diagnostic；不得复用当前 tuple。当前 project 按授权精确 cleanup，host evidence 保留。后续两次写入、六次有序跨 owner 读取、final oracle 与三个真实 headless 均为 Not Run；真实 API、TUI 与 Codex Stage 2 仍为 Not Run。active gitlink 在获得独立 push/归档授权前仍无法由 fresh clone 获取。
