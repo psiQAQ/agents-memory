@@ -2,7 +2,7 @@
 
 ## 结论
 
-当前 active 目标是四 Docker CLI 共享记忆实验。Task 5 的 Proxy→Core auth service-token、Mock fixture、Claude EROFS/tmpfs 与 OpenCode fixed-title 缺口均已完成 TDD、replacement images 与 scoped review。`opentitle-4f056ee6` 的单次 full Mock launcher 在 fixed step 9 fail-stop 并已 exact cleanup；typed diagnostic `89398d1d` 随后证明 render/spawn/capture/CLI code0 与 exact single Mock operation，并已 cleanup。normal headless fixed-phase diagnostic 已在 `cbd1a27...` 完成 TDD、root `254/254`、Compose `8/8` 与独立 `C0/I0/M0` review；全新 `a666e597` tuple 已通过 freshness preflight，状态为 **Ready / Not Run**。当前业务 Gate 仍为 **Blocked**；三写六读、final、TUI 与真实 API/模型仍未获得通过证明。
+当前 active 目标是四 Docker CLI 共享记忆实验。Task 5 的 Proxy→Core auth service-token、Mock fixture、Claude EROFS/tmpfs 与 OpenCode fixed-title 缺口均已完成 TDD、replacement images 与 scoped review。历史 `opentitle-4f056ee6` full Mock 在 step 9 fail-stop；typed diagnostic `89398d1d` 已证明 OpenCode launch 与 exact single Mock operation。normal headless phase diagnostic `a666e597` 随后单次返回 `phase=success`，证明 prior Claude operation 后的 OpenCode client、exact aggregate verifier 与 atomic evidence publish 全部成功；exact project 已从 `5/1/12` cleanup 为 `0/0/0`，active images `7/7` 保留。该结果仍不是完整 Mock Gate，当前业务状态为 **Blocked / fresh full Mock preflight next**；三写六读、final、TUI 与真实 API/模型仍未获得通过证明。
 
 旧 Windows 原生 Claude + Docker Claude 证据一律是 **Legacy**：保留原文供追溯，但不用于推断新的四 CLI 架构已通过。
 
@@ -56,7 +56,7 @@ flowchart LR
 | Stage 1 client Compose/bootstrap/config/images | Runtime Passed | tools 与三 client 原 build/assets、Claude EROFS replacement、OpenCode fixed-title replacement；version/help、UID10001、evidence ownership/writability、headless assets；仅 client build/config assets |
 | Stage 1 Task 5 root harness | Static/contract Passed | root Node 254/254、active Compose config 7/7 与 normal headless diagnostic overlay 1/1；fixture、固定 step/phase、typed client diagnostic、exact verifier/evidence、outsider、freshness 与 request-local credential 合同，不是业务运行 |
 | Stage 1 Proxy privacy/build | Runtime Passed | reviewed `9e456a5` auth service-token fix、38/38 suites / 276/276 tests、exact six baseline typecheck errors、Proxy `sha256:55fedae3...`；replacement image Ready，product tests + build/assets only |
-| Stage 1 Mock identity/share/isolation/leak | Blocked / phase diagnostic Ready | `opentitle-4f056ee6` 单次 launcher fixed step 9 fail-stop且 exact cleanup；`a666e597` normal headless phase diagnostic Ready/Not Run，仅用于区分 client、observation、evidence、setup 与 success |
+| Stage 1 Mock identity/share/isolation/leak | Blocked / fresh full Mock preflight next | `a666e597` normal headless phase diagnostic Passed/cleaned；只证明 prior Claude operation 后的 OpenCode client/verifier/evidence，完整三写六读/final 仍 Not Run |
 | Stage 1 TUI | Not Run | 仅在 headless Gate 通过后由用户确认 |
 | Stage 1 真实模型 | Not Run | 需完整 Mock Gate 与明确授权 |
 | Stage 2 Codex Responses | Not Run | 在 Stage 1 后执行 |
@@ -81,4 +81,4 @@ flowchart LR
 
 ## 下一 Gate
 
-[opentitle-4f056ee6 OpenCode write Blocked](reproduction/2026-08-12-task5-mock-20260812-opentitle-4f056ee6-opencode-write-blocked.md) 与 [typed diagnostic `89398d1d` Passed](reproduction/2026-08-12-task5-diag-opencode-20260812-89398d1d-passed.md) 均保持 append-only且对应 project 已清理。下一 Gate 唯一允许对 [normal headless phase diagnostic `a666e597` Ready](reproduction/2026-08-12-task5-diag-opencode-headless-20260812-a666e597-ready.md) tuple 执行一次 tracked coordinator；禁止 build、retry、复用旧 tuple、读取 raw logs/evidence、进入 TUI 或真实模型。freshness 失败保留资源审计；只有本次创建 exact project 后才执行 exact cleanup。真实 API、TUI 与 Codex Stage 2 仍为 Not Run。active gitlink 在获得独立 push/归档授权前仍无法由 fresh clone 获取。
+[normal headless phase diagnostic `a666e597` Passed](reproduction/2026-08-12-task5-diag-opencode-headless-20260812-a666e597-passed.md) 与 [exact cleanup](reproduction/2026-08-12-task5-diag-opencode-headless-20260812-a666e597-exact-cleanup-passed.md) 已关闭普通 verifier/evidence 路径候选，但不改写历史 full-Mock Blocked。下一 Gate 是为全新唯一 tuple 写 Ready/preflight 记录后，单次执行 tracked 17-step deterministic Mock launcher；禁止 build、retry、复用旧 tuple、读取 raw logs/evidence、进入 TUI 或真实模型。失败须 fail-stop并保留固定 step，成功后仍先 review/cleanup，再进入用户手工 TUI。真实 API 与 Codex Stage 2 仍为 Not Run。active gitlink 在获得独立 push/归档授权前仍无法由 fresh clone 获取。
