@@ -4,9 +4,9 @@
 
 ## 当前边界
 
-**Fact**：upstream base 锁定 `feat/server_team@0a568c328ea1aae3f22ed3656e7900da7ea565c1`，active fork/gitlink 为 Task 3 review-fix 产品提交 `0bba4d798ce452d97dbce3c6fa1b7a3eccd881a2`。Stage 1 是 Claude Code `2.1.226`、OpenCode `1.18.16`、Pi `0.84.1`，Stage 2 是 Codex `0.147.0`。
+**Fact**：upstream base 锁定 `feat/server_team@0a568c328ea1aae3f22ed3656e7900da7ea565c1`，active fork/gitlink 为 Task 5 product-privacy hardening 产品提交 `d6afcd835467c56a29d89e9befcb796ab612da78`。Stage 1 是 Claude Code `2.1.226`、OpenCode `1.18.16`、Pi `0.84.1`，Stage 2 是 Codex `0.147.0`。
 
-**Fact**：Task 4 的 active Compose/profile overlays、三客户端 manifest/identity/bootstrap、三 owner team-visible Chat Memory、六条 cross-owner binding、独立 outsider、私有 bundle/config 与三款固定 CLI image 已 Passed。服务启动、Mock prompt/共享/ACL/leak、真实 API、TUI 与端口探针仍为 Not Run。既有 Windows + Claude 命令、Compose 路径和运行证据是 Legacy，不能直接复用到四 CLI 路线。
+**Fact**：Task 4 的 active Compose/profile overlays、三客户端 manifest/identity/bootstrap、三 owner team-visible Chat Memory、六条 cross-owner binding、独立 outsider、私有 bundle/config 与三款固定 CLI image 已 Passed。Task 5 root harness 104/104、Compose config 6/6，以及 Proxy product privacy tests/build-assets 已通过；服务启动、真实 CLI headless、Mock 三写六读、live ACL/management、真实 API、TUI 与端口探针仍为 Not Run。既有 Windows + Claude 命令、Compose 路径和运行证据是 Legacy，不能直接复用到四 CLI 路线。
 
 **Fact**：legacy ref `codex/legacy-proxy-hardening-69fd8b@69fd8b31e3fd4362af6c65407b92b26dfabebd0c` 是 local-only、未 push；fresh clone 不可取得，未经授权不得 push。跨 clone 可重建保全需要 push 或外部归档授权，在此之前仍未完成。
 
@@ -14,7 +14,7 @@
 
 ## 静态验证
 
-在根仓库执行 legacy Node suite。它只验证当前根集成契约，不能证明 active Docker 业务流：
+在根仓库执行完整 Node suite；当前预期为 104/104。它只验证当前根集成契约，不能证明 active Docker 业务流：
 
 ```powershell
 node --test tests/integration/test/*.test.mjs
@@ -60,7 +60,7 @@ try {
 
 Messages 的 unknown/unbound/path-source conflict、缺失 session、非法字符、`..` 与超过 256 字符均必须在 auth、body parse、Core/store/upstream 前拒绝；`count_tokens` 的 unknown/unbound/conflict 必须在 auth、body、upstream、credit 前拒绝。不得新增 source header，不得把 OpenCode/Pi 映射为 Claude Code，也不得让最终 OpenAI `POST /*` catch-all 接走 unknown Anthropic-style route。OpenCode/Pi session-init 在 Anthropic protocol 下只把 context 追加到顶层 `system`，不得产生 `messages[].role=system`；OpenAI CodeBuddy 行为保持。
 
-Task 3 review-fix 固定 Proxy 为 `local/refine-memory-proxy:0bba4d7-task3-fix1@sha256:88a350e44c0e04bec0632034a4dfb437904dc4da6471fa9957ebb9dbaa86f66c`；official public context、31/31 tests、privacy focused、6 个 runtime shell、SQLite 3.49.2、node-pty、stub fallback 与 UID 10001 Passed。完整证据见 [review RED/erratum](../../docs/reproduction/2026-08-11-task3-review-fix-round1-erratum.md) 与 [review fix Passed](../../docs/reproduction/2026-08-11-task3-review-fix-round1-passed.md)。选定共享 SessionStore/recovery/capability console 已通过 sentinel Gate；JSONL、ClickHouse、Opik、Langfuse、upstream headers 与 Claude 专用历史状态机留到 Task 5，当前 Not Run。deprecated `/claude-code/v1/messages` 固定 404 的 Minor 已 deferred。该结果仍不授权启动业务栈或真实 API。
+Task 3 review-fix 固定 Proxy 为 `local/refine-memory-proxy:0bba4d7-task3-fix1@sha256:88a350e44c0e04bec0632034a4dfb437904dc4da6471fa9957ebb9dbaa86f66c`；official public context、31/31 tests、privacy focused、6 个 runtime shell、SQLite 3.49.2、node-pty、stub fallback 与 UID 10001 Passed。完整证据见 [review RED/erratum](../../docs/reproduction/2026-08-11-task3-review-fix-round1-erratum.md) 与 [review fix Passed](../../docs/reproduction/2026-08-11-task3-review-fix-round1-passed.md)。选定共享 SessionStore/recovery/capability console 已通过 sentinel Gate；当时后置的结构化 sinks、upstream headers 与 active diagnostics 已由下方 Task 5 产品级 Gate 覆盖，但 live stack/evidence chain 仍 Not Run。deprecated `/claude-code/v1/messages` 固定 404 的 Minor 已 deferred。该结果仍不授权启动业务栈或真实 API。
 
 ## Task 4 三客户端 Compose/bootstrap 结果
 
@@ -76,12 +76,28 @@ client 容器只挂自己的 home/workspace，不挂 bootstrap-state、模型 ke
 
 formal review 后，bootstrap 在发布 private/public artifact 前验证三 owner 的 user/key/Agent/Session/asset cardinality、outsider 身份与 Team/Task 隔离，并逐字段验证六条新增 binding 且保留全部既有 binding。renderer/launcher 只读取对应 home 的 `.memory/agent-bundle.json`，逐级拒绝 home/`.memory` symlink、junction 或非目录，并拒绝 linked final file。先前 review 的 Mock runtime config、只读挂载、healthy 依赖、config-dir no-follow 与固定 `node:22-bookworm-slim@sha256:d649c27...` 保持。`real` overlay 在 Task 4 仍只是 profile/config 静态入口，不含 `.env`/Paid launcher，不可当作 Task 6 运行 SOP。完整 RED 链与命令见 [Task 4 reproduction](../../docs/reproduction/2026-08-11-task4-three-client-compose-bootstrap-passed.md)。这些结果不证明 CLI prompt、服务健康、Mock 共享/ACL/leak、管理 CRUD、TUI 或真实 API。
 
+## Task 5 harness 与 Proxy privacy/build 结果
+
+根 harness commits `5bb2d65`、`a10e825`、`a2ed161`、`4cae880` 固定了以下 deterministic contracts：
+
+- 三个平台各 8 类 Anthropic fixture：text、SSE stream、tool、count、400、429、500、timeout；Mock 只保留 bounded redacted aggregate。
+- 三次顺序写入必须由 Core L0 后 L1 oracle 精确核对 owner/Team/Agent/Task；六次读取按固定顺序执行，read prompt 不含目标 owner marker，模型自然语言回复不能作为证明。
+- outsider 的 accessible asset、ACL、binding mutation 与 forged Proxy identity 必须 fail closed；非法请求 all-model delta 0，合法 outsider own request delta 1 且不能命中 owner marker。
+- management Gate 核对 users、teams/members、agents、tasks、assets、bindings、ACL、Panel；Panel 只在 `127.0.0.1` 发布，Knowledge 不发布宿主端口。
+- 三个 CLI 的非交互 argv、独立 writable home/workspace/credential volumes 和原子脱敏 evidence shape 均由测试固定，不接受 ambient command/options。
+
+Root full Node 为 104/104，base + `mock`、`real`、`claude`、`opencode`、`pi`、`management` Compose config 为 6/6。它们是 **Static/contract Passed**。
+
+产品范围 `0bba4d7..d6afcd8` 关闭 upstream header/credential origin/redirect、结构化 telemetry sinks 与 active/auxiliary/injection/bootstrap diagnostics；product suite 113/113 和 independent review CLEAN。唯一 official public-context build 固定为 `local/refine-memory-proxy:d6afcd8-task5@sha256:d79751b6dca733c5aec2ea11a4484cc4184068373dde14c0f01e6793c6bc30e8`，UID10001、6 shell、SQLite 3.49.2、node-pty、public stub/source、tsx/tini Passed。这是 **Runtime Passed（product tests + build/assets only）**。
+
+完整证据见 [privacy RED](../../docs/reproduction/2026-08-11-task5-proxy-privacy-hardening-red.md) 与 [privacy/build Passed](../../docs/reproduction/2026-08-11-task5-proxy-privacy-build-passed.md)。独立根集成 review 前不得启动业务栈；review 通过后的实际顺序固定为 protocol/leak → management/outsider → 三次顺序写入 → 六次有序跨 owner 读取 → final oracle。三个真实 headless 全绿后才由用户确认 TUI。当前所有 live business steps 均为 **Not Run / User Confirmation Pending**，本节没有授权真实模型或破坏性清理。
+
 ## 后续受控顺序
 
 1. **Task 2（Passed，build/assets only）**：固定 image ID/digest 与不可变 RED→GREEN 已归档；不扩写为服务或业务通过。
 2. **Task 3（Passed，handler/route + build/assets only）**：三平台 literal Messages/`count_tokens` route、source/session fail-closed、Anthropic system context 与选定 console privacy 已固定；不扩写为服务业务或 comprehensive leak Gate 通过。
 3. **Task 4（Passed，client build/config assets only）**：active Compose、三客户端身份/config/image 已固定；不扩写为服务或业务流通过。
-4. **Task 5（下一 Gate）**：完成 deterministic Mock 下的身份、三写六读、隔离、泄漏和管理 Gate；headless 通过后才进行用户 TUI 确认。
+4. **Task 5（in progress）**：root harness 与 Proxy privacy/build-assets 已通过限定层级；下一步是在独立根集成 review 后执行 deterministic Mock Docker runtime，headless 通过后才进行用户 TUI 确认。
 5. **Task 6**：完整 Mock Gate 后且负责人明确授权，才可使用 host-only 双 key 与预算限制做真实 Stage 1。
 6. **Task 7–8**：在 Stage 1 后实现/验证 Codex Responses 与四客户端 binding 上限。
 

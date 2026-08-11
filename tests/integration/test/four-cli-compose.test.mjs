@@ -32,7 +32,7 @@ test('active four-CLI Compose fixes product images, profiles, private network, a
   const { parsed, text } = composeConfig();
   assert.equal(parsed.networks.default.internal, true);
   assert.equal(parsed.services['memory-core'].image, 'local/refine-memory-core:49c4536-fix1@sha256:fded9d48d76bf71d0652023be0e9aa5553d46c039cc04ace0ec7c1e370f95d44');
-  assert.equal(parsed.services['memory-proxy'].image, 'local/refine-memory-proxy:0bba4d7-task3-fix1@sha256:88a350e44c0e04bec0632034a4dfb437904dc4da6471fa9957ebb9dbaa86f66c');
+  assert.equal(parsed.services['memory-proxy'].image, 'local/refine-memory-proxy:d6afcd8-task5@sha256:d79751b6dca733c5aec2ea11a4484cc4184068373dde14c0f01e6793c6bc30e8');
   assert.equal(parsed.services['memory-hub'].image, 'local/refine-memory-hub:0a568c3-task2@sha256:a60377245cb4cfff6f5769910ff3a7f4b2fa7b0b64a756a69bf2c552408c44e4');
   assert.deepEqual(parsed.services['mock-llm'].profiles, ['mock']);
   for (const client of ['claude', 'opencode', 'pi']) {

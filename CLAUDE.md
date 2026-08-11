@@ -10,11 +10,12 @@ Stage 1 依次支持 Claude Code、OpenCode、Pi 的 Anthropic Messages 路由�
 
 ## Current baseline
 
-- **Fact**：Tencent upstream base 固定为 default `feat/server_team@0a568c328ea1aae3f22ed3656e7900da7ea565c1`；active fork/gitlink 为 Task 3 review-fix `codex/four-agent-memory-upstream@0bba4d798ce452d97dbce3c6fa1b7a3eccd881a2`。upstream 前移时仍须先审查增量，不能静默更新。
+- **Fact**：Tencent upstream base 固定为 default `feat/server_team@0a568c328ea1aae3f22ed3656e7900da7ea565c1`；active fork/gitlink 为 Task 5 product-privacy hardening `codex/four-agent-memory-upstream@d6afcd835467c56a29d89e9befcb796ab612da78`。upstream 前移时仍须先审查增量，不能静默更新。
 - **Fact**：历史修复 ref `codex/legacy-proxy-hardening-69fd8b@69fd8b31e3fd4362af6c65407b92b26dfabebd0c` 仅存在于当前本地对象库，尚未 push；fresh clone 不可取得，未经授权不得 push。若需要跨 clone 可重建保全，必须获得 push 或外部归档授权；在此之前该项仍未完成。
 - **Fact**：版本基线为 Claude Code `2.1.226`、Codex `0.147.0`、OpenCode `1.18.16`、Pi `0.84.1`。
 - **Fact**：Task 2 fix round 2 已使 tracked-shell producer 部分输出后 nonzero 必须整体失败；正常 Git Bash、WSL native 与 `git.exe` fallback 均保持 23/23。该轮只改 Gate/test/EOL attribute，不改镜像输入，因此 round 1 的 Core/Proxy image IDs 继续有效，Hub 保持原 Passed 镜像。该 Gate 为 **Runtime Passed（build/assets only）**。Core 与 Hub 是 root-default，Proxy UID 10001；本轮只记录权限元数据。服务健康、Mock、真实 API、TUI 与跨客户端业务流仍为 **Not Run**。
 - **Fact**：Task 4 已新增 active `compose.four-cli*.yaml`、无 secret 三客户端清单、动态三 owner bootstrap、独立 outsider、六条 cross-owner binding、私有 bundle/config renderer，以及三个 UID 10001 的固定 CLI image。formal review fix 已补齐 owner/outsider cardinality、binding post-set 全字段验证，以及 bundle 固定 home 路径和 parent no-follow；先前的 Mock runtime config/healthy 依赖、config-dir no-follow 与 Node base digest pin 保持。root Node 86/86、Compose config matrix、三镜像 build/version/help/UID Passed；状态仅是 **Runtime Passed（client build/config assets only）**，服务、Mock 业务、真实 API、TUI 与跨客户端读写仍为 **Not Run**。
+- **Fact**：Task 5 root harness 已以 104/104 Node tests 与 6/6 Compose config 固定 protocol、owner oracle、outsider/management、headless argv 和脱敏 evidence 契约；这是 **Static/contract Passed**，不是业务运行。产品 `d6afcd8` 的 113/113 tests、独立 review 与唯一 public-context build 已通过，固定 Proxy 为 `local/refine-memory-proxy:d6afcd8-task5@sha256:d79751b6dca733c5aec2ea11a4484cc4184068373dde14c0f01e6793c6bc30e8`；这仅是 **Runtime Passed（product tests + build/assets only）**。服务启动、真实 CLI headless、三写六读、live outsider/management oracle、TUI 与真实模型均为 **Not Run**。
 - **Recommendation**：从 `docs/enterprise-memory-system-evaluation.md` 确认下一 Gate；执行 Windows/Docker 操作前，再读 `tests/integration/README.md` 与最新 ADR/reproduction。
 
 ## Constraints
