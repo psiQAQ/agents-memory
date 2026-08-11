@@ -1,8 +1,5 @@
 x-tools-service: &tools-service
   image: refine-memory-integration-tools:task5
-  build:
-    context: .
-    dockerfile: images/tools/Dockerfile
 
 services:
   memory-core:
@@ -59,7 +56,10 @@ volumes:
   bootstrap-state: {}
   claude-home: {}
   claude-workspace: {}
+  claude-evidence: {}
   opencode-home: {}
   opencode-workspace: {}
+  opencode-evidence: {}
   pi-home: {}
   pi-workspace: {}
+  pi-evidence: {}

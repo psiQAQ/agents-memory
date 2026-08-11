@@ -1,9 +1,6 @@
 services:
   config-init:
     image: refine-memory-integration-tools:task5
-    build:
-      context: .
-      dockerfile: images/tools/Dockerfile
     profiles: ["mock"]
     command: ["config/render-config.mjs", "--out", "/out", "--mode", "mock"]
     environment:
@@ -72,9 +69,6 @@ services:
       - runtime-config:/runtime-config:ro
   mock-llm:
     image: refine-memory-integration-tools:task5
-    build:
-      context: .
-      dockerfile: images/tools/Dockerfile
     profiles: ["mock"]
     command: ["tools/mock-llm.mjs"]
     environment:
@@ -90,9 +84,6 @@ services:
 
   stage1-gate:
     image: refine-memory-integration-tools:task5
-    build:
-      context: .
-      dockerfile: images/tools/Dockerfile
     profiles: ["mock"]
     # Bootstrap/runtime-config secrets are root-owned 0600; keep this one-shot
     # oracle root-only and drop every capability instead of widening file modes.
@@ -124,11 +115,16 @@ services:
       - /runtime-config/gateway.token
       - --output-dir
       - /evidence
+      - --client-evidence-root
+      - /client-evidence
       - --scenario
       - ${STAGE1_SCENARIO:-protocol-leak}
     volumes:
       - bootstrap-state:/state:ro
       - runtime-config:/runtime-config:ro
+      - claude-evidence:/client-evidence/claude:ro
+      - opencode-evidence:/client-evidence/opencode:ro
+      - pi-evidence:/client-evidence/pi:ro
       - type: bind
         source: ${EVIDENCE_DIR:-../../.runtime/runs/task5-manual}
         target: /evidence

@@ -47,6 +47,28 @@ test('active four-CLI Compose fixes product images, profiles, private network, a
   assert.doesNotMatch(text, /api\.deepseek\.com|PROXY_UPSTREAM_API_KEY|MEMORY_LLM_API_KEY|sk-mem-|docker\.sock/i);
 });
 
+test('active runtime Compose cannot implicitly build an image', () => {
+  const { parsed } = composeConfig();
+  const buildServices = Object.entries(parsed.services)
+    .filter(([, service]) => service.build)
+    .map(([name]) => name)
+    .sort();
+  assert.deepEqual(buildServices, []);
+});
+
+test('explicit build-only overlay defines exactly the tools and three client builds', () => {
+  const { parsed } = composeConfig([...files, 'compose.four-cli.build.yaml']);
+  const builds = Object.fromEntries(Object.entries(parsed.services)
+    .filter(([, service]) => service.build)
+    .map(([name, service]) => [name, service.build]));
+  assert.deepEqual(builds, {
+    bootstrap: { context: integrationRoot, dockerfile: 'images/tools/Dockerfile' },
+    'claude-client': { context: join(integrationRoot, 'images', 'clients', 'claude'), dockerfile: 'Dockerfile', additional_contexts: { integration: integrationRoot } },
+    'opencode-client': { context: join(integrationRoot, 'images', 'clients', 'opencode'), dockerfile: 'Dockerfile', additional_contexts: { integration: integrationRoot } },
+    'pi-client': { context: join(integrationRoot, 'images', 'clients', 'pi'), dockerfile: 'Dockerfile', additional_contexts: { integration: integrationRoot } },
+  });
+});
+
 test('active client containers are non-root and receive only their private home and workspace', () => {
   const { parsed } = composeConfig();
   const clientVolumes = new Set();
@@ -81,7 +103,11 @@ test('active client containers are non-root and receive only their private home 
     assert.deepEqual(headless.volumes.map(({ source, target }) => ({ source, target })), [
       { source: `${client}-home`, target: '/home/agent' },
       { source: `${client}-workspace`, target: '/workspace' },
+      { source: `${client}-evidence`, target: '/client-evidence' },
     ]);
+    assert.notEqual(headless.volumes.find((volume) => volume.target === '/client-evidence').read_only, true);
+    assert.ok(headless.command.includes('--evidence-dir'));
+    assert.ok(headless.command.includes('/client-evidence'));
     assert.equal(headless.environment.STAGE1_CLIENT_SCENARIO, 'write');
     assert.equal(headless.environment.STAGE1_OWNER, '');
     assert.equal(headless.command.includes('--scenario'), false);
@@ -142,6 +168,11 @@ test('active mock overlay renders runtime config and waits for healthy services'
   assert.equal(gate.environment.PANEL_BASE_URL, 'http://memory-hub:8125');
   assert.ok(gate.volumes.some((volume) => volume.source === 'bootstrap-state' && volume.target === '/state' && volume.read_only));
   assert.ok(gate.volumes.some((volume) => volume.target === '/evidence' && volume.type === 'bind'));
+  for (const client of ['claude', 'opencode', 'pi']) {
+    assert.ok(gate.volumes.some((volume) => volume.source === `${client}-evidence` && volume.target === `/client-evidence/${client}` && volume.read_only));
+  }
+  assert.ok(gate.command.includes('--client-evidence-root'));
+  assert.ok(gate.command.includes('/client-evidence'));
   assert.doesNotMatch(JSON.stringify(gate), /docker\.sock|DEEPSEEK|PROXY_UPSTREAM_API_KEY|MEMORY_LLM_API_KEY/i);
 });
 

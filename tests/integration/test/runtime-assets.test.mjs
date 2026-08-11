@@ -33,7 +33,7 @@ test('Claude entrypoint rebuilds isolated settings before every CLI invocation',
 
 test('integration tools image is pinned and contains only the local harness inputs', async () => {
   const dockerfile = await read('images/tools/Dockerfile');
-  assert.match(dockerfile, /^FROM node:22-bookworm-slim$/m);
+  assert.match(dockerfile, /^FROM node:22-bookworm-slim@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436$/m);
   assert.match(dockerfile, /^COPY tools \/lab\/tools$/m);
   assert.match(dockerfile, /^COPY config \/lab\/config$/m);
   assert.match(dockerfile, /^COPY claude\/settings\.template\.json \/lab\/claude\/settings\.template\.json$/m);

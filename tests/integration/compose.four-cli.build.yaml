@@ -1,0 +1,26 @@
+services:
+  bootstrap:
+    build:
+      context: .
+      dockerfile: images/tools/Dockerfile
+
+  claude-client:
+    build:
+      context: images/clients/claude
+      dockerfile: Dockerfile
+      additional_contexts:
+        integration: .
+
+  opencode-client:
+    build:
+      context: images/clients/opencode
+      dockerfile: Dockerfile
+      additional_contexts:
+        integration: .
+
+  pi-client:
+    build:
+      context: images/clients/pi
+      dockerfile: Dockerfile
+      additional_contexts:
+        integration: .

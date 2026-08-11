@@ -13,11 +13,6 @@ services:
     restart: "no"
   pi-client:
     image: refine-memory-pi:0.84.1
-    build:
-      context: images/clients/pi
-      dockerfile: Dockerfile
-      additional_contexts:
-        integration: .
     profiles: ["pi"]
     user: "10001:10001"
     init: true
@@ -60,6 +55,7 @@ services:
     volumes:
       - pi-home:/home/agent
       - pi-workspace:/workspace
+      - pi-evidence:/client-evidence
     entrypoint: ["node", "/opt/memory-client/task5-headless-client.mjs"]
-    command: ["--client", "pi", "--run-id", "${RUN_ID:-task5-static}", "--home-dir", "/home/agent", "--bundle-file", "/home/agent/.memory/agent-bundle.json", "--space-id", "${MEMORY_SPACE_ID:-default}", "--template", "/opt/memory-client/settings.template.json"]
+    command: ["--client", "pi", "--run-id", "${RUN_ID:-task5-static}", "--home-dir", "/home/agent", "--bundle-file", "/home/agent/.memory/agent-bundle.json", "--space-id", "${MEMORY_SPACE_ID:-default}", "--template", "/opt/memory-client/settings.template.json", "--evidence-dir", "/client-evidence"]
     restart: "no"
