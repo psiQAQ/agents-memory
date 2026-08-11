@@ -4,9 +4,9 @@
 
 ## 当前边界
 
-**Fact**：upstream base 锁定 `feat/server_team@0a568c328ea1aae3f22ed3656e7900da7ea565c1`，active fork/gitlink 为 Task 5 product-privacy hardening 产品提交 `d6afcd835467c56a29d89e9befcb796ab612da78`。Stage 1 是 Claude Code `2.1.226`、OpenCode `1.18.16`、Pi `0.84.1`，Stage 2 是 Codex `0.147.0`。
+**Fact**：upstream base 锁定 `feat/server_team@0a568c328ea1aae3f22ed3656e7900da7ea565c1`，active fork/gitlink 为 reviewed Task 5 session-identity fix `2de58c2f656978cfe310e3ac3ade085d8096f83b`。该 commit 是 local-only；`origin/codex/four-agent-memory-upstream` 仍为 `38ced16f46fed640bcb7360fb1ca45f9f9918628`，未经单独授权不得 push，fresh clone 暂不可取得。Stage 1 是 Claude Code `2.1.226`、OpenCode `1.18.16`、Pi `0.84.1`，Stage 2 是 Codex `0.147.0`。
 
-**Fact**：Task 4 的 active Compose/profile overlays、三客户端 manifest/identity/bootstrap、三 owner team-visible Chat Memory、六条 cross-owner binding、独立 outsider、私有 bundle/config 与三款固定 CLI image 已 Passed。Task 5 round 2 root contracts 149/149、Compose config 6/6；project/run exact binding、exact Compose-label freshness 和 `/client-evidence` UID10001 image contract 仅为 Static Passed。原 `d6afcd8` Proxy privacy tests/build-assets 只在既定范围内保持历史 Passed。跨 identity terminal L1 session cache 风险的产品修复、替代镜像、tools/三客户端 rebuild 和 scoped re-review Pending；服务启动、真实 CLI headless、Mock 三写六读、live ACL/management、真实 API、TUI 与端口探针仍为 Not Run。既有 Windows + Claude 命令、Compose 路径和运行证据是 Legacy，不能直接复用到四 CLI 路线。
+**Fact**：Task 5 product session fix 已通过 19 files / 298 tests、formal review 与 Proxy build/assets；root 150/150、Compose config 7/7，launcher 从同一私有 bundle key 覆盖 `MEMORY_USER_KEY` 与 `TDAI_MEMORY_USER_KEY`。tools 与三客户端已串行各 build 一次；version/help、UID10001、`/client-evidence` 10001:10001 可写与 headless assets Passed。服务启动、Proxy→Mock、真实 CLI headless、Mock 三写六读、live ACL/management、final oracle、真实 API、TUI、Paid/真实模型、Codex Stage 2 与端口探针仍为 Not Run。既有 Windows + Claude 命令、Compose 路径和运行证据是 Legacy，不能直接复用到四 CLI 路线。
 
 **Fact**：legacy ref `codex/legacy-proxy-hardening-69fd8b@69fd8b31e3fd4362af6c65407b92b26dfabebd0c` 是 local-only、未 push；fresh clone 不可取得，未经授权不得 push。跨 clone 可重建保全需要 push 或外部归档授权，在此之前仍未完成。
 
@@ -14,7 +14,7 @@
 
 ## 静态验证
 
-在根仓库执行完整 Node suite；当前预期为 149/149。它只验证当前根集成契约，不能证明 active Docker 业务流：
+在根仓库执行完整 Node suite；当前预期为 150/150。它只验证当前根集成契约，不能证明 active Docker 业务流：
 
 ```powershell
 node --test tests/integration/test/*.test.mjs
@@ -31,6 +31,8 @@ $env:RUN_ID = 'task5-static'
 $env:COMPOSE_PROJECT_NAME = 'refine-memory-task5-static'
 $env:EVIDENCE_DIR = [System.IO.Path]::GetFullPath((Join-Path $PWD '.runtime\static\task5-static'))
 try {
+  docker compose -f $base config --format json | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw 'Compose config failed: base' }
   foreach ($profile in @('mock', 'real', 'claude', 'opencode', 'pi', 'management')) {
     docker compose --profile $profile -f $base `
       -f "tests/integration/compose.four-cli.$profile.yaml" config --format json | Out-Null
@@ -76,9 +78,9 @@ client 容器只挂自己的 home/workspace，不挂 bootstrap-state、模型 ke
 
 | Client | 固定 image ID | 已验证边界 |
 | --- | --- | --- |
-| Claude Code `2.1.226` | `sha256:440d744ef794a29340622f920458fb533c9bff3d3db0b9ce01d3c5947c68492b` | Node base digest、npm wrapper/native integrity、version/help、UID 10001 |
-| OpenCode `1.18.16` | `sha256:8cdd9dfe249acc1888cb8c6fd8d00bfe46091cc4802fc44f3102adfd976886ab` | Node base digest、npm wrapper/native integrity、version/help、UID 10001 |
-| Pi `0.84.1` | `sha256:8d3275d699e20f9ab0e91f69f2eb50bcdf6b8722e331ba995c94444ebe56bc82` | Node base digest、Release SHA-256、version/help、UID 10001 |
+| Claude Code `2.1.226` | `sha256:8da31af44b686f44b3595e2d392d69c113ed26a35c781bfea39a276e6f271dbb` | rebuild、version/help、UID 10001、evidence ownership/writability、headless assets |
+| OpenCode `1.18.16` | `sha256:42bc38ead4c3de8ecd75152eeffe23f10f81c580d00e8a816e7b657cf7c57e9b` | rebuild、version/help、UID 10001、evidence ownership/writability、headless assets |
+| Pi `0.84.1` | `sha256:56582fd216db259342f4414ebdc6c9c9188229678d77eb2f360959c9af2e4538` | rebuild、version/help、UID 10001、evidence ownership/writability、headless assets |
 
 formal review 后，bootstrap 在发布 private/public artifact 前验证三 owner 的 user/key/Agent/Session/asset cardinality、outsider 身份与 Team/Task 隔离，并逐字段验证六条新增 binding 且保留全部既有 binding。renderer/launcher 只读取对应 home 的 `.memory/agent-bundle.json`，逐级拒绝 home/`.memory` symlink、junction 或非目录，并拒绝 linked final file。先前 review 的 Mock runtime config、只读挂载、healthy 依赖、config-dir no-follow 与固定 `node:22-bookworm-slim@sha256:d649c27...` 保持。`real` overlay 在 Task 4 仍只是 profile/config 静态入口，不含 `.env`/Paid launcher，不可当作 Task 6 运行 SOP。完整 RED 链与命令见 [Task 4 reproduction](../../docs/reproduction/2026-08-11-task4-three-client-compose-bootstrap-passed.md)。这些结果不证明 CLI prompt、服务健康、Mock 共享/ACL/leak、管理 CRUD、TUI 或真实 API。
 
@@ -92,17 +94,18 @@ formal review 后，bootstrap 在发布 private/public artifact 前验证三 own
 - management Gate 核对 users、teams/members、agents、tasks、assets、bindings、ACL、Panel；Panel 只在 `127.0.0.1` 发布，Knowledge 不发布宿主端口。
 - 三个 CLI 的非交互 argv、独立 writable home/workspace/credential/evidence volumes 和原子 0600 脱敏 evidence shape 均由测试固定，不接受 ambient command/options。headless stdout/stderr 只做 bounded in-memory scan，不继承或持久化；TUI 仍保留 interactive stdio。
 - runtime Compose 不含 `build:`；build-only overlay 明确覆盖 bootstrap 与三客户端。`RUN_ID`、`COMPOSE_PROJECT_NAME`、`EVIDENCE_DIR` 必填，project 必须精确为 `refine-memory-${RUN_ID}`。host launcher 先对 container/network/volume 执行 exact Compose-project label freshness probe，再执行固定 17 步 `--no-build` 流程；任一探针或步骤失败立即停止。
-- 三个 active client Dockerfile 在 `USER agent` 前创建 `/client-evidence` 并归属 10001:10001；headless 仍以 `10001:10001` 运行且三个 evidence named volume 彼此独立。该 ownership 尚待统一镜像 rebuild/runtime 验证。
+- 三个 active client Dockerfile 在 `USER agent` 前创建 `/client-evidence` 并归属 10001:10001；headless 仍以 `10001:10001` 运行且三个 evidence named volume 彼此独立。三镜像已验证该目录归属与 UID10001 写入；named volume 的业务流使用仍为 Not Run。
+- launcher 删除继承的所有私有 identity/key 变量，再从选定 private bundle 的同一 `memory_user_key` 设置 `MEMORY_USER_KEY` 与 product-required request-local `TDAI_MEMORY_USER_KEY`；值不进入 Compose、prompt、cache、log、evidence 或 tracked file。
 
-Root full Node 为 149/149，base + `mock`、`real`、`claude`、`opencode`、`pi`、`management` Compose config 为 6/6。它们是 **Static/contract Passed**。
+Root full Node 为 150/150，base + `mock`、`real`、`claude`、`opencode`、`pi`、`management` Compose config 为 7/7。它们是 **Static/contract Passed**。
 
-产品范围 `0bba4d7..d6afcd8` 对 upstream header/credential origin/redirect、结构化 telemetry sinks 与 active/auxiliary/injection/bootstrap diagnostics 的 113/113 和原 build-assets 结论保持。其唯一旧 build 是 `local/refine-memory-proxy:d6afcd8-task5@sha256:d79751b6dca733c5aec2ea11a4484cc4184068373dde14c0f01e6793c6bc30e8`。pre-runtime review 随后复现跨 identity terminal L1 session cache 风险；产品修复、全量复验与替代镜像 Pending，因此旧 image 不得进入 Task 5 runtime。
+产品 session-identity fix 固定为 `2de58c2f656978cfe310e3ac3ade085d8096f83b`；19 files / 298 tests、typecheck exact six baseline errors、formal Spec/Quality PASS 与最终 CLEAN。Compose 固定使用 `local/refine-memory-proxy:2de58c2-l1-fix@sha256:be847074bd63e34ba85b1eee8638cd7d2457d3617d85ad880d36d71efea69fcd`；本轮没有重建 Proxy。旧 `d6afcd8` image 只保留历史证据，不得进入 Task 5 runtime。
 
-完整链见 [privacy/build Passed](../../docs/reproduction/2026-08-11-task5-proxy-privacy-build-passed.md)、[pre-runtime round 1 erratum/RED](../../docs/reproduction/2026-08-11-task5-pre-runtime-review-round1-erratum.md) 与 [root static Passed](../../docs/reproduction/2026-08-11-task5-pre-runtime-review-round1-root-static-passed.md)。产品修复、新 Proxy、tools/三客户端镜像与 scoped re-review 全部通过前不得启动业务栈；随后实际顺序固定为 protocol/leak → management/outsider → 三次顺序写入 → 六次有序跨 owner 读取 → final oracle。三个真实 headless 全绿后才由用户确认 TUI。当前所有 live business steps 均为 **Not Run / User Confirmation Pending**，本节没有授权真实模型或破坏性清理。
+完整链见 [privacy/build Passed](../../docs/reproduction/2026-08-11-task5-proxy-privacy-build-passed.md)、[pre-runtime round 1 erratum/RED](../../docs/reproduction/2026-08-11-task5-pre-runtime-review-round1-erratum.md)、[root static Passed](../../docs/reproduction/2026-08-11-task5-pre-runtime-review-round1-root-static-passed.md) 与 [session-identity root integration/build Passed](../../docs/reproduction/2026-08-11-task5-session-identity-root-integration-build-passed.md)。下一项 live 顺序固定为 protocol/leak → management/outsider → 三次顺序写入 → 六次有序跨 owner 读取 → final oracle。三个真实 headless 全绿后才由用户确认 TUI。当前所有 live business steps 均为 **Not Run / User Confirmation Pending**，本节没有授权真实模型或破坏性清理。
 
 ## Task 5 Mock runtime 启动器（下一 Gate，尚未运行）
 
-只有独立根集成 review、所需 tools/三客户端镜像重建与产品安全修复全部通过后，才能执行本节。启动器不读取 Tencent `.env`、模型 key、settings、home 或旧 evidence；它只运行固定的 Mock 顺序，不接受任意命令，也不会执行 build、`down`、`down -v` 或 prune。
+产品修复、root integration 与所需 tools/三客户端镜像前置已通过限定层级；本节仍未执行。启动器不读取 Tencent `.env`、模型 key、settings、home 或旧 evidence；它只运行固定的 Mock 顺序，不接受任意命令，也不会执行 build、`down`、`down -v` 或 prune。
 
 `COMPOSE_PROJECT_NAME` 必须由 launcher 验证为 `refine-memory-${RUN_ID}`，不能复用无关 project 名。创建 evidence 目录或执行首个 Compose step 前，launcher 内部实际执行以下只读探针：
 
