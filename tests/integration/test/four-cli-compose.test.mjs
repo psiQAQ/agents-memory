@@ -39,7 +39,7 @@ test('active four-CLI Compose fixes product images, profiles, private network, a
   assert.equal(parsed.name, staticEnvironment.COMPOSE_PROJECT_NAME);
   assert.equal(parsed.networks.default.internal, true);
   assert.equal(parsed.services['memory-core'].image, 'local/refine-memory-core:49c4536-fix1@sha256:fded9d48d76bf71d0652023be0e9aa5553d46c039cc04ace0ec7c1e370f95d44');
-  assert.equal(parsed.services['memory-proxy'].image, 'local/refine-memory-proxy:2de58c2-l1-fix@sha256:be847074bd63e34ba85b1eee8638cd7d2457d3617d85ad880d36d71efea69fcd');
+  assert.equal(parsed.services['memory-proxy'].image, 'local/refine-memory-proxy:9e456a5-auth-fix@sha256:55fedae3f6a3a0a45ac8be45461d8cab23c52f11cc089c1c1e54c7d236de764b');
   assert.equal(parsed.services['memory-hub'].image, 'local/refine-memory-hub:0a568c3-task2@sha256:a60377245cb4cfff6f5769910ff3a7f4b2fa7b0b64a756a69bf2c552408c44e4');
   assert.deepEqual(parsed.services['mock-llm'].profiles, ['mock']);
   for (const client of ['claude', 'opencode', 'pi']) {
@@ -54,13 +54,13 @@ test('active four-CLI Compose fixes product images, profiles, private network, a
   assert.doesNotMatch(text, /api\.deepseek\.com|PROXY_UPSTREAM_API_KEY|MEMORY_LLM_API_KEY|sk-mem-|docker\.sock/i);
 });
 
-test('root gitlink fixes the reviewed session-identity product commit', () => {
+test('root gitlink fixes the reviewed auth service-token product commit', () => {
   const result = spawnSync('git', ['ls-files', '--stage', '--', 'submodules/TencentDB-Agent-Memory'], {
     cwd: join(integrationRoot, '..', '..'),
     encoding: 'utf8',
   });
   assert.equal(result.status, 0, result.stderr);
-  assert.equal(result.stdout.trim(), '160000 2de58c2f656978cfe310e3ac3ade085d8096f83b 0\tsubmodules/TencentDB-Agent-Memory');
+  assert.equal(result.stdout.trim(), '160000 9e456a5b7bb47ae40596237d0f0b87c1edfc098f 0\tsubmodules/TencentDB-Agent-Memory');
 });
 
 test('active Compose fails fast unless project, run, and evidence values are all explicit', async () => {

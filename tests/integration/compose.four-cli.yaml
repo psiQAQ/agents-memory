@@ -10,7 +10,7 @@ services:
     volumes: ["core-data:/data/tdai-memory"]
 
   memory-proxy:
-    image: local/refine-memory-proxy:2de58c2-l1-fix@sha256:be847074bd63e34ba85b1eee8638cd7d2457d3617d85ad880d36d71efea69fcd
+    image: local/refine-memory-proxy:9e456a5-auth-fix@sha256:55fedae3f6a3a0a45ac8be45461d8cab23c52f11cc089c1c1e54c7d236de764b
     expose: ["8096"]
     volumes:
       - proxy-data:/data/tdai-memory-proxy
