@@ -11,7 +11,7 @@ const clients = {
 };
 const privateEnvironment = ['MEMORY_USER_KEY', 'TDAI_MEMORY_USER_KEY', 'MEMORY_TEAM_ID', 'MEMORY_AGENT_ID', 'MEMORY_TASK_ID', 'MEMORY_SESSION_ID'];
 const categoryPatterns = [
-  ['filesystem', [/^(?:error:\s*)?(?:EACCES|EPERM|ENOENT)\b(?::.*)?$/im, /^(?:error:\s*)?(?:permission denied|read-only file system)(?::.*)?$/im]],
+  ['filesystem', [/^(?:error:\s*)?(?:EACCES|EPERM|ENOENT|EROFS)\b(?::.*)?$/im, /^(?:error:\s*)?(?:permission denied|read-only file system)(?::.*)?$/im]],
   ['settings', [/^(?:error:\s*)?(?:invalid (?:settings|configuration)|failed to (?:parse|load) (?:settings|configuration))(?:[.:].*)?$/im]],
   ['auth-onboarding', [/^(?:error:\s*)?(?:not logged in|please (?:run )?\/login|authentication required|api key (?:is )?(?:missing|required))(?:[.:].*)?$/im]],
   ['transport', [/^(?:error:\s*)?(?:connect\s+)?(?:ECONNREFUSED|ECONNRESET|ENOTFOUND|EAI_AGAIN|ETIMEDOUT)\b(?::.*)?$/im, /^(?:error:\s*)?(?:fetch failed|connection refused)(?::.*)?$/im]],

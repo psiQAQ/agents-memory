@@ -118,6 +118,7 @@ test('launcher diagnostic classifies bounded child outcomes without returning ca
   const cases = [
     { name: 'cli-zero', chunks: [['ok'], []], code: 0, expected: { phase: 'cli-zero', category: 'none', outputPresent: true } },
     { name: 'filesystem', chunks: [[], ['EACCES: permission denied']], code: 1, expected: { phase: 'cli-nonzero', category: 'filesystem', outputPresent: true } },
+    { name: 'filesystem-erofs', chunks: [[], ['Error: EROFS: read-only file system']], code: 1, expected: { phase: 'cli-nonzero', category: 'filesystem', outputPresent: true } },
     { name: 'settings', chunks: [[], ['Invalid \u001b[31msettings\u001b[0m']], code: 1, expected: { phase: 'cli-nonzero', category: 'settings', outputPresent: true } },
     { name: 'auth-onboarding', chunks: [[], ['Please run /login']], code: 1, expected: { phase: 'cli-nonzero', category: 'auth-onboarding', outputPresent: true } },
     { name: 'transport', chunks: [[], ['connect ECONNREFUSED']], code: 1, expected: { phase: 'cli-nonzero', category: 'transport', outputPresent: true } },
