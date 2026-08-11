@@ -6,7 +6,7 @@
 
 | 入口 | 用途 | 当前状态 |
 | --- | --- | --- |
-| [企业智能体记忆系统评估](enterprise-memory-system-evaluation.md) | 当前范围、风险、下一 Gate | `e83748e2` full deterministic Mock Ready/Not Run；TUI/real Not Run |
+| [企业智能体记忆系统评估](enterprise-memory-system-evaluation.md) | 当前范围、风险、下一 Gate | `e83748e2` generic failure Blocked、exact cleanup Passed；fresh tuple Not Run；TUI/real Not Run |
 | [四 Docker CLI 实施计划](superpowers/plans/2026-08-10-four-docker-cli-memory.md) | 任务顺序与验收边界 | 计划，不是运行证据 |
 | [架构 ADR](decisions/2026-08-10-four-docker-cli-baseline.md) | 四 CLI 分阶段与身份隔离决策 | Accepted；runtime Not Run |
 | [baseline reproduction](reproduction/2026-08-10-four-docker-cli-baseline.md) | 固定版本、gitlink 与本轮未运行边界 | Append-only；Static baseline |
@@ -54,8 +54,10 @@
 | [Task 5 Claude -p diagnostic 113ca669 Passed](reproduction/2026-08-12-task5-diag-claude-p-20260812-113ca669-passed.md) | canonical child code0、Proxy DNS/TCP、exact Mock operation/path/marker delta 与 leak flags | Runtime Passed（single Claude diagnostic only）；full Mock Not Run |
 | [Task 5 Claude -p diagnostic 113ca669 exact cleanup Passed](reproduction/2026-08-12-task5-diag-claude-p-20260812-113ca669-exact-cleanup-passed.md) | exact profiled project cleanup 与独立 after-query | Runtime Cleanup Passed；5/1/9 → 0/0/0；active images retained |
 | [Task 5 deterministic Mock e83748e2 Ready](reproduction/2026-08-12-task5-mock-20260812-e83748e2-ready.md) | full 17-step launcher 的唯一 tuple、7-image/config/port/label freshness | Ready/Not Run；失败 fail-stop，成功保留至 review/TUI |
+| [Task 5 deterministic Mock e83748e2 generic failure Blocked](reproduction/2026-08-12-task5-mock-20260812-e83748e2-generic-launcher-failure-blocked.md) | 单次 tracked launcher generic failure 与脱敏现场盘点 | Blocked；step unknown；禁止复用或 raw-log/evidence 推断 |
+| [Task 5 deterministic Mock e83748e2 exact cleanup Passed](reproduction/2026-08-12-task5-mock-20260812-e83748e2-exact-cleanup-passed.md) | exact profiled project cleanup 与固定 step 输出 TDD | Runtime Cleanup Passed；5/1/14 → 0/0/0；fresh tuple Not Run |
 | [Legacy Docker 运行资源精确清理](reproduction/2026-08-10-legacy-docker-resources-cleanup.md) | 旧 Compose projects、容器、网络、卷和镜像的不可恢复清理审计 | Runtime Cleanup Passed；不改变四 CLI 业务 Gate |
-| [集成实验 SOP](../tests/integration/README.md) | 后续静态验证与受控运行入口 | e83748e2 full deterministic Mock Ready/Not Run |
+| [集成实验 SOP](../tests/integration/README.md) | 后续静态验证与受控运行入口 | e83748e2 Blocked/cleaned；safe step contract Passed；fresh tuple Not Run |
 
 建议阅读顺序：先读 [负责人思想](repo-author-comment/comment.md)，再读当前评估和本轮 ADR/reproduction；需要执行实验时才读 SOP 及相应产品源码/测试。负责人思想与企业设计草案分别位于 `repo-author-comment/` 和 [design/2026-08-06-enterprise-memory-design.md](design/2026-08-06-enterprise-memory-design.md)，不能当作本机运行证明。
 
