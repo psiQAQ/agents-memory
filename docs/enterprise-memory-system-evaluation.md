@@ -2,7 +2,7 @@
 
 ## 结论
 
-当前 active 目标是四 Docker CLI 共享记忆实验。Task 5 reviewed product session-identity fix、exact root gitlink/Proxy digest、request-local client credential 映射与 tools/三客户端 image rebuild 已完成限定前置：产品 19 files / 298 tests，root 150/150，Compose config 7/7，四镜像 build/assets Passed。随后固定 run `task5-mock-20260811-preflight-7c1a9e2b` 的 17 步 deterministic Mock launcher exit 1；失败后的四个长期服务为 healthy、`config-init` exit 0，但 evidence 目录为空且 launcher 未披露失败 step。因此 Task 5 business Gate 为 **Blocked**，三写六读、live outsider/management、final oracle 与真实 CLI headless 均未验证；真实 API 与 TUI 仍为 **Not Run**。
+当前 active 目标是四 Docker CLI 共享记忆实验。Task 5 reviewed product session-identity fix、exact root gitlink/Proxy digest、request-local client credential 映射与 tools/三客户端 image rebuild 已完成限定前置：产品 19 files / 298 tests，root 150/150，Compose config 7/7，四镜像 build/assets Passed。首个固定 run `task5-mock-20260811-preflight-7c1a9e2b` launcher exit 1，evidence 为空且未披露失败 step；后续固定 run `task5-mock-20260811-fixed-8d4802d5` 到达 step 6 `protocol-leak` 后以 `leak-claude-text` / `passed=0` fail closed，Proxy/Core 的脱敏诊断为 HTTP 401。steps 1–5 returned 0 只用于该 step 定位，不构成业务 Passed。静态定位显示 template 的 `auth.serviceToken` 未被产品 AuthConfig/buildConfig/auth.ts 保留并作为 Bearer 发送。因此 Task 5 business Gate 为 **Blocked**；24 cases、三写六读、live outsider/management、final oracle 与真实 CLI headless 均未验证；真实 API 与 TUI 仍为 **Not Run**。
 
 旧 Windows 原生 Claude + Docker Claude 证据一律是 **Legacy**：保留原文供追溯，但不用于推断新的四 CLI 架构已通过。
 
@@ -56,7 +56,7 @@ flowchart LR
 | Stage 1 client Compose/bootstrap/config/images | Runtime Passed | tools 与三 client 串行各 build 一次；version/help、UID 10001、evidence ownership/writability、headless assets；仅 client build/config assets |
 | Stage 1 Task 5 root harness | Static/contract Passed | root Node 150/150 与 Compose config 7/7；固定 epoch/path、strict fixture、逐 operation oracle、outsider、exact project freshness、run/build/evidence 与 request-local credential 合同，不是业务运行 |
 | Stage 1 Proxy privacy/build | Runtime Passed | reviewed `2de58c2`、19 files / 298 tests、exact six baseline typecheck errors、Proxy `sha256:be847074...`；product tests + build/assets only |
-| Stage 1 Mock identity/share/isolation/leak | Blocked | 固定 run launcher exit 1；服务 healthy/config-init exit 0 只属于失败后状态，evidence 为空且具体失败 step 未披露；精确现场保留 |
+| Stage 1 Mock identity/share/isolation/leak | Blocked | `preflight-7c1a9e2b` 未披露失败 step；`fixed-8d4802d5` 到达 step 6 后 `leak-claude-text` / `passed=0` fail closed，Proxy/Core 为 HTTP 401。steps 1–5 returned 0 仅定位步骤；24 cases 与其余业务 Gate 未验证 |
 | Stage 1 TUI | Not Run | 仅在 headless Gate 通过后由用户确认 |
 | Stage 1 真实模型 | Not Run | 需完整 Mock Gate 与明确授权 |
 | Stage 2 Codex Responses | Not Run | 在 Stage 1 后执行 |
@@ -80,4 +80,4 @@ flowchart LR
 
 ## 下一 Gate
 
-Task 5 product/root/image 前置已通过限定层级，但固定 deterministic Mock run `task5-mock-20260811-preflight-7c1a9e2b` 已 fail closed。下一 Gate 不是 TUI 或真实模型，而是对保留的精确 project/volumes/evidence 现场确定失败步骤与原因；在获得新的实施授权前不修复、不重跑、不清理。protocol/leak、management/outsider、三次顺序写入、六次有序跨 owner 读取、final oracle 与三个真实 headless 均未验证；真实 API、TUI 与 Codex Stage 2 仍为 Not Run。active gitlink 在获得独立 push/归档授权前仍无法由 fresh clone 获取。
+Task 5 product/root/image 前置已通过限定层级，但两个 deterministic Mock run 均已 fail closed；后者把阻塞收敛到 Proxy→Core auth 的静态缺口。下一 Gate 不是 TUI 或真实模型，而是在产品 fork 中先以 TDD 修复 `auth.serviceToken` 的保留与 Bearer 发送、构建 replacement Proxy image 并完成 scoped independent review；之后才可使用新的唯一 run/project/evidence tuple 重跑 deterministic Mock。24 cases、protocol/leak 的完整通过、management/outsider、三次顺序写入、六次有序跨 owner 读取、final oracle 与三个真实 headless 均未验证；真实 API、TUI 与 Codex Stage 2 仍为 Not Run。active gitlink 在获得独立 push/归档授权前仍无法由 fresh clone 获取。

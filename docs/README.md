@@ -6,7 +6,7 @@
 
 | 入口 | 用途 | 当前状态 |
 | --- | --- | --- |
-| [企业智能体记忆系统评估](enterprise-memory-system-evaluation.md) | 当前范围、风险、下一 Gate | Task 5 deterministic Mock Blocked；现场保留，API/TUI Not Run |
+| [企业智能体记忆系统评估](enterprise-memory-system-evaluation.md) | 当前范围、风险、下一 Gate | Task 5 Mock step 6 protocol/leak Blocked；下一 Gate 为产品 TDD、replacement image 与 review |
 | [四 Docker CLI 实施计划](superpowers/plans/2026-08-10-four-docker-cli-memory.md) | 任务顺序与验收边界 | 计划，不是运行证据 |
 | [架构 ADR](decisions/2026-08-10-four-docker-cli-baseline.md) | 四 CLI 分阶段与身份隔离决策 | Accepted；runtime Not Run |
 | [baseline reproduction](reproduction/2026-08-10-four-docker-cli-baseline.md) | 固定版本、gitlink 与本轮未运行边界 | Append-only；Static baseline |
@@ -31,6 +31,7 @@
 | [Task 5 pre-runtime root static Passed + round 2 erratum](reproduction/2026-08-11-task5-pre-runtime-review-round1-root-static-passed.md) | epoch/oracle/outsider 与 project freshness/evidence ownership 合同；149 tests | Static/contract Passed；产品修复/rebuild/scoped re-review 与 business runtime Pending |
 | [Task 5 session-identity root integration/build Passed](reproduction/2026-08-11-task5-session-identity-root-integration-build-passed.md) | reviewed product fix、exact gitlink/Proxy pin、launcher key 与四镜像 rebuild | Product/root tests + build/assets Passed；business runtime Not Run；gitlink local-only |
 | [Task 5 deterministic Mock preflight-7c1a9e2b Blocked](reproduction/2026-08-11-task5-mock-20260811-preflight-7c1a9e2b-blocked.md) | 固定 17 步 launcher、失败后的精确 project 状态与保留现场 | Blocked；launcher step 未披露；无 evidence 文件；TUI/real Not Run |
+| [Task 5 deterministic Mock fixed-8d4802d5 protocol/leak Blocked](reproduction/2026-08-11-task5-mock-20260811-fixed-8d4802d5-protocol-leak-blocked.md) | 第 6 步的 401 脱敏诊断与静态 auth root cause | Blocked；24 cases/management/headless/final 未验证；TUI/real Not Run |
 | [Legacy Docker 运行资源精确清理](reproduction/2026-08-10-legacy-docker-resources-cleanup.md) | 旧 Compose projects、容器、网络、卷和镜像的不可恢复清理审计 | Runtime Cleanup Passed；不改变四 CLI 业务 Gate |
 | [集成实验 SOP](../tests/integration/README.md) | 后续静态验证与受控运行入口 | Task 5 deterministic Mock 已 Blocked；精确现场保留待诊断 |
 
