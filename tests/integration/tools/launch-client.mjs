@@ -8,7 +8,7 @@ const clients = {
   opencode: { command: 'opencode', target: 'opencode', config: ['.config', 'opencode'] },
   pi: { command: 'pi', target: 'pi', config: ['.pi', 'agent'] },
 };
-const privateEnvironment = ['MEMORY_USER_KEY', 'MEMORY_TEAM_ID', 'MEMORY_AGENT_ID', 'MEMORY_TASK_ID', 'MEMORY_SESSION_ID'];
+const privateEnvironment = ['MEMORY_USER_KEY', 'TDAI_MEMORY_USER_KEY', 'MEMORY_TEAM_ID', 'MEMORY_AGENT_ID', 'MEMORY_TASK_ID', 'MEMORY_SESSION_ID'];
 
 export async function launchClient({ client, homeDir, bundleFile, spaceId, args = [], template, capture, spawnProcess = spawn, parentEnvironment = process.env }) {
   const definition = clients[client];
@@ -19,7 +19,7 @@ export async function launchClient({ client, homeDir, bundleFile, spaceId, args 
   const rendered = await renderSettings({ target: definition.target, template, configDir: join(homeDir, ...definition.config), bundleFile, bundleHomeDir: homeDir, homeDir, spaceId });
   const environment = { ...parentEnvironment };
   for (const name of privateEnvironment) delete environment[name];
-  Object.assign(environment, rendered.environment);
+  Object.assign(environment, rendered.environment, { TDAI_MEMORY_USER_KEY: rendered.environment.MEMORY_USER_KEY });
   const child = spawnProcess(definition.command, args, { env: environment, stdio: capture ? ['ignore', 'pipe', 'pipe'] : 'inherit' });
   if (capture) {
     const chunks = [];

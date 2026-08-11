@@ -26,12 +26,13 @@ test('launcher renders the selected native config and replaces inherited Memory 
     return child;
   };
   try {
-    const status = await launchClient({ client: 'opencode', homeDir, bundleFile, spaceId: 'default', args: ['--version'], spawnProcess, parentEnvironment: { PATH: process.env.PATH, MEMORY_USER_KEY: otherKey, MEMORY_TEAM_ID: 'other-team' } });
+    const status = await launchClient({ client: 'opencode', homeDir, bundleFile, spaceId: 'default', args: ['--version'], spawnProcess, parentEnvironment: { PATH: process.env.PATH, MEMORY_USER_KEY: otherKey, TDAI_MEMORY_USER_KEY: otherKey, MEMORY_TEAM_ID: 'other-team' } });
     assert.equal(status, 0);
     assert.equal(invocation.command, 'opencode');
     assert.deepEqual(invocation.args, ['--version']);
     assert.equal(invocation.options.stdio, 'inherit');
     assert.equal(invocation.options.env.MEMORY_USER_KEY, key);
+    assert.equal(invocation.options.env.TDAI_MEMORY_USER_KEY, key);
     assert.equal(invocation.options.env.MEMORY_TEAM_ID, 'team-launch');
     assert.doesNotMatch(JSON.stringify(invocation.options.env), new RegExp(otherKey));
     assert.equal(JSON.parse(await readFile(join(homeDir, '.config', 'opencode', 'opencode.json'), 'utf8')).provider['memory-anthropic'].options.baseURL, 'http://memory-proxy:8096/opencode/default/v1');
