@@ -113,7 +113,7 @@ export function headlessInvocation(client, scenario, runId, owner) {
   const args = client === 'claude'
     ? ['-p', prompt]
     : client === 'opencode'
-      ? ['run', '--model', 'memory-anthropic/deepseek-v4-pro', '--format', 'json', prompt]
+      ? ['run', '--model', 'memory-anthropic/deepseek-v4-pro', '--format', 'json', '--title', 'Task 5 Stage 1', prompt]
       : ['--model', 'memory-anthropic/deepseek-v4-pro', '-p', prompt];
   return { args, operation_digest };
 }

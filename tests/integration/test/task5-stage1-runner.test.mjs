@@ -118,7 +118,12 @@ test('Task 5 headless driver locks official noninteractive argv and excludes own
     args: ['-p', `STAGE1_OP_${stage1OperationDigest(runId, 'write', 'claude').toUpperCase()} Remember this team fact for later: ${stage1Marker(runId, 'claude')}`],
     operation_digest: stage1OperationDigest(runId, 'write', 'claude'),
   });
-  assert.deepEqual(headlessInvocation('opencode', 'write', runId).args.slice(0, 5), ['run', '--model', 'memory-anthropic/deepseek-v4-pro', '--format', 'json']);
+  const opencodeWrite = headlessInvocation('opencode', 'write', runId);
+  assert.deepEqual(opencodeWrite.args.slice(0, 7), ['run', '--model', 'memory-anthropic/deepseek-v4-pro', '--format', 'json', '--title', 'Task 5 Stage 1']);
+  assert.equal(opencodeWrite.args.length, 8);
+  assert.equal(opencodeWrite.args.at(-1), `STAGE1_OP_${opencodeWrite.operation_digest.toUpperCase()} Remember this team fact for later: ${stage1Marker(runId, 'opencode')}`);
+  assert.doesNotMatch(opencodeWrite.args[6], new RegExp(runId));
+  assert.doesNotMatch(opencodeWrite.args[6], /STAGE1_OP_|MEMORY_NONCE_/);
   assert.deepEqual(headlessInvocation('pi', 'write', runId).args.slice(0, 3), ['--model', 'memory-anthropic/deepseek-v4-pro', '-p']);
   for (const reader of clients) {
     for (const owner of clients.filter((client) => client !== reader)) {
