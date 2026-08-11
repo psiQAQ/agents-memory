@@ -2,7 +2,7 @@
 
 ## 结论
 
-当前 active 目标是四 Docker CLI 共享记忆实验。Task 5 reviewed product session-identity fix、exact root gitlink/Proxy digest、request-local client credential 映射与 tools/三客户端 image rebuild 已完成限定前置：产品 19 files / 298 tests，root 150/150，Compose config 7/7，四镜像 build/assets Passed。该证据不包含业务服务启动；服务健康、Proxy→Mock、真实 CLI headless、三写六读、live outsider/management、final oracle、真实 API、TUI 与跨客户端业务流仍为 **Not Run**。
+当前 active 目标是四 Docker CLI 共享记忆实验。Task 5 reviewed product session-identity fix、exact root gitlink/Proxy digest、request-local client credential 映射与 tools/三客户端 image rebuild 已完成限定前置：产品 19 files / 298 tests，root 150/150，Compose config 7/7，四镜像 build/assets Passed。随后固定 run `task5-mock-20260811-preflight-7c1a9e2b` 的 17 步 deterministic Mock launcher exit 1；失败后的四个长期服务为 healthy、`config-init` exit 0，但 evidence 目录为空且 launcher 未披露失败 step。因此 Task 5 business Gate 为 **Blocked**，三写六读、live outsider/management、final oracle 与真实 CLI headless 均未验证；真实 API 与 TUI 仍为 **Not Run**。
 
 旧 Windows 原生 Claude + Docker Claude 证据一律是 **Legacy**：保留原文供追溯，但不用于推断新的四 CLI 架构已通过。
 
@@ -56,7 +56,7 @@ flowchart LR
 | Stage 1 client Compose/bootstrap/config/images | Runtime Passed | tools 与三 client 串行各 build 一次；version/help、UID 10001、evidence ownership/writability、headless assets；仅 client build/config assets |
 | Stage 1 Task 5 root harness | Static/contract Passed | root Node 150/150 与 Compose config 7/7；固定 epoch/path、strict fixture、逐 operation oracle、outsider、exact project freshness、run/build/evidence 与 request-local credential 合同，不是业务运行 |
 | Stage 1 Proxy privacy/build | Runtime Passed | reviewed `2de58c2`、19 files / 298 tests、exact six baseline typecheck errors、Proxy `sha256:be847074...`；product tests + build/assets only |
-| Stage 1 Mock identity/share/isolation/leak | Not Run | 业务栈尚未启动；product build/assets 不替代该 Gate |
+| Stage 1 Mock identity/share/isolation/leak | Blocked | 固定 run launcher exit 1；服务 healthy/config-init exit 0 只属于失败后状态，evidence 为空且具体失败 step 未披露；精确现场保留 |
 | Stage 1 TUI | Not Run | 仅在 headless Gate 通过后由用户确认 |
 | Stage 1 真实模型 | Not Run | 需完整 Mock Gate 与明确授权 |
 | Stage 2 Codex Responses | Not Run | 在 Stage 1 后执行 |
@@ -80,4 +80,4 @@ flowchart LR
 
 ## 下一 Gate
 
-Task 5 product/root/image 前置已通过限定层级。下一 Gate 是另行执行 deterministic Mock：protocol/leak → management/outsider → 三次顺序写入 → 六次有序跨 owner 读取 → final oracle；本轮没有启动它。三个真实 headless 全绿后才进入用户 TUI 确认；服务健康、Mock 业务流、真实 API、TUI 与 Codex Stage 2 当前仍为 Not Run。active gitlink 在获得独立 push/归档授权前仍无法由 fresh clone 获取。
+Task 5 product/root/image 前置已通过限定层级，但固定 deterministic Mock run `task5-mock-20260811-preflight-7c1a9e2b` 已 fail closed。下一 Gate 不是 TUI 或真实模型，而是对保留的精确 project/volumes/evidence 现场确定失败步骤与原因；在获得新的实施授权前不修复、不重跑、不清理。protocol/leak、management/outsider、三次顺序写入、六次有序跨 owner 读取、final oracle 与三个真实 headless 均未验证；真实 API、TUI 与 Codex Stage 2 仍为 Not Run。active gitlink 在获得独立 push/归档授权前仍无法由 fresh clone 获取。

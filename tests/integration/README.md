@@ -6,7 +6,7 @@
 
 **Fact**：upstream base 锁定 `feat/server_team@0a568c328ea1aae3f22ed3656e7900da7ea565c1`，active fork/gitlink 为 reviewed Task 5 session-identity fix `2de58c2f656978cfe310e3ac3ade085d8096f83b`。该 commit 是 local-only；`origin/codex/four-agent-memory-upstream` 仍为 `38ced16f46fed640bcb7360fb1ca45f9f9918628`，未经单独授权不得 push，fresh clone 暂不可取得。Stage 1 是 Claude Code `2.1.226`、OpenCode `1.18.16`、Pi `0.84.1`，Stage 2 是 Codex `0.147.0`。
 
-**Fact**：Task 5 product session fix 已通过 19 files / 298 tests、formal review 与 Proxy build/assets；root 150/150、Compose config 7/7，launcher 从同一私有 bundle key 覆盖 `MEMORY_USER_KEY` 与 `TDAI_MEMORY_USER_KEY`。tools 与三客户端已串行各 build 一次；version/help、UID10001、`/client-evidence` 10001:10001 可写与 headless assets Passed。服务启动、Proxy→Mock、真实 CLI headless、Mock 三写六读、live ACL/management、final oracle、真实 API、TUI、Paid/真实模型、Codex Stage 2 与端口探针仍为 Not Run。既有 Windows + Claude 命令、Compose 路径和运行证据是 Legacy，不能直接复用到四 CLI 路线。
+**Fact**：Task 5 product session fix 已通过 19 files / 298 tests、formal review 与 Proxy build/assets；root 150/150、Compose config 7/7，launcher 从同一私有 bundle key 覆盖 `MEMORY_USER_KEY` 与 `TDAI_MEMORY_USER_KEY`。tools 与三客户端已串行各 build 一次；version/help、UID10001、`/client-evidence` 10001:10001 可写与 headless assets Passed。固定 run `task5-mock-20260811-preflight-7c1a9e2b` 的 17 步 launcher exit 1；失败后四个长期服务 healthy、`config-init` exit 0，但 evidence 为空且具体失败 step 未披露。deterministic Mock 业务 Gate 为 Blocked；三写六读、live ACL/management、final oracle 与真实 headless 未验证，真实 API、TUI、Paid/真实模型、Codex Stage 2 仍为 Not Run。既有 Windows + Claude 命令、Compose 路径和运行证据是 Legacy，不能直接复用到四 CLI 路线。
 
 **Fact**：legacy ref `codex/legacy-proxy-hardening-69fd8b@69fd8b31e3fd4362af6c65407b92b26dfabebd0c` 是 local-only、未 push；fresh clone 不可取得，未经授权不得 push。跨 clone 可重建保全需要 push 或外部归档授权，在此之前仍未完成。
 
@@ -101,11 +101,13 @@ Root full Node 为 150/150，base + `mock`、`real`、`claude`、`opencode`、`p
 
 产品 session-identity fix 固定为 `2de58c2f656978cfe310e3ac3ade085d8096f83b`；19 files / 298 tests、typecheck exact six baseline errors、formal Spec/Quality PASS 与最终 CLEAN。Compose 固定使用 `local/refine-memory-proxy:2de58c2-l1-fix@sha256:be847074bd63e34ba85b1eee8638cd7d2457d3617d85ad880d36d71efea69fcd`；本轮没有重建 Proxy。旧 `d6afcd8` image 只保留历史证据，不得进入 Task 5 runtime。
 
-完整链见 [privacy/build Passed](../../docs/reproduction/2026-08-11-task5-proxy-privacy-build-passed.md)、[pre-runtime round 1 erratum/RED](../../docs/reproduction/2026-08-11-task5-pre-runtime-review-round1-erratum.md)、[root static Passed](../../docs/reproduction/2026-08-11-task5-pre-runtime-review-round1-root-static-passed.md) 与 [session-identity root integration/build Passed](../../docs/reproduction/2026-08-11-task5-session-identity-root-integration-build-passed.md)。下一项 live 顺序固定为 protocol/leak → management/outsider → 三次顺序写入 → 六次有序跨 owner 读取 → final oracle。三个真实 headless 全绿后才由用户确认 TUI。当前所有 live business steps 均为 **Not Run / User Confirmation Pending**，本节没有授权真实模型或破坏性清理。
+完整前置链见 [privacy/build Passed](../../docs/reproduction/2026-08-11-task5-proxy-privacy-build-passed.md)、[pre-runtime round 1 erratum/RED](../../docs/reproduction/2026-08-11-task5-pre-runtime-review-round1-erratum.md)、[root static Passed](../../docs/reproduction/2026-08-11-task5-pre-runtime-review-round1-root-static-passed.md) 与 [session-identity root integration/build Passed](../../docs/reproduction/2026-08-11-task5-session-identity-root-integration-build-passed.md)。live 顺序固定为 protocol/leak → management/outsider → 三次顺序写入 → 六次有序跨 owner 读取 → final oracle；本次 launcher 在形成可验收 evidence 前 fail closed，因此整项为 **Blocked**，不把失败后服务 healthy 扩写为任何 business step Passed。三个真实 headless 全绿后才可由用户确认 TUI；当前仍未到该判断点，本节没有授权真实模型或破坏性清理。
 
-## Task 5 Mock runtime 启动器（下一 Gate，尚未运行）
+## Task 5 Mock runtime 启动器（Blocked，保留现场）
 
-产品修复、root integration 与所需 tools/三客户端镜像前置已通过限定层级；本节仍未执行。启动器不读取 Tencent `.env`、模型 key、settings、home 或旧 evidence；它只运行固定的 Mock 顺序，不接受任意命令，也不会执行 build、`down`、`down -v` 或 prune。
+产品修复、root integration 与所需 tools/三客户端镜像前置已通过限定层级。固定 run `task5-mock-20260811-preflight-7c1a9e2b` 已执行 launcher 并 exit 1；失败后四个长期服务 healthy、`config-init` exit 0，但 evidence 目录为空且 launcher 未披露具体失败 step。精确 project、network、5 个 volumes 与 evidence 目录均保留，未 cleanup。该结果不能证明 protocol/leak、management/outsider、三写六读、final oracle 或真实 headless 通过；在现场诊断和新的实施授权前不得重跑、进入 TUI 或真实模型 Gate。完整边界见 [Blocked reproduction](../../docs/reproduction/2026-08-11-task5-mock-20260811-preflight-7c1a9e2b-blocked.md)。
+
+启动器不读取 Tencent `.env`、模型 key、settings、home 或旧 evidence；它只运行固定的 Mock 顺序，不接受任意命令，也不会执行 build、`down`、`down -v` 或 prune。以下命令保留为合同参考，不得用于覆盖或复用上述失败 tuple。
 
 `COMPOSE_PROJECT_NAME` 必须由 launcher 验证为 `refine-memory-${RUN_ID}`，不能复用无关 project 名。创建 evidence 目录或执行首个 Compose step 前，launcher 内部实际执行以下只读探针：
 
@@ -149,7 +151,7 @@ try {
 1. **Task 2（Passed，build/assets only）**：固定 image ID/digest 与不可变 RED→GREEN 已归档；不扩写为服务或业务通过。
 2. **Task 3（Passed，handler/route + build/assets only）**：三平台 literal Messages/`count_tokens` route、source/session fail-closed、Anthropic system context 与选定 console privacy 已固定；不扩写为服务业务或 comprehensive leak Gate 通过。
 3. **Task 4（Passed，client build/config assets only）**：active Compose、三客户端身份/config/image 已固定；不扩写为服务或业务流通过。
-4. **Task 5（in progress）**：round 2 root contracts 已 Static Passed；先完成产品 session fix、新 Proxy、tools/三客户端镜像 rebuild/runtime assets 与 scoped re-review，再执行 deterministic Mock Docker runtime；headless 通过后才进行用户 TUI 确认。
+4. **Task 5（Blocked）**：product/root/image 前置已 Passed；固定 deterministic Mock launcher exit 1，精确现场保留待诊断。三写六读、outsider/management、final oracle 与真实 headless 未验证；不得进入 TUI。
 5. **Task 6**：完整 Mock Gate 后且负责人明确授权，才可使用 host-only 双 key 与预算限制做真实 Stage 1。
 6. **Task 7–8**：在 Stage 1 后实现/验证 Codex Responses 与四客户端 binding 上限。
 
