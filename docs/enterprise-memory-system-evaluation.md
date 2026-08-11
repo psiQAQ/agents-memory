@@ -2,7 +2,7 @@
 
 ## 结论
 
-当前 active 目标是四 Docker CLI 共享记忆实验。Task 5 的 Proxy→Core auth service-token、Mock fixture、Claude EROFS/tmpfs 与 OpenCode fixed-title 缺口均已完成 TDD、replacement images 与 scoped review。历史 `opentitle-4f056ee6` full Mock 在 step 9 fail-stop；typed diagnostic `89398d1d` 已证明 OpenCode launch 与 exact single Mock operation。normal headless phase diagnostic `a666e597` 随后单次返回 `phase=success`，证明 prior Claude operation 后的 OpenCode client、exact aggregate verifier 与 atomic evidence publish 全部成功；exact project 已从 `5/1/12` cleanup 为 `0/0/0`，active images `7/7` 保留。该结果仍不是完整 Mock Gate，当前业务状态为 **Blocked / fresh full Mock preflight next**；三写六读、final、TUI 与真实 API/模型仍未获得通过证明。
+当前 active 目标是四 Docker CLI 共享记忆实验。Task 5 的产品、replacement images、typed diagnostic 与 normal headless phase diagnostic 均已通过对应 TDD/static/runtime Gate并完成 exact cleanup。全新 full-Mock tuple `full-6449fcf8` 已通过 root/product clean、labels `0/0/0`、evidence absent、port empty、images `7/7` 与合并 Compose config preflight，状态为 **Ready / Not Run**。下一 Gate 唯一允许单次执行 tracked 17-step deterministic Mock launcher；三写六读、final、TUI 与真实 API/模型仍未获得通过证明。
 
 旧 Windows 原生 Claude + Docker Claude 证据一律是 **Legacy**：保留原文供追溯，但不用于推断新的四 CLI 架构已通过。
 
@@ -56,7 +56,7 @@ flowchart LR
 | Stage 1 client Compose/bootstrap/config/images | Runtime Passed | tools 与三 client 原 build/assets、Claude EROFS replacement、OpenCode fixed-title replacement；version/help、UID10001、evidence ownership/writability、headless assets；仅 client build/config assets |
 | Stage 1 Task 5 root harness | Static/contract Passed | root Node 254/254、active Compose config 7/7 与 normal headless diagnostic overlay 1/1；fixture、固定 step/phase、typed client diagnostic、exact verifier/evidence、outsider、freshness 与 request-local credential 合同，不是业务运行 |
 | Stage 1 Proxy privacy/build | Runtime Passed | reviewed `9e456a5` auth service-token fix、38/38 suites / 276/276 tests、exact six baseline typecheck errors、Proxy `sha256:55fedae3...`；replacement image Ready，product tests + build/assets only |
-| Stage 1 Mock identity/share/isolation/leak | Blocked / fresh full Mock preflight next | `a666e597` normal headless phase diagnostic Passed/cleaned；只证明 prior Claude operation 后的 OpenCode client/verifier/evidence，完整三写六读/final 仍 Not Run |
+| Stage 1 Mock identity/share/isolation/leak | Ready / Not Run | `full-6449fcf8` 已通过 freshness preflight；只允许单次 tracked 17-step Mock，未运行前不得扩写为 Passed |
 | Stage 1 TUI | Not Run | 仅在 headless Gate 通过后由用户确认 |
 | Stage 1 真实模型 | Not Run | 需完整 Mock Gate 与明确授权 |
 | Stage 2 Codex Responses | Not Run | 在 Stage 1 后执行 |
@@ -81,4 +81,4 @@ flowchart LR
 
 ## 下一 Gate
 
-[normal headless phase diagnostic `a666e597` Passed](reproduction/2026-08-12-task5-diag-opencode-headless-20260812-a666e597-passed.md) 与 [exact cleanup](reproduction/2026-08-12-task5-diag-opencode-headless-20260812-a666e597-exact-cleanup-passed.md) 已关闭普通 verifier/evidence 路径候选，但不改写历史 full-Mock Blocked。下一 Gate 是为全新唯一 tuple 写 Ready/preflight 记录后，单次执行 tracked 17-step deterministic Mock launcher；禁止 build、retry、复用旧 tuple、读取 raw logs/evidence、进入 TUI 或真实模型。失败须 fail-stop并保留固定 step，成功后仍先 review/cleanup，再进入用户手工 TUI。真实 API 与 Codex Stage 2 仍为 Not Run。active gitlink 在获得独立 push/归档授权前仍无法由 fresh clone 获取。
+[normal headless phase diagnostic `a666e597` Passed](reproduction/2026-08-12-task5-diag-opencode-headless-20260812-a666e597-passed.md) 与 [exact cleanup](reproduction/2026-08-12-task5-diag-opencode-headless-20260812-a666e597-exact-cleanup-passed.md) 已关闭普通 verifier/evidence 路径候选。[full Mock `full-6449fcf8` Ready](reproduction/2026-08-12-task5-mock-20260812-full-6449fcf8-ready.md) 固定下一次唯一 tuple；只允许单次 tracked 17-step launcher，禁止 build、retry、旧 tuple、raw logs/evidence、TUI 或真实模型。失败须 fail-stop并保留固定 step；本次创建 project 后无论成功失败都只做脱敏盘点与 exact cleanup，不使用 `--rmi`/prune。真实 API、TUI 与 Codex Stage 2 仍为 Not Run。
