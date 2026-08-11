@@ -22,15 +22,15 @@ const args = [
 ];
 const environment = { MOCK_BASE_URL: 'http://mock-llm:8080', STAGE1_CLIENT_SCENARIO: 'write' };
 
-function aggregate({ sequence = 40, total = 0, paths = {}, operations = {}, dropped = 0, truncated = false, sticky = {} } = {}) {
+function aggregate({ sequence = 0, total = 0, paths = {}, fixtures = {}, operations = {}, dropped = 0, truncated = false, sticky = {} } = {}) {
   return {
     epoch, sequence, total_requests: total, dropped_requests: dropped, truncated,
-    paths, fixtures: {}, operations,
+    paths, fixtures, operations,
     sticky_leaks: { credential: false, identity: false, sentinel: false, ...sticky },
   };
 }
 
-function operation(sequence = 41, requests = 1, paths = { '/anthropic/v1/messages': { requests: 1, sequences: [sequence], marker_hashes: [markerHash] } }) {
+function operation(sequence = 1, requests = 1, paths = { '/anthropic/v1/messages': { requests: 1, sequences: [sequence], marker_hashes: [markerHash] } }) {
   return { requests, paths };
 }
 
@@ -63,8 +63,8 @@ const fixedKeys = [
 test('Claude diagnostic classifies code0, nonzero, and throw with at most one launch', async (context) => {
   const before = aggregate();
   const validAfter = aggregate({
-    sequence: 41, total: 1,
-    paths: { '/anthropic/v1/messages': { requests: 1, sequences: [41] } },
+    sequence: 1, total: 1,
+    paths: { '/anthropic/v1/messages': { requests: 1, sequences: [1] } },
     operations: { [operationHash]: operation() },
   });
   for (const [name, outcome, expectedLaunch, after] of [
@@ -100,9 +100,9 @@ test('Claude diagnostic classifies invalid expected operations and unexpected re
   const before = aggregate();
   const extraHash = stage1OperationHash(runId, 'write', 'pi');
   const missingMarkerAfter = aggregate({
-    sequence: 41, total: 1,
-    paths: { '/anthropic/v1/messages': { requests: 1, sequences: [41] } },
-    operations: { [operationHash]: operation(41, 1, { '/anthropic/v1/messages': { requests: 1, sequences: [41], marker_hashes: [] } }) },
+    sequence: 1, total: 1,
+    paths: { '/anthropic/v1/messages': { requests: 1, sequences: [1] } },
+    operations: { [operationHash]: operation(1, 1, { '/anthropic/v1/messages': { requests: 1, sequences: [1], marker_hashes: [] } }) },
   });
   const missingMarkerHarness = harness(before, missingMarkerAfter, 0);
   const missingMarker = await runClaudeDiagnostic(args, environment, missingMarkerHarness.dependencies);
@@ -110,9 +110,9 @@ test('Claude diagnostic classifies invalid expected operations and unexpected re
   assert.equal(missingMarker.expected_operation_valid, false);
 
   const invalidExpected = aggregate({
-    sequence: 42, total: 2,
-    paths: { '/anthropic/v1/messages': { requests: 2, sequences: [41, 42] } },
-    operations: { [operationHash]: operation(41, 2, { '/anthropic/v1/messages': { requests: 2, sequences: [41, 42], marker_hashes: [] } }) },
+    sequence: 2, total: 2,
+    paths: { '/anthropic/v1/messages': { requests: 2, sequences: [1, 2] } },
+    operations: { [operationHash]: operation(1, 2, { '/anthropic/v1/messages': { requests: 2, sequences: [1, 2], marker_hashes: [] } }) },
   });
   const invalidHarness = harness(before, invalidExpected, 0);
   const invalid = await runClaudeDiagnostic(args, environment, invalidHarness.dependencies);
@@ -124,14 +124,14 @@ test('Claude diagnostic classifies invalid expected operations and unexpected re
   assert.equal(invalid.unsafe, false);
 
   const unexpectedAfter = aggregate({
-    sequence: 42, total: 2,
+    sequence: 2, total: 2,
     paths: {
-      '/anthropic/v1/messages': { requests: 1, sequences: [41] },
-      '/unexpected': { requests: 1, sequences: [42] },
+      '/anthropic/v1/messages': { requests: 1, sequences: [1] },
+      '/unexpected': { requests: 1, sequences: [2] },
     },
     operations: {
       [operationHash]: operation(),
-      [extraHash]: operation(42, 1, { '/unexpected': { requests: 1, sequences: [42], marker_hashes: [] } }),
+      [extraHash]: operation(2, 1, { '/unexpected': { requests: 1, sequences: [2], marker_hashes: [] } }),
     },
   });
   const unexpectedHarness = harness(before, unexpectedAfter, 0);
@@ -148,9 +148,9 @@ test('Claude diagnostic classifies invalid expected operations and unexpected re
 test('Claude diagnostic reports sticky, dropped, truncated, and aggregate failures without launching twice', async () => {
   const before = aggregate();
   const unsafeAfter = aggregate({
-    sequence: 41, total: 1, dropped: 1, truncated: true,
+    sequence: 1, total: 1, dropped: 1, truncated: true,
     sticky: { credential: true },
-    paths: { '/anthropic/v1/messages': { requests: 1, sequences: [41] } },
+    paths: { '/anthropic/v1/messages': { requests: 1, sequences: [1] } },
     operations: { [operationHash]: operation() },
   });
   const unsafeHarness = harness(before, unsafeAfter, 0);
@@ -181,23 +181,33 @@ test('Claude diagnostic reports sticky, dropped, truncated, and aggregate failur
   assert.equal(failed.unsafe, false);
   assert.equal(afterFailure.launches.length, 1);
   assert.doesNotMatch(JSON.stringify([notRun, failed]), /raw error/);
+});
 
+test('Claude diagnostic does not launch from any preexisting aggregate state', async (context) => {
   const baselineHash = stage1OperationHash(runId, 'write', 'pi');
-  const baseline = aggregate({
-    sequence: 40, total: 1,
-    paths: { '/anthropic/v1/messages': { requests: 1, sequences: [40] } },
-    operations: { [baselineHash]: operation(40) },
+  for (const [name, baseline, expectedUnsafe = false, expectedDropped = 0, expectedTruncated = false] of [
+    ['sequence', aggregate({ sequence: 1 })],
+    ['total', aggregate({ total: 1 })],
+    ['paths', aggregate({ paths: { '/anthropic/v1/messages': { requests: 1, sequences: [1] } } })],
+    ['fixtures', aggregate({ fixtures: { text: 1 } })],
+    ['operations', aggregate({ operations: { [baselineHash]: operation(1) } })],
+    ['dropped', aggregate({ dropped: 1 }), false, 1],
+    ['truncated', aggregate({ truncated: true }), false, 0, true],
+    ['sticky', aggregate({ sticky: { credential: true } }), true],
+  ]) await context.test(name, async () => {
+    const baselineHarness = harness(baseline, aggregate(), 0);
+    const result = await runClaudeDiagnostic(args, environment, baselineHarness.dependencies);
+    assert.equal(result.launch, 'not_run');
+    assert.equal(result.continuity, 'failed');
+    assert.equal(result.sequence_delta, -1);
+    assert.equal(result.total_delta, -1);
+    assert.equal(result.expected_operation_present, false);
+    assert.equal(result.expected_operation_valid, false);
+    assert.equal(result.unsafe, expectedUnsafe);
+    assert.equal(result.dropped, expectedDropped);
+    assert.equal(result.truncated, expectedTruncated);
+    assert.equal(baselineHarness.launches.length, 0);
   });
-  const changedBaseline = structuredClone(baseline);
-  changedBaseline.operations[baselineHash].requests = 2;
-  const baselineHarness = harness(baseline, changedBaseline, 7);
-  const continuity = await runClaudeDiagnostic(args, environment, baselineHarness.dependencies);
-  assert.equal(continuity.launch, 'nonzero');
-  assert.equal(continuity.continuity, 'failed');
-  assert.equal(continuity.sequence_delta, -1);
-  assert.equal(continuity.total_delta, -1);
-  assert.equal(continuity.unsafe, false);
-  assert.equal(baselineHarness.launches.length, 1);
 });
 
 test('Claude diagnostic rejects ambient command arguments and CLI emits one fixed JSON line', async () => {
@@ -215,6 +225,32 @@ test('Claude diagnostic rejects ambient command arguments and CLI emits one fixe
   assert.equal(value.launch, 'not_run');
   assert.equal(value.continuity, 'failed');
   assert.doesNotMatch(result.stdout, /MEMORY_|sentinel|command|error/i);
+});
+
+test('Claude diagnostic rejects invalid space identifiers before observation or launch', async () => {
+  const invalidSpace = 'team..MEMORY_LEAK_SENTINEL_SPACE';
+  for (const value of [invalidSpace, '-leading', '.leading', 'team/path', 'team value']) {
+    const functionArgs = [...args];
+    functionArgs[functionArgs.indexOf('--space-id') + 1] = value;
+    const functionHarness = harness(aggregate(), aggregate(), 0);
+    await assert.rejects(runClaudeDiagnostic(functionArgs, environment, functionHarness.dependencies), /invalid diagnostic arguments/);
+    assert.equal(functionHarness.launches.length, 0);
+  }
+
+  const invalidArgs = [...args];
+  invalidArgs[invalidArgs.indexOf('--space-id') + 1] = invalidSpace;
+  const result = spawnSync(process.execPath, [diagnosticTool, ...invalidArgs], {
+    encoding: 'utf8',
+    env: { ...process.env, MOCK_BASE_URL: 'http://127.0.0.1:1', STAGE1_CLIENT_SCENARIO: 'write' },
+  });
+  assert.notEqual(result.status, 0);
+  assert.equal(result.stderr, '');
+  assert.equal(result.stdout.split('\n').filter(Boolean).length, 1);
+  const output = JSON.parse(result.stdout);
+  assert.deepEqual(Object.keys(output).sort(), fixedKeys);
+  assert.equal(output.launch, 'not_run');
+  assert.equal(output.continuity, 'failed');
+  assert.doesNotMatch(result.stdout, /MEMORY_|sentinel|space|error/i);
 });
 
 test('diagnostic overlay changes only the Claude headless entrypoint and adds one read-only script bind', async () => {

@@ -61,26 +61,16 @@ function validAggregate(value) {
     && ['credential', 'identity', 'sentinel'].every((name) => typeof value.sticky_leaks[name] === 'boolean');
 }
 
-function cleanBefore(value, expectedHash) {
+function cleanBefore(value) {
   return validAggregate(value)
+    && value.sequence === 0 && value.total_requests === 0
     && value.dropped_requests === 0 && value.truncated === false
+    && Object.keys(value.paths).length === 0
+    && Object.keys(value.fixtures).length === 0
+    && Object.keys(value.operations).length === 0
     && value.sticky_leaks.credential === false
     && value.sticky_leaks.identity === false
-    && value.sticky_leaks.sentinel === false
-    && !Object.hasOwn(value.operations, expectedHash);
-}
-
-function preservedBaseline(before, after) {
-  for (const [name, operation] of Object.entries(before.operations)) {
-    if (!Object.hasOwn(after.operations, name)
-      || JSON.stringify(after.operations[name]) !== JSON.stringify(operation)) return false;
-  }
-  for (const [path, entry] of Object.entries(before.paths)) {
-    const next = after.paths[path];
-    if (!validPathEntry(next) || next.requests < entry.requests
-      || entry.sequences.some((sequence, index) => next.sequences[index] !== sequence)) return false;
-  }
-  return true;
+    && value.sticky_leaks.sentinel === false;
 }
 
 function expectedOperationValid(operation, totalDelta, expectedMarkerHash) {
@@ -104,8 +94,7 @@ function classify(before, after, launch, expectedHash, expectedMarkerHash) {
   if (!validAggregate(after)) return fixedResult({ launch });
   const sequenceDelta = after.sequence - before.sequence;
   const totalDelta = after.total_requests - before.total_requests;
-  const continuous = after.epoch === before.epoch && sequenceDelta >= 0 && sequenceDelta === totalDelta
-    && preservedBaseline(before, after);
+  const continuous = after.epoch === before.epoch && sequenceDelta >= 0 && sequenceDelta === totalDelta;
   if (!continuous) return fixedResult({
     launch, unsafe: stickyLeak(after), dropped: after.dropped_requests, truncated: after.truncated,
   });
@@ -151,8 +140,10 @@ function parse(argv, environment) {
     values[name] = value;
   }
   const homeDir = values['--home-dir'];
+  const spaceId = values['--space-id'];
   if (values['--client'] !== 'claude' || environment.STAGE1_CLIENT_SCENARIO !== 'write'
     || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(values['--run-id'])
+    || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(spaceId) || spaceId.includes('..')
     || homeDir !== '/home/agent' || values['--bundle-file'] !== posix.join(homeDir, '.memory', 'agent-bundle.json')
     || values['--template'] !== '/opt/memory-client/settings.template.json'
     || values['--evidence-dir'] !== '/client-evidence'
@@ -184,7 +175,7 @@ export async function runClaudeDiagnostic(argv, environment = process.env, depen
   } catch {
     return fixedResult();
   }
-  if (!cleanBefore(before, expectedHash)) return validAggregate(before)
+  if (!cleanBefore(before)) return validAggregate(before)
     ? fixedResult({ unsafe: stickyLeak(before), dropped: before.dropped_requests, truncated: before.truncated })
     : fixedResult();
 
