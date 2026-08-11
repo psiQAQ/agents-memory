@@ -38,8 +38,9 @@
 | [Task 5 deterministic Mock toolsfix-7e1031af Claude write Blocked](reproduction/2026-08-11-task5-mock-20260811-toolsfix-7e1031af-claude-write-blocked.md) | formal run 的 step 8 fail-stop 与 Claude 路径脱敏边界 | Blocked；protocol 24/24、management ok；后续写/读/final/TUI/real Not Run |
 | [Task 5 Claude -p diagnostic 6d6e9f6a Ready](reproduction/2026-08-11-task5-diag-claude-p-20260811-6d6e9f6a-ready.md) | 单次、脱敏、最小 Claude write 诊断的固定 preflight | Ready；diagnostic write/runtime/TUI/real Not Run |
 | [Task 5 Claude -p diagnostic 6d6e9f6a Blocked](reproduction/2026-08-11-task5-diag-claude-p-20260811-6d6e9f6a-blocked.md) | JSON schema 已验证但 classification forwarding 不可恢复 | Blocked；新 tuple/direct parser 诊断待执行；TUI/real Not Run |
+| [Task 5 Claude -p diagnostic 08c403c6 Ready](reproduction/2026-08-11-task5-diag-claude-p-20260811-08c403c6-ready.md) | 新 tuple、direct structured JSON parser 的固定 preflight | Ready；diagnostic write/runtime/TUI/real Not Run |
 | [Legacy Docker 运行资源精确清理](reproduction/2026-08-10-legacy-docker-resources-cleanup.md) | 旧 Compose projects、容器、网络、卷和镜像的不可恢复清理审计 | Runtime Cleanup Passed；不改变四 CLI 业务 Gate |
-| [集成实验 SOP](../tests/integration/README.md) | 后续静态验证与受控运行入口 | 当前 diagnostic forwarding filter Blocked；新 tuple/direct parser 待执行；TUI/real Not Run |
+| [集成实验 SOP](../tests/integration/README.md) | 后续静态验证与受控运行入口 | forwarding filter Blocked；08c403c6 direct-parser preflight Ready；TUI/real Not Run |
 
 建议阅读顺序：先读 [负责人思想](repo-author-comment/comment.md)，再读当前评估和本轮 ADR/reproduction；需要执行实验时才读 SOP 及相应产品源码/测试。负责人思想与企业设计草案分别位于 `repo-author-comment/` 和 [design/2026-08-06-enterprise-memory-design.md](design/2026-08-06-enterprise-memory-design.md)，不能当作本机运行证明。
 
