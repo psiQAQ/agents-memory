@@ -2,7 +2,7 @@
 
 ## 结论
 
-当前 active 目标是四 Docker CLI 共享记忆实验。Task 5 的 Proxy→Core auth service-token 缺口已在产品提交 `9e456a5` 完成 TDD 修复与独立 review；replacement Proxy `sha256:55fedae3...` 已通过唯一 build、离线 `276/276` tests 与 image assets Gate，active root 已固定新 gitlink/tag/digest，root 为 `151/151`、Compose config 为 `7/7`。旧 `preflight-7c1a9e2b` 与 `fixed-8d4802d5` 仍是 append-only Blocked 历史；后者在 step 6 `leak-claude-text` / HTTP 401 fail closed。replacement image 下的 deterministic Mock rerun 尚未执行，因此 replacement image 为 **Ready**，Mock rerun 为 **Not Run**，不能更新为 Mock Passed；24 cases、三写六读、live outsider/management、final oracle 与真实 CLI headless 均未验证，真实 API 与 TUI 仍为 **Not Run**。
+当前 active 目标是四 Docker CLI 共享记忆实验。Task 5 的 Proxy→Core auth service-token 缺口已在产品提交 `9e456a5` 完成 TDD 修复与独立 review；replacement Proxy `sha256:55fedae3...` 已通过唯一 build、离线 `276/276` tests 与 image assets Gate，active root 已固定新 gitlink/tag/digest，root 为 `151/151`、Compose config 为 `7/7`。旧 `preflight-7c1a9e2b` 与 `fixed-8d4802d5` 保持 append-only Blocked 历史；新的 `authfix-2eae9df1` run 已在 replacement image 下到达 step 6，`leak-claude-tool` / `passed=2` fail closed。该 run 的前两个 cases 仅间接证明 auth 修复可用于已观察调用，不构成完整 auth Gate；24-case protocol/leak 整体为 **Failed**，静态根因是 Mock fixture 未识别 Proxy 规范化后的 array text-block marker。因此 Task 5 Mock 为 **Blocked / fixture fix pending**；management/outsider、三写六读、final oracle、真实 CLI headless、真实 API 与 TUI 均为 **Not Run**。
 
 旧 Windows 原生 Claude + Docker Claude 证据一律是 **Legacy**：保留原文供追溯，但不用于推断新的四 CLI 架构已通过。
 
@@ -56,7 +56,7 @@ flowchart LR
 | Stage 1 client Compose/bootstrap/config/images | Runtime Passed | tools 与三 client 串行各 build 一次；version/help、UID 10001、evidence ownership/writability、headless assets；仅 client build/config assets |
 | Stage 1 Task 5 root harness | Static/contract Passed | root Node 151/151 与 Compose config 7/7；固定 epoch/path、strict fixture、逐 operation oracle、outsider、exact project freshness、run/build/evidence 与 request-local credential 合同，不是业务运行 |
 | Stage 1 Proxy privacy/build | Runtime Passed | reviewed `9e456a5` auth service-token fix、38/38 suites / 276/276 tests、exact six baseline typecheck errors、Proxy `sha256:55fedae3...`；replacement image Ready，product tests + build/assets only |
-| Stage 1 Mock identity/share/isolation/leak | Blocked / rerun Not Run | 旧 `preflight-7c1a9e2b` 与 `fixed-8d4802d5` 保持 Blocked；后者到达 step 6 后 `leak-claude-text` / `passed=0`、HTTP 401 fail closed。auth replacement 已 Ready，但尚未用新 tuple 重跑；24 cases 与其余业务 Gate 未验证 |
+| Stage 1 Mock identity/share/isolation/leak | Blocked / fixture fix pending | `authfix-2eae9df1` 到达 step 6 后 `leak-claude-tool` / `passed=2` fail closed；24-case protocol/leak 为 Failed。两项已通过 case 仅间接证明已观察 auth 调用，Mock fixture array text-block marker 识别待修复；其余业务 Gate Not Run |
 | Stage 1 TUI | Not Run | 仅在 headless Gate 通过后由用户确认 |
 | Stage 1 真实模型 | Not Run | 需完整 Mock Gate 与明确授权 |
 | Stage 2 Codex Responses | Not Run | 在 Stage 1 后执行 |
@@ -80,4 +80,4 @@ flowchart LR
 
 ## 下一 Gate
 
-Task 5 `auth.serviceToken` 保留与服务端 Bearer 发送已完成 TDD 修复、scoped independent review、唯一 replacement Proxy build 与 active root pin；replacement image 当前为 **Ready**。下一 Gate 不是 TUI 或真实模型，而是使用新的唯一 run/project/evidence tuple 重跑固定 17 步 deterministic Mock；该 rerun 当前为 **Not Run**。24 cases、protocol/leak 的完整通过、management/outsider、三次顺序写入、六次有序跨 owner 读取、final oracle 与三个真实 headless 均未验证；真实 API、TUI 与 Codex Stage 2 仍为 Not Run。active gitlink 在获得独立 push/归档授权前仍无法由 fresh clone 获取。
+Task 5 `auth.serviceToken` 保留与服务端 Bearer 发送已完成 TDD 修复、scoped independent review、唯一 replacement Proxy build 与 active root pin；`authfix-2eae9df1` runtime 对已观察的前两个 protocol/leak calls 提供了有限的间接 auth 证据，但 24-case Gate 在 Mock tool fixture 处失败。下一 Gate 不是 TUI 或真实模型，而是先以 TDD 修复 Mock fixture 的 array text-block marker 识别、完成测试/review，再使用新的唯一 run/project/evidence tuple 重跑固定 17 步 deterministic Mock。management/outsider、三次顺序写入、六次有序跨 owner 读取、final oracle 与三个真实 headless 均为 Not Run；真实 API、TUI 与 Codex Stage 2 仍为 Not Run。active gitlink 在获得独立 push/归档授权前仍无法由 fresh clone 获取。

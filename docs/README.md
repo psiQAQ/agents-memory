@@ -6,7 +6,7 @@
 
 | 入口 | 用途 | 当前状态 |
 | --- | --- | --- |
-| [企业智能体记忆系统评估](enterprise-memory-system-evaluation.md) | 当前范围、风险、下一 Gate | auth fix/replacement Proxy image Ready；deterministic Mock rerun Not Run |
+| [企业智能体记忆系统评估](enterprise-memory-system-evaluation.md) | 当前范围、风险、下一 Gate | Task 5 Mock step 6 tool fixture Blocked；下一 Gate 为 Mock fixture fix/test/review |
 | [四 Docker CLI 实施计划](superpowers/plans/2026-08-10-four-docker-cli-memory.md) | 任务顺序与验收边界 | 计划，不是运行证据 |
 | [架构 ADR](decisions/2026-08-10-four-docker-cli-baseline.md) | 四 CLI 分阶段与身份隔离决策 | Accepted；runtime Not Run |
 | [baseline reproduction](reproduction/2026-08-10-four-docker-cli-baseline.md) | 固定版本、gitlink 与本轮未运行边界 | Append-only；Static baseline |
@@ -33,6 +33,7 @@
 | [Task 5 deterministic Mock preflight-7c1a9e2b Blocked](reproduction/2026-08-11-task5-mock-20260811-preflight-7c1a9e2b-blocked.md) | 固定 17 步 launcher、失败后的精确 project 状态与保留现场 | Blocked；launcher step 未披露；无 evidence 文件；TUI/real Not Run |
 | [Task 5 deterministic Mock fixed-8d4802d5 protocol/leak Blocked](reproduction/2026-08-11-task5-mock-20260811-fixed-8d4802d5-protocol-leak-blocked.md) | 第 6 步的 401 脱敏诊断与静态 auth root cause | Blocked；24 cases/management/headless/final 未验证；TUI/real Not Run |
 | [Task 5 auth service-token replacement image Passed](reproduction/2026-08-11-task5-auth-service-token-replacement-image-passed.md) | 产品 TDD/review、唯一 replacement Proxy build、离线 image/full tests 与 active root pin | Replacement image Ready；deterministic Mock rerun Not Run |
+| [Task 5 deterministic Mock authfix-2eae9df1 tool fixture Blocked](reproduction/2026-08-11-task5-mock-20260811-authfix-2eae9df1-tool-fixture-blocked.md) | step 6 的 tool fixture 脱敏观测与静态 root cause | Blocked；24-case protocol/leak Failed；management/headless/final/TUI/real Not Run |
 | [Legacy Docker 运行资源精确清理](reproduction/2026-08-10-legacy-docker-resources-cleanup.md) | 旧 Compose projects、容器、网络、卷和镜像的不可恢复清理审计 | Runtime Cleanup Passed；不改变四 CLI 业务 Gate |
 | [集成实验 SOP](../tests/integration/README.md) | 后续静态验证与受控运行入口 | 旧 Blocked 现场保留；replacement image Ready；Mock rerun Not Run |
 
