@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import test from 'node:test';
+import { stage1Marker } from '../tools/task5-headless-client.mjs';
 import { stage1OperationHash } from '../tools/task5-contract.mjs';
 import { runClaudeDiagnostic } from '../tools/task5-claude-diagnostic.mjs';
 
@@ -10,6 +12,7 @@ const integrationRoot = join(import.meta.dirname, '..');
 const diagnosticTool = join(integrationRoot, 'tools', 'task5-claude-diagnostic.mjs');
 const runId = 'task5-diagnostic';
 const operationHash = stage1OperationHash(runId, 'write', 'claude');
+const markerHash = createHash('sha256').update(stage1Marker(runId, 'claude')).digest('hex');
 const epoch = '00000000-0000-4000-8000-000000000001';
 const args = [
   '--client', 'claude', '--run-id', runId,
@@ -27,7 +30,7 @@ function aggregate({ sequence = 40, total = 0, paths = {}, operations = {}, drop
   };
 }
 
-function operation(sequence = 41, requests = 1, paths = { '/anthropic/v1/messages': { requests: 1, sequences: [sequence], marker_hashes: [] } }) {
+function operation(sequence = 41, requests = 1, paths = { '/anthropic/v1/messages': { requests: 1, sequences: [sequence], marker_hashes: [markerHash] } }) {
   return { requests, paths };
 }
 
@@ -96,6 +99,16 @@ test('Claude diagnostic classifies code0, nonzero, and throw with at most one la
 test('Claude diagnostic classifies invalid expected operations and unexpected requests without details', async () => {
   const before = aggregate();
   const extraHash = stage1OperationHash(runId, 'write', 'pi');
+  const missingMarkerAfter = aggregate({
+    sequence: 41, total: 1,
+    paths: { '/anthropic/v1/messages': { requests: 1, sequences: [41] } },
+    operations: { [operationHash]: operation(41, 1, { '/anthropic/v1/messages': { requests: 1, sequences: [41], marker_hashes: [] } }) },
+  });
+  const missingMarkerHarness = harness(before, missingMarkerAfter, 0);
+  const missingMarker = await runClaudeDiagnostic(args, environment, missingMarkerHarness.dependencies);
+  assert.equal(missingMarker.expected_operation_present, true);
+  assert.equal(missingMarker.expected_operation_valid, false);
+
   const invalidExpected = aggregate({
     sequence: 42, total: 2,
     paths: { '/anthropic/v1/messages': { requests: 2, sequences: [41, 42] } },

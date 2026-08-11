@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { isAbsolute, posix } from 'node:path';
 import { launchClient } from './launch-client.mjs';
 import { isMain } from './runtime-lib.mjs';
@@ -82,7 +83,7 @@ function preservedBaseline(before, after) {
   return true;
 }
 
-function expectedOperationValid(operation, totalDelta) {
+function expectedOperationValid(operation, totalDelta, expectedMarkerHash) {
   if (!record(operation) || !Number.isInteger(operation.requests) || operation.requests < 1 || !validPaths(operation.paths)) return false;
   const paths = Object.keys(operation.paths);
   const main = operation.paths[mainPath];
@@ -91,6 +92,7 @@ function expectedOperationValid(operation, totalDelta) {
     && paths.every((path) => allowedPaths.has(path))
     && requestTotal === operation.requests
     && main.requests === 1
+    && Array.isArray(main.marker_hashes) && main.marker_hashes.includes(expectedMarkerHash)
     && operation.requests === totalDelta;
 }
 
@@ -98,7 +100,7 @@ function stickyLeak(value) {
   return value.sticky_leaks.credential || value.sticky_leaks.identity || value.sticky_leaks.sentinel;
 }
 
-function classify(before, after, launch, expectedHash) {
+function classify(before, after, launch, expectedHash, expectedMarkerHash) {
   if (!validAggregate(after)) return fixedResult({ launch });
   const sequenceDelta = after.sequence - before.sequence;
   const totalDelta = after.total_requests - before.total_requests;
@@ -115,7 +117,7 @@ function classify(before, after, launch, expectedHash) {
   const unexpectedOperationCount = addedOperations.filter((name) => name !== expectedHash).length;
   const unexpectedPathCount = Object.keys(after.paths).filter((path) => !allowedPaths.has(path)).length;
   const sticky = stickyLeak(after);
-  const expectedValid = expectedPresent && expectedOperationValid(expected, totalDelta);
+  const expectedValid = expectedPresent && expectedOperationValid(expected, totalDelta, expectedMarkerHash);
   const globalRequestDelta = Object.entries(after.paths).reduce((total, [path, entry]) => {
     const previous = before.paths[path]?.requests ?? 0;
     return total + entry.requests - previous;
@@ -188,6 +190,7 @@ export async function runClaudeDiagnostic(argv, environment = process.env, depen
 
   const invocation = headlessInvocation('claude', 'write', runId);
   const marker = stage1Marker(runId, 'claude');
+  const expectedMarkerHash = createHash('sha256').update(marker).digest('hex');
   const operation = `STAGE1_OP_${invocation.operation_digest.toUpperCase()}`;
   let launchStatus;
   try {
@@ -206,7 +209,7 @@ export async function runClaudeDiagnostic(argv, environment = process.env, depen
   }
 
   try {
-    return classify(before, await aggregate(), launchStatus, expectedHash);
+    return classify(before, await aggregate(), launchStatus, expectedHash, expectedMarkerHash);
   } catch {
     return fixedResult({ launch: launchStatus });
   }
