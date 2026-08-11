@@ -118,6 +118,20 @@ test('Task 5 host launcher stops at the first failure without cleanup or leaking
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
+test('Task 5 host launcher reports only an allowlisted fixed step number', async () => {
+  const { formatTask5MockFailure } = await import('../tools/run-task5-mock.mjs');
+  assert.equal(formatTask5MockFailure(new Error('Task 5 Mock launcher failed step=8')), 'Task 5 Mock launcher failed step=8\n');
+  for (const failure of [
+    new Error('Task 5 Mock launcher failed step=0'),
+    new Error('Task 5 Mock launcher failed step=18'),
+    new Error('Task 5 Mock launcher failed step=8 raw child log'),
+    new Error('raw child log'),
+    undefined,
+  ]) {
+    assert.equal(formatTask5MockFailure(failure), 'Task 5 Mock launcher failed\n');
+  }
+});
+
 test('Task 5 host launcher rejects missing, ambiguous, or reusable run boundaries before Docker', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'task5-host-invalid-'));
   const { runTask5Mock } = await import('../tools/run-task5-mock.mjs');

@@ -121,13 +121,20 @@ export async function runTask5Mock({ environment = process.env, integrationRoot 
   return { status: 'ok', steps: steps.length };
 }
 
+export function formatTask5MockFailure(error) {
+  const message = error instanceof Error ? error.message : '';
+  return /^Task 5 Mock launcher failed step=(?:[1-9]|1[0-7])$/.test(message)
+    ? `${message}\n`
+    : 'Task 5 Mock launcher failed\n';
+}
+
 if (isMain(import.meta)) {
   try {
     if (process.argv.length !== 2) throw new Error();
     const result = await runTask5Mock();
     process.stdout.write(`${JSON.stringify(result)}\n`);
-  } catch {
-    process.stderr.write('Task 5 Mock launcher failed\n');
+  } catch (error) {
+    process.stderr.write(formatTask5MockFailure(error));
     process.exitCode = 1;
   }
 }
