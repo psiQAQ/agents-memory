@@ -79,7 +79,7 @@ async function prepare(environment, integrationRoot, spawnDocker) {
 }
 
 function actions() {
-  const run = (service, environment = {}) => ({ args: ['run', '--rm', '--no-deps', '--no-build', service], environment });
+  const run = (service, environment = {}) => ({ args: ['run', '--rm', '--no-deps', service], environment });
   return [
     { args: ['up', '-d', '--wait', '--wait-timeout', '180', '--no-build', 'mock-llm', 'memory-core', 'memory-proxy', 'memory-hub'], environment: {} },
     run('bootstrap'),

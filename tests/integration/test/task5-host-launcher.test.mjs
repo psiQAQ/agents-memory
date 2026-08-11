@@ -54,8 +54,8 @@ test('Task 5 host launcher fixes one no-build fail-stop sequence and forwards on
       assert.equal(options.env.EVIDENCE_DIR, undefined);
       assert.equal(options.env.MEMORY_CORE_GATEWAY_API_KEY, undefined);
     }
+    assert.ok(businessCalls[0].args.includes('--no-build'));
     for (const { args, options } of businessCalls) {
-      assert.ok(args.includes('--no-build'));
       assert.doesNotMatch(args.join(' '), /(?:^| )build(?: |$)|\bdown\b|\bprune\b/);
       assert.deepEqual(options.stdio, ['ignore', 'pipe', 'pipe']);
       assert.equal(options.env.RUN_ID, runId);
@@ -64,6 +64,10 @@ test('Task 5 host launcher fixes one no-build fail-stop sequence and forwards on
       assert.equal(options.env.MEMORY_CORE_GATEWAY_API_KEY, 'task5-disposable-gateway');
       assert.equal(options.env.PROXY_UPSTREAM_API_KEY, undefined);
     }
+    for (const { args } of businessCalls.slice(1)) {
+      assert.equal(args.includes('--build'), false);
+      assert.equal(args.includes('--no-build'), false);
+    }
     assert.deepEqual(businessCalls.filter(({ options }) => options.env.STAGE1_SCENARIO).map(({ options }) => options.env.STAGE1_SCENARIO), ['protocol-leak', 'management', 'finalize']);
     const headless = businessCalls.filter(({ options }) => options.env.STAGE1_CLIENT_SCENARIO);
     assert.deepEqual(headless.map(({ options }) => `${options.env.STAGE1_CLIENT_SCENARIO}:${options.env.STAGE1_OWNER ?? ''}`), [
@@ -71,6 +75,23 @@ test('Task 5 host launcher fixes one no-build fail-stop sequence and forwards on
       'read:opencode', 'read:pi', 'read:claude', 'read:pi', 'read:claude', 'read:opencode',
     ]);
     assert.equal(await readFile(evidenceDir).catch((error) => error.code), 'EISDIR');
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test('Task 5 host launcher omits unsupported build flags from one-shot Compose run', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'task5-host-run-flags-'));
+  const evidenceDir = join(directory, runId);
+  try {
+    const { runTask5Mock } = await import('../tools/run-task5-mock.mjs');
+    const result = await runTask5Mock({
+      environment: environment(evidenceDir), integrationRoot: join(directory, 'integration'),
+      spawnCompose: async (args) => {
+        if (args[0] !== 'compose') return { status: 0, stdout: '', stderr: '' };
+        const runIndex = args.indexOf('run');
+        return { status: runIndex >= 0 && args.includes('--no-build', runIndex) ? 125 : 0, stdout: '', stderr: '' };
+      },
+    });
+    assert.deepEqual(result, { status: 'ok', steps: 17 });
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
