@@ -2,7 +2,7 @@
 
 ## 结论
 
-当前 active 目标是四 Docker CLI 共享记忆实验。Task 5 的 Proxy→Core auth service-token 缺口已在产品提交 `9e456a5` 完成 TDD 修复与独立 review；root `bfb3839a` 的 tools fixture fix 与唯一 `sha256:8ca1a2a8...` replacement image 继续保持 Ready（build/assets only）。历史 Blocked records 均 append-only。`08c403c6` 的第一次宿主动作在 workload 前因 `New-Item -LiteralPath` 停止，修正后的首个 workload attempt 又被错误的 1 秒 shell timeout 在 Compose up 期间中止，因此该 run 仍为 **Blocked / host-timeout-during-up**；bootstrap/config/headless 未执行，不能声明 JSON、classification、Claude write 根因或任何业务 Gate 结论。新唯一 `a72ae725` tuple 已完成 freshness/overlay preflight，状态仅为 **Ready / Not Run**；未启动 workload。后续两写、六读、final、真实 headless、TUI 与真实 API/模型均为 **Not Run**。
+当前 active 目标是四 Docker CLI 共享记忆实验。Task 5 的 Proxy→Core auth service-token 缺口已在产品提交 `9e456a5` 完成 TDD 修复与独立 review；root `bfb3839a` 的 tools fixture fix 与唯一 `sha256:8ca1a2a8...` replacement image 继续保持 Ready（build/assets only）。历史 Blocked records 均 append-only。`08c403c6` 仍为 host-timeout-during-up Blocked。新唯一 `a72ae725` tuple 的 preflight 保持 Ready 历史，但其单次 workload attempt 在 Compose `up` 被 Windows PowerShell 5 对正常 Docker stderr progress 的 terminating `NativeCommandError` 转换中止，因此当前为 **Blocked / host-native-stderr-during-up**。`bootstrap`、client config、headless、JSON 与 classification 未执行；failure-time health/config-init 盘点不是业务 Gate 证明。后续两写、六读、final、真实 headless、TUI 与真实 API/模型均为 **Not Run**。
 
 旧 Windows 原生 Claude + Docker Claude 证据一律是 **Legacy**：保留原文供追溯，但不用于推断新的四 CLI 架构已通过。
 
@@ -56,7 +56,7 @@ flowchart LR
 | Stage 1 client Compose/bootstrap/config/images | Runtime Passed | tools 与三 client 串行各 build 一次；version/help、UID 10001、evidence ownership/writability、headless assets；仅 client build/config assets |
 | Stage 1 Task 5 root harness | Static/contract Passed | root Node 152/152 与 Compose config 7/7；fixture array text-block 识别的 RED→GREEN、固定 epoch/path、strict fixture、逐 operation oracle、outsider、exact project freshness、run/build/evidence 与 request-local credential 合同，不是业务运行 |
 | Stage 1 Proxy privacy/build | Runtime Passed | reviewed `9e456a5` auth service-token fix、38/38 suites / 276/276 tests、exact six baseline typecheck errors、Proxy `sha256:55fedae3...`；replacement image Ready，product tests + build/assets only |
-| Stage 1 Mock identity/share/isolation/leak | Blocked / host-timeout-during-up；a72ae725 Ready/Not Run | `08c403c6` 首个 workload attempt 在 Compose up 被宿主 1 秒 timeout 中止。evidence 0 files、bootstrap/config/headless 未执行；不得声明 JSON/classification/root cause。新 `a72ae725` 仅完成 preflight，单次 diagnostic 及后续业务 Gate Not Run |
+| Stage 1 Mock identity/share/isolation/leak | Blocked / host-native-stderr-during-up | `a72ae725` 单次 workload attempt 在 Compose up 被 Windows PowerShell 5 的 Docker stderr→terminating `NativeCommandError` 中止。evidence 0 files；bootstrap/config/headless/JSON/classification 未执行。5-container health/config-init inventory 不是业务证明；TDD/new tuple 及后续业务 Gate Not Run |
 | Stage 1 TUI | Not Run | 仅在 headless Gate 通过后由用户确认 |
 | Stage 1 真实模型 | Not Run | 需完整 Mock Gate 与明确授权 |
 | Stage 2 Codex Responses | Not Run | 在 Stage 1 后执行 |
@@ -80,4 +80,4 @@ flowchart LR
 
 ## 下一 Gate
 
-Task 5 `auth.serviceToken` 与 Mock fixture fixes/replacement images 均保持 **Ready（build/assets only）**，[08c403c6 host-timeout-during-up](reproduction/2026-08-11-task5-diag-claude-p-20260811-08c403c6-host-timeout-during-up-blocked.md) 保持 Blocked。新的 [a72ae725 diagnostic preflight](reproduction/2026-08-11-task5-diag-claude-p-20260811-a72ae725-ready.md) 为 **Ready / Not Run**。下一 Gate 不是 retry、TUI 或真实模型：如获运行授权，仅以该 tuple 进行一次 long-lived asynchronous host execution，并以 direct structured canonical JSON parser 执行最小 Claude write diagnostic。后续两次写入、六次有序跨 owner 读取、final oracle 与三个真实 headless 均为 Not Run；真实 API、TUI 与 Codex Stage 2 仍为 Not Run。active gitlink 在获得独立 push/归档授权前仍无法由 fresh clone 获取。
+Task 5 `auth.serviceToken` 与 Mock fixture fixes/replacement images 均保持 **Ready（build/assets only）**，[08c403c6 host-timeout-during-up](reproduction/2026-08-11-task5-diag-claude-p-20260811-08c403c6-host-timeout-during-up-blocked.md) 与 [a72ae725 host-native-stderr-during-up](reproduction/2026-08-11-task5-diag-claude-p-20260811-a72ae725-host-native-stderr-during-up-blocked.md) 均保持 Blocked。下一 Gate 不是 retry、TUI 或真实模型：先为 tracked Node coordinator 写 `spawnSync`、bounded stdout 与 direct structured canonical JSON parser 的 TDD，随后以全新 tuple 执行最小 Claude write diagnostic。当前 tuple 的精确 cleanup 已获授权，host evidence 保留。后续两次写入、六次有序跨 owner 读取、final oracle 与三个真实 headless 均为 Not Run；真实 API、TUI 与 Codex Stage 2 仍为 Not Run。active gitlink 在获得独立 push/归档授权前仍无法由 fresh clone 获取。
