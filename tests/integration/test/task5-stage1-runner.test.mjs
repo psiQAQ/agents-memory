@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import http from 'node:http';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -57,6 +57,19 @@ function finalAggregate(runId, mutate = (value) => value) {
     paths: { '/anthropic/v1/messages': { requests: orderedStage1Actions.length, sequences: orderedStage1Actions.map((_, index) => index + 1) } },
     operations,
   }));
+}
+
+async function createClientEvidence(root, mutate = (value) => value) {
+  for (const client of clients) {
+    const directory = join(root, client);
+    await mkdir(directory, { recursive: true });
+    const actions = orderedStage1Actions.filter((action) => action.client === client);
+    for (const action of actions) {
+      const filename = action.scenario === 'write' ? 'write.json' : `read-${action.owner}.json`;
+      const value = mutate({ status: 'ok', scenario: action.scenario, owner: action.owner ?? null }, { client, filename });
+      await writeFile(join(directory, filename), `${JSON.stringify(value)}\n`, { mode: 0o600 });
+    }
+  }
 }
 
 test('Task 5 fixes 24 ordered Anthropic protocol and leak cases across the three native sources', () => {
@@ -285,13 +298,15 @@ test('Task 5 final gate proves three writes and six ordered foreign reads withou
   try {
     const oracleOrder = [];
     const outputDir = join(value.directory, 'final-evidence');
-    const result = await runFinalizeGate({ manifestPath: value.manifestPath, gatewayTokenFile: value.gatewayTokenFile, coreUrl: 'http://memory-core:8420', mockUrl: value.mockUrl, outputDir }, {
+    const clientEvidenceRoot = join(value.directory, 'client-evidence');
+    await createClientEvidence(clientEvidenceRoot);
+    const result = await runFinalizeGate({ manifestPath: value.manifestPath, gatewayTokenFile: value.gatewayTokenFile, coreUrl: 'http://memory-core:8420', mockUrl: value.mockUrl, outputDir, clientEvidenceRoot }, {
       ownerOracle: async ({ client }) => { oracleOrder.push(`write:${client}`); return { status: 'ok', l0_matches: 1, l1_matches: 1 }; },
       operationOracle: async ({ scenario, client, owner }) => { oracleOrder.push(`${scenario}:${client}:${owner}`); return { status: 'ok', l0_matches: 1 }; },
       aggregate: async () => finalAggregate(value.manifest.run_id),
     });
     assert.deepEqual(oracleOrder, orderedStage1Actions.map(({ scenario, client, owner }) => `${scenario}:${client}${owner ? `:${owner}` : ''}`));
-    assert.deepEqual(result, { status: 'ok', owner_oracles: 3, l0_operation_oracles: 9, write_operations: 3, cross_owner_reads: 6 });
+    assert.deepEqual(result, { status: 'ok', owner_oracles: 3, l0_operation_oracles: 9, client_evidence: 9, write_operations: 3, cross_owner_reads: 6 });
     const evidence = await readFile(join(outputDir, 'stage1-shared-memory.json'), 'utf8');
     assert.deepEqual(JSON.parse(evidence), result);
     assert.doesNotMatch(evidence, /MEMORY_|[a-f0-9]{32}|user-|agent-|team-|task-|session-|credential|prompt|body/i);
@@ -304,6 +319,8 @@ test('Task 5 final gate rejects wrong main-path markers, out-of-order sequences,
   const first = orderedStage1Actions[0];
   const firstHash = stage1OperationHash(runId, first.scenario, first.client, first.owner);
   const markerHash = createHash('sha256').update(stage1Marker(runId, first.client)).digest('hex');
+  const clientEvidenceRoot = join(value.directory, 'client-evidence-negative');
+  await createClientEvidence(clientEvidenceRoot);
   const cases = [
     ['wrong-main-path', finalAggregate(runId, (aggregate) => {
       aggregate.sequence += 1;
@@ -338,12 +355,34 @@ test('Task 5 final gate rejects wrong main-path markers, out-of-order sequences,
     for (const [name, aggregate] of cases) await context.test(name, async () => {
       const outputDir = join(value.directory, `final-negative-${name}`);
       await assert.rejects(runFinalizeGate({
-        manifestPath: value.manifestPath, gatewayTokenFile: value.gatewayTokenFile, coreUrl: 'http://memory-core:8420', mockUrl: value.mockUrl, outputDir,
+        manifestPath: value.manifestPath, gatewayTokenFile: value.gatewayTokenFile, coreUrl: 'http://memory-core:8420', mockUrl: value.mockUrl, outputDir, clientEvidenceRoot,
       }, {
         ownerOracle: async () => ({ status: 'ok', l0_matches: 1, l1_matches: 1 }),
         operationOracle: async () => ({ status: 'ok', l0_matches: 1 }),
         aggregate: async () => aggregate,
       }), /final gate failed/);
+    });
+  } finally { await value.close(); }
+});
+
+test('Task 5 final gate rejects extra or sensitive client evidence before accepting the shared-memory proof', async (context) => {
+  const value = await fixture();
+  try {
+    for (const kind of ['extra-file', 'sensitive-content']) await context.test(kind, async () => {
+      const root = join(value.directory, `client-evidence-${kind}`);
+      await createClientEvidence(root, (evidence, { client, filename }) => kind === 'sensitive-content' && client === 'claude' && filename === 'write.json'
+        ? { ...evidence, detail: value.keys.claude }
+        : evidence);
+      if (kind === 'extra-file') await writeFile(join(root, 'claude', 'unexpected.json'), '{}\n', { mode: 0o600 });
+      const outputDir = join(value.directory, `final-client-evidence-${kind}`);
+      await assert.rejects(runFinalizeGate({
+        manifestPath: value.manifestPath, gatewayTokenFile: value.gatewayTokenFile, coreUrl: 'http://memory-core:8420', mockUrl: value.mockUrl,
+        outputDir, clientEvidenceRoot: root,
+      }, {
+        ownerOracle: async () => ({ status: 'ok', l0_matches: 1, l1_matches: 1 }),
+        operationOracle: async () => ({ status: 'ok', l0_matches: 1 }),
+        aggregate: async () => finalAggregate(value.manifest.run_id),
+      }), /assertion=client-evidence/);
     });
   } finally { await value.close(); }
 });
@@ -600,15 +639,57 @@ test('Task 5 headless runtime verifies the real CLI exit and redacted Mock opera
   });
   await ensureFetchSafeServer(server);
   const calls = [];
+  const evidenceDir = await mkdtemp(join(tmpdir(), 'task5-client-evidence-'));
   try {
     const result = await runHeadlessClient({
       client: 'claude', scenario: 'read', runId, owner: 'opencode', homeDir: '/home/agent', bundleFile: '/home/agent/.memory/agent-bundle.json', template: '/opt/memory-client/settings.template.json', spaceId: 'default', mockUrl: `http://127.0.0.1:${server.address().port}`,
+      evidenceDir,
       launch: async (options) => { calls.push(options); return 0; },
     });
-    assert.deepEqual(result, { status: 'ok', scenario: 'read', observed_marker_count: 1 });
+    assert.deepEqual(result, { status: 'ok', scenario: 'read' });
     assert.deepEqual(calls[0].args, invocation.args);
+    assert.equal(calls[0].capture.maxBytes, 256 * 1024);
+    assert.ok(calls[0].capture.sensitiveValues.includes(invocation.args.at(-1)));
+    const evidenceFile = join(evidenceDir, 'read-opencode.json');
+    const evidence = await readFile(evidenceFile, 'utf8');
+    assert.deepEqual(JSON.parse(evidence), { status: 'ok', scenario: 'read', owner: 'opencode' });
+    if (process.platform !== 'win32') assert.equal((await stat(evidenceFile)).mode & 0o777, 0o600);
+    assert.doesNotMatch(evidence, /MEMORY_|STAGE1_OP_|user-|agent-|team-|task-|session-|prompt|body|log|sk-mem-/i);
     assert.equal(reads, 2);
-  } finally { await new Promise((resolve) => server.close(resolve)); }
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    await rm(evidenceDir, { recursive: true, force: true });
+  }
+});
+
+test('Task 5 headless evidence publication is atomic and never overwrites an existing action result', async () => {
+  const runId = 'task5-fixture';
+  const markerHash = createHash('sha256').update(stage1Marker(runId, 'opencode')).digest('hex');
+  let reads = 0;
+  const server = http.createServer((request, response) => {
+    const after = aggregateSnapshot({
+      sequence: 41, total: 1,
+      paths: { '/anthropic/v1/messages': { requests: 1, sequences: [41] } },
+      operations: { [stage1OperationHash(runId, 'read', 'claude', 'opencode')]: mainOperation(41, [markerHash]) },
+    });
+    response.writeHead(200, { 'content-type': 'application/json' });
+    response.end(JSON.stringify(reads++ === 0 ? aggregateSnapshot() : after));
+  });
+  await ensureFetchSafeServer(server);
+  const evidenceDir = await mkdtemp(join(tmpdir(), 'task5-client-evidence-existing-'));
+  const existing = join(evidenceDir, 'read-opencode.json');
+  await writeFile(existing, '{"status":"existing"}\n', { mode: 0o600 });
+  try {
+    await assert.rejects(runHeadlessClient({
+      client: 'claude', scenario: 'read', runId, owner: 'opencode', homeDir: '/home/agent', bundleFile: '/home/agent/.memory/agent-bundle.json',
+      template: '/opt/memory-client/settings.template.json', spaceId: 'default', mockUrl: `http://127.0.0.1:${server.address().port}`,
+      evidenceDir, launch: async () => 0,
+    }), /client evidence failed/);
+    assert.equal(await readFile(existing, 'utf8'), '{"status":"existing"}\n');
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    await rm(evidenceDir, { recursive: true, force: true });
+  }
 });
 
 test('Task 5 headless runtime rejects a replayed operation before launching the CLI', async () => {
@@ -623,6 +704,7 @@ test('Task 5 headless runtime rejects a replayed operation before launching the 
   try {
     await assert.rejects(runHeadlessClient({
       client: 'pi', scenario: 'write', runId, homeDir: '/home/agent', bundleFile: '/home/agent/.memory/agent-bundle.json', template: '/opt/memory-client/settings.template.json', spaceId: 'default', mockUrl: `http://127.0.0.1:${server.address().port}`,
+      evidenceDir: '/client-evidence',
       launch: async () => { launches += 1; return 0; },
     }), /observation failed/);
     assert.equal(launches, 0);
@@ -658,6 +740,7 @@ test('Task 5 headless runtime rejects epoch changes, nonmonotonic or duplicate m
     try {
       await assert.rejects(runHeadlessClient({
         client: 'claude', scenario: 'read', runId, owner: 'opencode', homeDir: '/home/agent', bundleFile: '/home/agent/.memory/agent-bundle.json', template: '/opt/memory-client/settings.template.json', spaceId: 'default', mockUrl: `http://127.0.0.1:${server.address().port}`,
+        evidenceDir: '/client-evidence',
         launch: async () => 0,
       }), /observation failed/);
     } finally { await new Promise((resolve) => server.close(resolve)); }
@@ -665,7 +748,7 @@ test('Task 5 headless runtime rejects epoch changes, nonmonotonic or duplicate m
 });
 
 test('Task 5 CLI dispatches only fixed protocol, owner, management, and finalize contracts without ambient options', async () => {
-  const common = ['--manifest', '/state/run/run-manifest.json', '--gateway-token-file', '/runtime-config/gateway.token', '--output-dir', '/evidence'];
+  const common = ['--manifest', '/state/run/run-manifest.json', '--gateway-token-file', '/runtime-config/gateway.token', '--output-dir', '/evidence', '--client-evidence-root', '/client-evidence'];
   const environment = {
     PROXY_BASE_URL: 'http://memory-proxy:8096', MOCK_BASE_URL: 'http://mock-llm:8080', CORE_BASE_URL: 'http://memory-core:8420', PANEL_BASE_URL: 'http://memory-hub:8125',
   };
@@ -673,7 +756,7 @@ test('Task 5 CLI dispatches only fixed protocol, owner, management, and finalize
     { scenario: 'protocol-leak', dependency: 'protocol', expected: { manifestPath: '/state/run/run-manifest.json', proxyUrl: environment.PROXY_BASE_URL, mockUrl: environment.MOCK_BASE_URL, outputDir: '/evidence' } },
     { scenario: 'owner-oracle', dependency: 'owner', extra: ['--client', 'claude'], expected: { manifestPath: '/state/run/run-manifest.json', gatewayTokenFile: '/runtime-config/gateway.token', coreUrl: environment.CORE_BASE_URL, client: 'claude' } },
     { scenario: 'management', dependency: 'management', expected: { manifestPath: '/state/run/run-manifest.json', gatewayTokenFile: '/runtime-config/gateway.token', coreUrl: environment.CORE_BASE_URL, proxyUrl: environment.PROXY_BASE_URL, mockUrl: environment.MOCK_BASE_URL, panelUrl: environment.PANEL_BASE_URL, outputDir: '/evidence' } },
-    { scenario: 'finalize', dependency: 'finalize', expected: { manifestPath: '/state/run/run-manifest.json', gatewayTokenFile: '/runtime-config/gateway.token', coreUrl: environment.CORE_BASE_URL, mockUrl: environment.MOCK_BASE_URL, outputDir: '/evidence' } },
+    { scenario: 'finalize', dependency: 'finalize', expected: { manifestPath: '/state/run/run-manifest.json', gatewayTokenFile: '/runtime-config/gateway.token', coreUrl: environment.CORE_BASE_URL, mockUrl: environment.MOCK_BASE_URL, outputDir: '/evidence', clientEvidenceRoot: '/client-evidence' } },
   ];
   for (const entry of cases) {
     const calls = [];
@@ -692,7 +775,7 @@ test('Task 5 headless CLI forwards the fixed private paths and never accepts arb
   const result = await runHeadlessCli([
     '--client', 'pi', '--scenario', 'read', '--run-id', 'task5-fixture', '--owner', 'claude',
     '--home-dir', '/home/agent', '--bundle-file', '/home/agent/.memory/agent-bundle.json',
-    '--space-id', 'default', '--template', '/opt/memory-client/settings.template.json',
+    '--space-id', 'default', '--template', '/opt/memory-client/settings.template.json', '--evidence-dir', '/client-evidence',
   ], { MOCK_BASE_URL: 'http://mock-llm:8080' }, { run: async (options) => { calls.push(options); return { status: 'ok' }; } });
   assert.deepEqual(result, { status: 'ok' });
   assert.equal(calls[0].mockUrl, 'http://mock-llm:8080');
@@ -702,7 +785,7 @@ test('Task 5 headless CLI forwards the fixed private paths and never accepts arb
   await runHeadlessCli([
     '--client', 'opencode', '--run-id', 'task5-fixture',
     '--home-dir', '/home/agent', '--bundle-file', '/home/agent/.memory/agent-bundle.json',
-    '--space-id', 'default', '--template', '/opt/memory-client/settings.template.json',
+    '--space-id', 'default', '--template', '/opt/memory-client/settings.template.json', '--evidence-dir', '/client-evidence',
   ], { MOCK_BASE_URL: 'http://mock-llm:8080', STAGE1_CLIENT_SCENARIO: 'read', STAGE1_OWNER: 'pi' }, { run: async (options) => { fromEnvironment.push(options); return { status: 'ok' }; } });
   assert.equal(fromEnvironment[0].scenario, 'read');
   assert.equal(fromEnvironment[0].owner, 'pi');

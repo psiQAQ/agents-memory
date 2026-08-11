@@ -1,4 +1,6 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import { chmod, link, lstat, mkdir, unlink, writeFile } from 'node:fs/promises';
+import { isAbsolute, join } from 'node:path';
 import { launchClient } from './launch-client.mjs';
 import { isMain } from './runtime-lib.mjs';
 import { stage1Marker, stage1OperationDigest, stage1OperationHash } from './task5-contract.mjs';
@@ -81,6 +83,27 @@ function verifyAggregateDelta(beforeValue, afterValue, operationHash, markerHash
   return main.marker_hashes.length;
 }
 
+async function writeClientEvidence(evidenceDir, scenario, owner) {
+  const filename = scenario === 'write' ? 'write.json' : `read-${owner}.json`;
+  const result = { status: 'ok', scenario, owner: owner ?? null };
+  const destination = join(evidenceDir, filename);
+  const temporary = join(evidenceDir, `.${filename}.${randomUUID()}.tmp`);
+  try {
+    await mkdir(evidenceDir, { recursive: true, mode: 0o700 });
+    const directory = await lstat(evidenceDir);
+    if (!directory.isDirectory() || directory.isSymbolicLink()) throw new Error();
+    await writeFile(temporary, `${JSON.stringify(result)}\n`, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
+    await chmod(temporary, 0o600);
+    await link(temporary, destination);
+    await unlink(temporary);
+    await chmod(destination, 0o600);
+    return { status: 'ok', scenario };
+  } catch {
+    await unlink(temporary).catch(() => {});
+    throw new Error('Stage 1 client evidence failed');
+  }
+}
+
 export function headlessInvocation(client, scenario, runId, owner) {
   const operation_digest = stage1OperationDigest(runId, scenario, client, owner);
   const operation = `STAGE1_OP_${operation_digest.toUpperCase()}`;
@@ -95,9 +118,9 @@ export function headlessInvocation(client, scenario, runId, owner) {
   return { args, operation_digest };
 }
 
-export async function runHeadlessClient({ client, scenario, runId, owner, homeDir, bundleFile, template, spaceId, mockUrl, launch = launchClient }) {
+export async function runHeadlessClient({ client, scenario, runId, owner, homeDir, bundleFile, template, spaceId, mockUrl, evidenceDir, launch = launchClient }) {
   const invocation = headlessInvocation(client, scenario, runId, owner);
-  if (!/^https?:\/\//.test(mockUrl ?? '')) throw new Error('invalid Stage 1 headless arguments');
+  if (!/^https?:\/\//.test(mockUrl ?? '') || !isAbsolute(evidenceDir ?? '')) throw new Error('invalid Stage 1 headless arguments');
   const operationHash = stage1OperationHash(runId, scenario, client, owner);
   const aggregate = async () => {
     try {
@@ -110,17 +133,22 @@ export async function runHeadlessClient({ client, scenario, runId, owner, homeDi
   const before = await aggregate();
   cleanAggregate(before);
   if (before.operations[operationHash]) throw new Error('Stage 1 observation failed');
-  const code = await launch({ client, homeDir, bundleFile, template, spaceId, args: invocation.args });
+  const marker = stage1Marker(runId, scenario === 'write' ? client : owner);
+  const operation = `STAGE1_OP_${invocation.operation_digest.toUpperCase()}`;
+  const code = await launch({
+    client, homeDir, bundleFile, template, spaceId, args: invocation.args,
+    capture: { maxBytes: 256 * 1024, sensitiveValues: [invocation.args.at(-1), marker, operation] },
+  });
   if (code !== 0) throw new Error('Stage 1 client failed');
   const after = await aggregate();
-  const expectedMarker = createHash('sha256').update(stage1Marker(runId, scenario === 'write' ? client : owner)).digest('hex');
-  const observedMarkerCount = verifyAggregateDelta(before, after, operationHash, expectedMarker);
-  return { status: 'ok', scenario, observed_marker_count: observedMarkerCount };
+  const expectedMarker = createHash('sha256').update(marker).digest('hex');
+  verifyAggregateDelta(before, after, operationHash, expectedMarker);
+  return writeClientEvidence(evidenceDir, scenario, owner);
 }
 
 function parse(argv) {
   if (argv.length === 0 || argv.length % 2 !== 0) throw new Error('invalid Stage 1 headless CLI arguments');
-  const allowed = new Set(['--client', '--scenario', '--run-id', '--owner', '--home-dir', '--bundle-file', '--space-id', '--template']);
+  const allowed = new Set(['--client', '--scenario', '--run-id', '--owner', '--home-dir', '--bundle-file', '--space-id', '--template', '--evidence-dir']);
   const values = {};
   for (let index = 0; index < argv.length; index += 2) {
     const name = argv[index];
@@ -135,11 +163,11 @@ export async function runHeadlessCli(argv, environment = process.env, dependenci
   const values = parse(argv);
   const scenario = values['--scenario'] ?? environment.STAGE1_CLIENT_SCENARIO;
   const owner = (values['--owner'] ?? environment.STAGE1_OWNER) || undefined;
-  if (!clients.has(values['--client']) || !['write', 'read'].includes(scenario) || !values['--run-id'] || !values['--home-dir'] || !values['--bundle-file'] || !values['--space-id'] || !values['--template'] || !/^https?:\/\//.test(environment.MOCK_BASE_URL ?? '')) throw new Error('invalid Stage 1 headless CLI arguments');
+  if (!clients.has(values['--client']) || !['write', 'read'].includes(scenario) || !values['--run-id'] || !values['--home-dir'] || !values['--bundle-file'] || !values['--space-id'] || !values['--template'] || !values['--evidence-dir'] || !/^https?:\/\//.test(environment.MOCK_BASE_URL ?? '')) throw new Error('invalid Stage 1 headless CLI arguments');
   const run = dependencies.run ?? runHeadlessClient;
   return run({
     client: values['--client'], scenario, runId: values['--run-id'], owner,
-    homeDir: values['--home-dir'], bundleFile: values['--bundle-file'], spaceId: values['--space-id'], template: values['--template'], mockUrl: environment.MOCK_BASE_URL,
+    homeDir: values['--home-dir'], bundleFile: values['--bundle-file'], spaceId: values['--space-id'], template: values['--template'], mockUrl: environment.MOCK_BASE_URL, evidenceDir: values['--evidence-dir'],
   });
 }
 

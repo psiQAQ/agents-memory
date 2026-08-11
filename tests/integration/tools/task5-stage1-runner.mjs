@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { chmod, lstat, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { chmod, lstat, mkdir, readFile, readdir, rename, unlink, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { validateManifest } from './test-runner.mjs';
 import { isMain } from './runtime-lib.mjs';
@@ -423,8 +423,36 @@ function verifyFinalAggregate(manifest, aggregate) {
   return actions;
 }
 
-export async function runFinalizeGate({ manifestPath, gatewayTokenFile, coreUrl, mockUrl, outputDir }, dependencies = {}) {
-  if (![manifestPath, gatewayTokenFile, outputDir].every((path) => isAbsolute(path ?? '')) || ![coreUrl, mockUrl].every((url) => /^https?:\/\//.test(url ?? ''))) throw new Error('invalid Stage 1 final gate arguments');
+async function verifyClientEvidence(root) {
+  const rootMetadata = await lstat(root);
+  if (rootMetadata.isSymbolicLink() || !rootMetadata.isDirectory()) throw new Error();
+  const directories = await readdir(root, { withFileTypes: true });
+  if (!exactSet(directories.map((entry) => entry.name), clients) || directories.some((entry) => !entry.isDirectory() || entry.isSymbolicLink())) throw new Error();
+  let count = 0;
+  for (const client of clients) {
+    const directory = join(root, client);
+    const actions = stage1Actions().filter((action) => action.client === client);
+    const expectedFiles = actions.map((action) => action.scenario === 'write' ? 'write.json' : `read-${action.owner}.json`);
+    const entries = await readdir(directory, { withFileTypes: true });
+    if (!exactSet(entries.map((entry) => entry.name), expectedFiles) || entries.some((entry) => !entry.isFile() || entry.isSymbolicLink())) throw new Error();
+    for (const action of actions) {
+      const filename = action.scenario === 'write' ? 'write.json' : `read-${action.owner}.json`;
+      const path = join(directory, filename);
+      const metadata = await lstat(path);
+      if (metadata.isSymbolicLink() || !metadata.isFile() || metadata.nlink !== 1 || metadata.size < 1 || metadata.size > 256
+        || (process.platform !== 'win32' && (metadata.mode & 0o777) !== 0o600)) throw new Error();
+      const text = await readFile(path, 'utf8');
+      const value = JSON.parse(text);
+      if (!aggregateRecord(value) || Object.keys(value).sort().join() !== 'owner,scenario,status'
+        || value.status !== 'ok' || value.scenario !== action.scenario || value.owner !== (action.owner ?? null)) throw new Error();
+      count += 1;
+    }
+  }
+  return count;
+}
+
+export async function runFinalizeGate({ manifestPath, gatewayTokenFile, coreUrl, mockUrl, outputDir, clientEvidenceRoot }, dependencies = {}) {
+  if (![manifestPath, gatewayTokenFile, outputDir, clientEvidenceRoot].every((path) => isAbsolute(path ?? '')) || ![coreUrl, mockUrl].every((url) => /^https?:\/\//.test(url ?? ''))) throw new Error('invalid Stage 1 final gate arguments');
   let assertion = 'manifest';
   try {
     const { manifest } = await loadStage1Manifest(manifestPath);
@@ -441,7 +469,9 @@ export async function runFinalizeGate({ manifestPath, gatewayTokenFile, coreUrl,
     assertion = 'operation-aggregate';
     const aggregate = await (dependencies.aggregate ?? (() => mockAggregate(mockUrl)))();
     verifyFinalAggregate(manifest, aggregate);
-    const result = { status: 'ok', owner_oracles: clients.length, l0_operation_oracles: actions.length, write_operations: clients.length, cross_owner_reads: actions.length - clients.length };
+    assertion = 'client-evidence';
+    const clientEvidence = await verifyClientEvidence(clientEvidenceRoot);
+    const result = { status: 'ok', owner_oracles: clients.length, l0_operation_oracles: actions.length, client_evidence: clientEvidence, write_operations: clients.length, cross_owner_reads: actions.length - clients.length };
     await writeStage1Evidence(outputDir, 'stage1-shared-memory.json', result);
     return result;
   } catch (error) {
@@ -721,10 +751,11 @@ function parse(argv, allowed) {
 }
 
 export async function runTask5Cli(argv, environment = process.env, dependencies = {}) {
-  const values = parse(argv, new Set(['--manifest', '--scenario', '--gateway-token-file', '--output-dir', '--client']));
+  const values = parse(argv, new Set(['--manifest', '--scenario', '--gateway-token-file', '--output-dir', '--client-evidence-root', '--client']));
   const scenario = values['--scenario'];
   if (!values['--manifest'] || !values['--gateway-token-file'] || !values['--output-dir'] || !['protocol-leak', 'owner-oracle', 'management', 'finalize'].includes(scenario)
-    || (scenario === 'owner-oracle') !== Boolean(values['--client']) || (values['--client'] && !clients.includes(values['--client']))) throw new Error('invalid Stage 1 CLI arguments');
+    || (scenario === 'owner-oracle') !== Boolean(values['--client']) || (values['--client'] && !clients.includes(values['--client']))
+    || (scenario === 'finalize' && !values['--client-evidence-root'])) throw new Error('invalid Stage 1 CLI arguments');
   const http = (name) => {
     const value = environment[name];
     if (!/^https?:\/\//.test(value ?? '')) throw new Error('invalid Stage 1 CLI arguments');
@@ -745,7 +776,7 @@ export async function runTask5Cli(argv, environment = process.env, dependencies 
     return management({ ...secured, proxyUrl: http('PROXY_BASE_URL'), mockUrl: http('MOCK_BASE_URL'), panelUrl: http('PANEL_BASE_URL'), outputDir: values['--output-dir'] });
   }
   const finalize = dependencies.finalize ?? runFinalizeGate;
-  return finalize({ ...secured, mockUrl: http('MOCK_BASE_URL'), outputDir: values['--output-dir'] });
+  return finalize({ ...secured, mockUrl: http('MOCK_BASE_URL'), outputDir: values['--output-dir'], clientEvidenceRoot: values['--client-evidence-root'] });
 }
 
 if (isMain(import.meta)) {
