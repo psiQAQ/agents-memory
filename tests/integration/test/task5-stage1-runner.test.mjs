@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import http from 'node:http';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -6,12 +7,13 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { createMockServer } from '../tools/mock-llm.mjs';
 import { ensureFetchSafeServer } from './helpers.mjs';
-import { buildLeakCases, isUnsafeObservation, runFinalizeGate, runManagementGate, runOwnerOracle, runProtocolLeakGate, runTask5Cli, stage1OperationDigest, stage1OperationHash } from '../tools/task5-stage1-runner.mjs';
+import { buildLeakCases, isUnsafeObservation, runFinalizeGate, runManagementGate, runOperationOracle, runOwnerOracle, runProtocolLeakGate, runTask5Cli, stage1OperationDigest, stage1OperationHash } from '../tools/task5-stage1-runner.mjs';
 import { headlessInvocation, runHeadlessCli, runHeadlessClient, stage1Marker } from '../tools/task5-headless-client.mjs';
 
 const clients = ['claude', 'opencode', 'pi'];
 const epochA = '11111111-1111-4111-8111-111111111111';
 const epochB = '22222222-2222-4222-8222-222222222222';
+const epochC = '33333333-3333-4333-8333-333333333333';
 
 function aggregateSnapshot({ epoch = epochA, sequence = 40, total = 0, dropped = 0, truncated = false, paths = {}, operations = {}, sticky = {} } = {}) {
   return {
@@ -26,6 +28,35 @@ function mainOperation(sequence, markerHashes = [], requests = 1) {
     marker_hashes: markerHashes,
     paths: { '/anthropic/v1/messages': { requests, sequences: Array.from({ length: requests }, (_, index) => sequence + index), marker_hashes: markerHashes } },
   };
+}
+
+function operationText(runId, scenario, client, owner) {
+  return `STAGE1_OP_${stage1OperationDigest(runId, scenario, client, owner).toUpperCase()}`;
+}
+
+function outsiderOperationHash(runId, kind) {
+  const operation = `STAGE1_OP_${createHash('sha256').update(`${runId}:outsider:${kind}`).digest('hex').toUpperCase()}`;
+  return createHash('sha256').update(operation).digest('hex');
+}
+
+const orderedStage1Actions = [
+  ...clients.map((client) => ({ scenario: 'write', client, owner: undefined })),
+  ...clients.flatMap((client) => clients.filter((owner) => owner !== client).map((owner) => ({ scenario: 'read', client, owner }))),
+];
+
+function finalAggregate(runId, mutate = (value) => value) {
+  const operations = {};
+  for (const [index, action] of orderedStage1Actions.entries()) {
+    const markerOwner = action.scenario === 'write' ? action.client : action.owner;
+    const markerHash = createHash('sha256').update(stage1Marker(runId, markerOwner)).digest('hex');
+    operations[stage1OperationHash(runId, action.scenario, action.client, action.owner)] = mainOperation(index + 1, [markerHash]);
+  }
+  return mutate(aggregateSnapshot({
+    sequence: orderedStage1Actions.length,
+    total: orderedStage1Actions.length,
+    paths: { '/anthropic/v1/messages': { requests: orderedStage1Actions.length, sequences: orderedStage1Actions.map((_, index) => index + 1) } },
+    operations,
+  }));
 }
 
 test('Task 5 fixes 24 ordered Anthropic protocol and leak cases across the three native sources', () => {
@@ -194,7 +225,7 @@ test('Task 5 owner oracle requires exact Core L0 and L1 ownership and polls only
       core: async (path, context) => {
         calls.push({ path, context });
         const owner = { team_id: 'team-shared', user_id: 'user-claude', agent_id: 'agent-claude', task_id: 'task-shared' };
-        const item = { ...owner, content: `owned ${stage1Marker('task5-fixture', 'claude')}` };
+        const item = { ...owner, session_id: 'session-claude', role: 'user', content: `${operationText('task5-fixture', 'write', 'claude')} owned ${stage1Marker('task5-fixture', 'claude')}` };
         if (path === '/v3/conversation/query') return { status: 200, code: 0, data: { messages: [item] } };
         atomicCalls += 1;
         return { status: 200, code: 0, data: { items: atomicCalls === 1 ? [] : [item] } };
@@ -205,33 +236,147 @@ test('Task 5 owner oracle requires exact Core L0 and L1 ownership and polls only
     assert.equal(calls[0].context.key, value.keys.claude);
     assert.deepEqual(calls[0].context.body, { team_id: 'team-shared', user_id: 'user-claude', agent_id: 'agent-claude', task_id: 'task-shared', session_id: 'session-claude', limit: 100, offset: 0 });
 
-    await assert.rejects(runOwnerOracle({ manifestPath: value.manifestPath, gatewayTokenFile: value.gatewayTokenFile, coreUrl: 'http://memory-core:8420', client: 'claude', pollAttempts: 1, pollIntervalMs: 0 }, {
-      core: async () => ({ status: 200, code: 0, data: { messages: [{ content: stage1Marker('task5-fixture', 'claude'), team_id: 'team-shared', user_id: 'user-opencode', agent_id: 'agent-claude', task_id: 'task-shared' }] } }),
+    const base = {
+      content: `${operationText('task5-fixture', 'write', 'claude')} ${stage1Marker('task5-fixture', 'claude')}`,
+      team_id: 'team-shared', user_id: 'user-claude', agent_id: 'agent-claude', task_id: 'task-shared', session_id: 'session-claude', role: 'user',
+    };
+    for (const item of [
+      { ...base, session_id: 'session-opencode' },
+      { ...base, role: 'assistant' },
+      { ...base, content: stage1Marker('task5-fixture', 'claude') },
+      { ...base, user_id: 'user-opencode' },
+    ]) await assert.rejects(runOwnerOracle({ manifestPath: value.manifestPath, gatewayTokenFile: value.gatewayTokenFile, coreUrl: 'http://memory-core:8420', client: 'claude', pollAttempts: 1, pollIntervalMs: 0 }, {
+      core: async () => ({ status: 200, code: 0, data: { messages: [item] } }),
     }), /owner oracle failed/);
+  } finally { await value.close(); }
+});
+
+test('Task 5 operation oracle binds a read operation to the exact reader identity, session, task, and user role', async () => {
+  const value = await fixture();
+  try {
+    const exact = {
+      content: operationText(value.manifest.run_id, 'read', 'opencode', 'claude'),
+      team_id: value.manifest.team_id, user_id: value.ids.opencode.user_id, agent_id: value.ids.opencode.agent_id,
+      task_id: value.manifest.task_id, session_id: value.ids.opencode.session_id, role: 'user',
+    };
+    const calls = [];
+    const result = await runOperationOracle({
+      manifestPath: value.manifestPath, gatewayTokenFile: value.gatewayTokenFile, coreUrl: 'http://memory-core:8420',
+      scenario: 'read', client: 'opencode', owner: 'claude',
+    }, { core: async (path, context) => { calls.push({ path, context }); return { status: 200, code: 0, data: { messages: [exact] } }; } });
+    assert.deepEqual(result, { status: 'ok', l0_matches: 1 });
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].path, '/v3/conversation/query');
+    assert.deepEqual(calls[0].context.body, {
+      team_id: 'team-shared', user_id: 'user-opencode', agent_id: 'agent-opencode', task_id: 'task-shared',
+      session_id: 'session-opencode', limit: 100, offset: 0,
+    });
+    for (const item of [{ ...exact, session_id: 'session-claude' }, { ...exact, role: 'assistant' }, { ...exact, user_id: 'user-claude' }]) {
+      await assert.rejects(runOperationOracle({
+        manifestPath: value.manifestPath, gatewayTokenFile: value.gatewayTokenFile, coreUrl: 'http://memory-core:8420',
+        scenario: 'read', client: 'opencode', owner: 'claude',
+      }, { core: async () => ({ status: 200, code: 0, data: { messages: [item] } }) }), /operation oracle failed/);
+    }
   } finally { await value.close(); }
 });
 
 test('Task 5 final gate proves three writes and six ordered foreign reads without storing hashes or markers', async () => {
   const value = await fixture();
   try {
-    const operations = {};
-    for (const client of clients) {
-      operations[stage1OperationHash(value.manifest.run_id, 'write', client)] = { requests: 1, marker_hashes: [(await import('node:crypto')).createHash('sha256').update(stage1Marker(value.manifest.run_id, client)).digest('hex')] };
-      for (const owner of clients.filter((candidate) => candidate !== client)) {
-        operations[stage1OperationHash(value.manifest.run_id, 'read', client, owner)] = { requests: 1, marker_hashes: [(await import('node:crypto')).createHash('sha256').update(stage1Marker(value.manifest.run_id, owner)).digest('hex')] };
-      }
-    }
+    const oracleOrder = [];
     const outputDir = join(value.directory, 'final-evidence');
     const result = await runFinalizeGate({ manifestPath: value.manifestPath, gatewayTokenFile: value.gatewayTokenFile, coreUrl: 'http://memory-core:8420', mockUrl: value.mockUrl, outputDir }, {
-      ownerOracle: async ({ client }) => ({ status: 'ok', client }),
-      aggregate: async () => ({ total_requests: 9, paths: {}, fixtures: {}, operations }),
+      ownerOracle: async ({ client }) => { oracleOrder.push(`write:${client}`); return { status: 'ok', l0_matches: 1, l1_matches: 1 }; },
+      operationOracle: async ({ scenario, client, owner }) => { oracleOrder.push(`${scenario}:${client}:${owner}`); return { status: 'ok', l0_matches: 1 }; },
+      aggregate: async () => finalAggregate(value.manifest.run_id),
     });
-    assert.deepEqual(result, { status: 'ok', owner_oracles: 3, write_operations: 3, cross_owner_reads: 6 });
+    assert.deepEqual(oracleOrder, orderedStage1Actions.map(({ scenario, client, owner }) => `${scenario}:${client}${owner ? `:${owner}` : ''}`));
+    assert.deepEqual(result, { status: 'ok', owner_oracles: 3, l0_operation_oracles: 9, write_operations: 3, cross_owner_reads: 6 });
     const evidence = await readFile(join(outputDir, 'stage1-shared-memory.json'), 'utf8');
     assert.deepEqual(JSON.parse(evidence), result);
     assert.doesNotMatch(evidence, /MEMORY_|[a-f0-9]{32}|user-|agent-|team-|task-|session-|credential|prompt|body/i);
   } finally { await value.close(); }
 });
+
+test('Task 5 final gate rejects wrong main-path markers, out-of-order sequences, extra operations, and sticky or dropped observations', async (context) => {
+  const value = await fixture();
+  const runId = value.manifest.run_id;
+  const first = orderedStage1Actions[0];
+  const firstHash = stage1OperationHash(runId, first.scenario, first.client, first.owner);
+  const markerHash = createHash('sha256').update(stage1Marker(runId, first.client)).digest('hex');
+  const cases = [
+    ['wrong-main-path', finalAggregate(runId, (aggregate) => {
+      aggregate.sequence += 1;
+      aggregate.total_requests += 1;
+      aggregate.paths['/openai/v1/chat/completions'] = { requests: 1, sequences: [10] };
+      aggregate.operations[firstHash] = {
+        requests: 2, marker_hashes: [markerHash],
+        paths: {
+          '/anthropic/v1/messages': { requests: 1, sequences: [1], marker_hashes: [] },
+          '/openai/v1/chat/completions': { requests: 1, sequences: [10], marker_hashes: [markerHash] },
+        },
+      };
+      return aggregate;
+    })],
+    ['out-of-order', finalAggregate(runId, (aggregate) => {
+      const second = orderedStage1Actions[1];
+      const secondHash = stage1OperationHash(runId, second.scenario, second.client, second.owner);
+      aggregate.operations[firstHash].paths['/anthropic/v1/messages'].sequences = [2];
+      aggregate.operations[secondHash].paths['/anthropic/v1/messages'].sequences = [1];
+      return aggregate;
+    })],
+    ['extra-operation', finalAggregate(runId, (aggregate) => {
+      aggregate.operations['0'.repeat(64)] = mainOperation(10);
+      return aggregate;
+    })],
+    ['dropped-sticky', finalAggregate(runId, (aggregate) => ({
+      ...aggregate, dropped_requests: 1, truncated: true,
+      sticky_leaks: { credential: false, identity: true, sentinel: false },
+    }))],
+  ];
+  try {
+    for (const [name, aggregate] of cases) await context.test(name, async () => {
+      const outputDir = join(value.directory, `final-negative-${name}`);
+      await assert.rejects(runFinalizeGate({
+        manifestPath: value.manifestPath, gatewayTokenFile: value.gatewayTokenFile, coreUrl: 'http://memory-core:8420', mockUrl: value.mockUrl, outputDir,
+      }, {
+        ownerOracle: async () => ({ status: 'ok', l0_matches: 1, l1_matches: 1 }),
+        operationOracle: async () => ({ status: 'ok', l0_matches: 1 }),
+        aggregate: async () => aggregate,
+      }), /final gate failed/);
+    });
+  } finally { await value.close(); }
+});
+
+function managementCoreFixture(value, ownBindings, outsiderBinding, onCall = () => {}) {
+  return async (path, { body }) => {
+    onCall(path, body);
+    if (path === '/v3/meta/user/get') return { status: 200, code: 0, data: { user_id: body.user_id } };
+    if (path === '/v3/meta/team/get') return { status: 200, code: 0, data: { team_id: body.team_id } };
+    if (path === '/v3/meta/team-member/list') {
+      const actors = body.team_id === 'team-shared' ? clients : ['outsider'];
+      return { status: 200, code: 0, data: { items: actors.map((actor) => ({ user_id: value.ids[actor].user_id })) } };
+    }
+    if (path === '/v3/meta/agent/list') {
+      const actors = body.team_id === 'team-shared' ? clients : ['outsider'];
+      return { status: 200, code: 0, data: { items: actors.map((actor) => ({ agent_id: value.ids[actor].agent_id, team_id: body.team_id, owner_user_id: value.ids[actor].user_id })) } };
+    }
+    if (path === '/v3/meta/task/get') return { status: 200, code: 0, data: { task_id: body.task_id, team_id: body.task_id === 'task-shared' ? 'team-shared' : 'team-outsider' } };
+    if (path === '/v3/meta/asset/get') {
+      const owner = Object.entries(value.assetIds).find(([, assetId]) => assetId === body.asset_id)?.[0] ?? 'outsider';
+      return { status: 200, code: 0, data: { asset_id: body.asset_id, asset_type: 'chat_memory', team_id: owner === 'outsider' ? 'team-outsider' : 'team-shared', owner_user_id: value.ids[owner].user_id, visibility: owner === 'outsider' ? 'private' : 'team' } };
+    }
+    if (path === '/v3/meta/agent-fixed-asset/list') {
+      const actor = [...clients, 'outsider'].find((name) => value.ids[name].agent_id === body.agent_id);
+      const entries = actor === 'outsider' ? outsiderBinding : ownBindings[actor];
+      return { status: 200, code: 0, data: { items: structuredClone(entries) } };
+    }
+    if (path === '/v3/meta/asset/list-accessible') return { status: 200, code: 0, data: { items: [] } };
+    if (path === '/v3/meta/acl/check') return { status: 200, code: 0, data: { allowed: body.user_id !== value.ids.outsider.user_id } };
+    if (path === '/v3/meta/agent-fixed-asset/set') return { status: 403, code: 403, data: null };
+    throw new Error(`unexpected ${path}`);
+  };
+}
 
 test('Task 5 management gate validates topology and outsider isolation with mutation rollback and zero model side effects', async () => {
   const value = await fixture();
@@ -239,43 +384,106 @@ test('Task 5 management gate validates topology and outsider isolation with muta
     asset_id: value.assetIds[owner], asset_type: 'chat_memory', injection_mode: 'summary', priority: owner === client ? 50 : 0, created_by: value.ids[client].user_id,
   }))]));
   const outsiderBinding = [{ asset_id: 'asset-outsider', asset_type: 'chat_memory', injection_mode: 'summary', priority: 50, created_by: value.ids.outsider.user_id }];
+  let modelState = aggregateSnapshot({ sequence: 40 });
+  let resetCalls = 0;
+  let aggregateCalls = 0;
+  const reset = async () => {
+    resetCalls += 1;
+    modelState = aggregateSnapshot({ epoch: resetCalls === 1 ? epochB : epochC, sequence: modelState.sequence });
+    return { status: 'ok', epoch: modelState.epoch, sequence: modelState.sequence };
+  };
+  const aggregate = async () => { aggregateCalls += 1; return structuredClone(modelState); };
+  const observeLegalModelRequest = () => {
+    const sequence = modelState.sequence + 1;
+    modelState.sequence = sequence;
+    modelState.total_requests += 1;
+    modelState.paths['/anthropic/v1/messages'] = { requests: 1, sequences: [sequence] };
+    modelState.operations[outsiderOperationHash(value.manifest.run_id, 'legal')] = {
+      requests: 1,
+      paths: { '/anthropic/v1/messages': { requests: 1, sequences: [sequence], marker_hashes: [] } },
+    };
+  };
   try {
     const result = await runManagementGate({ manifestPath: value.manifestPath, gatewayTokenFile: value.gatewayTokenFile, coreUrl: 'http://memory-core:8420', proxyUrl: value.proxyUrl, mockUrl: value.mockUrl, panelUrl: 'http://memory-hub:8125', outputDir: join(value.directory, 'management-evidence') }, {
-      core: async (path, { body }) => {
-        if (path === '/v3/meta/user/get') return { status: 200, code: 0, data: { user_id: body.user_id } };
-        if (path === '/v3/meta/team/get') return { status: 200, code: 0, data: { team_id: body.team_id } };
-        if (path === '/v3/meta/team-member/list') {
-          const actors = body.team_id === 'team-shared' ? clients : ['outsider'];
-          return { status: 200, code: 0, data: { items: actors.map((actor) => ({ user_id: value.ids[actor].user_id })) } };
-        }
-        if (path === '/v3/meta/agent/list') {
-          const actors = body.team_id === 'team-shared' ? clients : ['outsider'];
-          return { status: 200, code: 0, data: { items: actors.map((actor) => ({ agent_id: value.ids[actor].agent_id, team_id: body.team_id, owner_user_id: value.ids[actor].user_id })) } };
-        }
-        if (path === '/v3/meta/task/get') return { status: 200, code: 0, data: { task_id: body.task_id, team_id: body.task_id === 'task-shared' ? 'team-shared' : 'team-outsider' } };
-        if (path === '/v3/meta/asset/get') {
-          const owner = Object.entries(value.assetIds).find(([, assetId]) => assetId === body.asset_id)?.[0] ?? 'outsider';
-          return { status: 200, code: 0, data: { asset_id: body.asset_id, asset_type: 'chat_memory', team_id: owner === 'outsider' ? 'team-outsider' : 'team-shared', owner_user_id: value.ids[owner].user_id, visibility: owner === 'outsider' ? 'private' : 'team' } };
-        }
-        if (path === '/v3/meta/agent-fixed-asset/list') {
-          const actor = [...clients, 'outsider'].find((name) => value.ids[name].agent_id === body.agent_id);
-          const items = actor === 'outsider' ? outsiderBinding : ownBindings[actor];
-          return { status: 200, code: 0, data: { items: structuredClone(items) } };
-        }
-        if (path === '/v3/meta/asset/list-accessible') return { status: 200, code: 0, data: { items: [] } };
-        if (path === '/v3/meta/acl/check') return { status: 200, code: 0, data: { allowed: body.user_id !== value.ids.outsider.user_id } };
-        if (path === '/v3/meta/agent-fixed-asset/set') return { status: 403, code: 403, data: null };
-        throw new Error(`unexpected ${path}`);
+      core: managementCoreFixture(value, ownBindings, outsiderBinding),
+      reset,
+      aggregate,
+      proxy: async (kind) => {
+        if (kind === 'legal') observeLegalModelRequest();
+        return kind === 'unknown' ? { status: 404 } : kind === 'forged' ? { status: 409 } : { status: 200 };
       },
-      proxy: async (kind) => kind === 'unknown' ? { status: 404 } : kind === 'forged' ? { status: 409 } : { status: 200 },
-      model: async (kind) => kind === 'legal' ? { count: 1, all_count: 2, owner_marker_count: 0, safe: true } : { count: 0, all_count: 0, owner_marker_count: 0, safe: true },
       panel: async (path) => ({ status: 200, contentType: path === '/' ? 'text/html; charset=utf-8' : 'application/json' }),
     });
     assert.deepEqual(result, { status: 'ok', users: 4, teams: 2, members: 4, agents: 4, tasks: 2, assets: 4, bindings: 10, acl_checks: 7, outsider_negative_checks: 6, panel_checks: 2 });
     const evidence = await readFile(join(value.directory, 'management-evidence', 'stage1-management.json'), 'utf8');
     assert.deepEqual(JSON.parse(evidence), result);
     assert.doesNotMatch(evidence, /user-|agent-|team-|task-|asset-|sk-mem-|MEMORY_|authorization/i);
+    assert.equal(resetCalls, 2);
+    assert.equal(aggregateCalls, 14);
   } finally { await value.close(); }
+});
+
+test('Task 5 management gate rejects a model side effect during an outsider Core negative check', async () => {
+  const value = await fixture();
+  const ownBindings = Object.fromEntries(clients.map((client) => [client, clients.map((owner) => ({
+    asset_id: value.assetIds[owner], asset_type: 'chat_memory', injection_mode: 'summary', priority: owner === client ? 50 : 0, created_by: value.ids[client].user_id,
+  }))]));
+  const outsiderBinding = [{ asset_id: 'asset-outsider', asset_type: 'chat_memory', injection_mode: 'summary', priority: 50, created_by: value.ids.outsider.user_id }];
+  let state = aggregateSnapshot({ sequence: 70 });
+  const reset = async () => { state = aggregateSnapshot({ epoch: epochB, sequence: state.sequence }); return { status: 'ok' }; };
+  const aggregate = async () => structuredClone(state);
+  const leakModelRequest = () => {
+    const sequence = state.sequence + 1;
+    state.sequence = sequence;
+    state.total_requests += 1;
+    state.paths['/openai/v1/chat/completions'] = { requests: 1, sequences: [sequence] };
+  };
+  try {
+    const outputDir = join(value.directory, 'management-delta-evidence');
+    await assert.rejects(runManagementGate({
+      manifestPath: value.manifestPath, gatewayTokenFile: value.gatewayTokenFile, coreUrl: 'http://memory-core:8420', proxyUrl: value.proxyUrl,
+      mockUrl: value.mockUrl, panelUrl: 'http://memory-hub:8125', outputDir,
+    }, {
+      core: managementCoreFixture(value, ownBindings, outsiderBinding, (path) => { if (path === '/v3/meta/asset/list-accessible') leakModelRequest(); }),
+      reset, aggregate,
+      proxy: async () => ({ status: 409 }),
+      panel: async () => ({ status: 200, contentType: 'application/json' }),
+    }), /assertion=outsider-accessible/);
+    assert.deepEqual(JSON.parse(await readFile(join(outputDir, 'stage1-management.json'), 'utf8')), { status: 'failed', assertion: 'outsider-accessible' });
+  } finally { await value.close(); }
+});
+
+test('Task 5 forged outsider request uses only the outsider key with the complete victim route tuple', async () => {
+  const value = await fixture();
+  const requests = [];
+  const server = http.createServer(async (request, response) => {
+    let body = '';
+    for await (const chunk of request) body += chunk;
+    requests.push({ path: request.url, headers: request.headers, body: JSON.parse(body) });
+    response.writeHead(409, { 'content-type': 'application/json' }).end('{}');
+  });
+  await ensureFetchSafeServer(server);
+  try {
+    const module = await import('../tools/task5-stage1-runner.mjs');
+    assert.equal(typeof module.proxyIsolationRequest, 'function');
+    const result = await module.proxyIsolationRequest('forged', {
+      manifest: value.manifest, keys: value.keys, proxyUrl: `http://127.0.0.1:${server.address().port}`, mockUrl: value.mockUrl,
+    });
+    assert.deepEqual(result, { status: 409 });
+    assert.equal(requests.length, 1);
+    const [request] = requests;
+    assert.equal(request.path, '/claude-code/default/v1/messages');
+    assert.equal(request.headers.authorization, `Bearer ${value.keys.outsider}`);
+    assert.equal(request.headers['x-team-id'], value.manifest.team_id);
+    assert.equal(request.headers['x-agent-id'], value.ids.claude.agent_id);
+    assert.equal(request.headers['x-task-id'], value.manifest.task_id);
+    assert.equal(request.headers['x-conversation-id'], value.ids.claude.session_id);
+    assert.equal(request.headers['x-user-id'], undefined);
+    assert.doesNotMatch(JSON.stringify(request.body), /MEMORY_NONCE_/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    await value.close();
+  }
 });
 
 test('Task 5 management gate rejects duplicate actor credentials before any Core request', async () => {

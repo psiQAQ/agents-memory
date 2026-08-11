@@ -296,6 +296,25 @@ function ownerFor(manifest, client) {
   };
 }
 
+function actorFor(manifest, client) {
+  return { ...ownerFor(manifest, client), session_id: manifest.clients[client].session_id };
+}
+
+function operationMatches(items, operation, actor) {
+  return Array.isArray(items) ? items.filter((item) => item && typeof item.content === 'string' && item.content.includes(operation)
+    && item.team_id === actor.team_id && item.user_id === actor.user_id && item.agent_id === actor.agent_id
+    && item.task_id === actor.task_id && item.session_id === actor.session_id && item.role === 'user') : [];
+}
+
+async function queryOperation({ manifest, client, scenario, owner, context, core }) {
+  const actor = actorFor(manifest, client);
+  const operation = `STAGE1_OP_${stage1OperationDigest(manifest.run_id, scenario, client, owner).toUpperCase()}`;
+  const l0 = await core('/v3/conversation/query', { ...context, body: { ...actor, limit: 100, offset: 0 } });
+  const matches = l0.status >= 200 && l0.status < 300 && l0.code === 0 ? operationMatches(l0.data?.messages, operation, actor) : [];
+  if (matches.length !== 1) throw new Error();
+  return matches.length;
+}
+
 function ownedMarkerMatches(items, marker, owner) {
   return Array.isArray(items) ? items.filter((item) => item && typeof item.content === 'string' && item.content.includes(marker)
     && item.team_id === owner.team_id && item.user_id === owner.user_id && item.agent_id === owner.agent_id && item.task_id === owner.task_id) : [];
@@ -312,9 +331,7 @@ export async function runOwnerOracle({ manifestPath, gatewayTokenFile, coreUrl, 
     const owner = ownerFor(manifest, client);
     const marker = stage1Marker(manifest.run_id, client);
     const context = { key, gatewayToken, serviceId: manifest.service_id, coreUrl };
-    const l0 = await core('/v3/conversation/query', { ...context, body: { ...owner, session_id: manifest.clients[client].session_id, limit: 100, offset: 0 } });
-    const l0Matches = l0.status >= 200 && l0.status < 300 && l0.code === 0 ? ownedMarkerMatches(l0.data?.messages, marker, owner) : [];
-    if (l0Matches.length === 0) throw new Error();
+    const l0Matches = await queryOperation({ manifest, client, scenario: 'write', context, core });
     let l1Matches = [];
     for (let attempt = 0; attempt < pollAttempts; attempt += 1) {
       const l1 = await core('/v3/atomic/query', { ...context, body: { ...owner, limit: 100, offset: 0 } });
@@ -323,8 +340,25 @@ export async function runOwnerOracle({ manifestPath, gatewayTokenFile, coreUrl, 
       if (attempt + 1 < pollAttempts && pollIntervalMs > 0) await new Promise((resolveDelay) => setTimeout(resolveDelay, pollIntervalMs));
     }
     if (l1Matches.length === 0) throw new Error();
-    return { status: 'ok', l0_matches: l0Matches.length, l1_matches: l1Matches.length };
+    return { status: 'ok', l0_matches: l0Matches, l1_matches: l1Matches.length };
   } catch { throw new Error('Stage 1 owner oracle failed'); }
+}
+
+export async function runOperationOracle({ manifestPath, gatewayTokenFile, coreUrl, scenario, client, owner }, dependencies = {}) {
+  if (![manifestPath, gatewayTokenFile].every((path) => isAbsolute(path ?? '')) || !/^https?:\/\//.test(coreUrl ?? '')
+    || !clients.includes(client)) throw new Error('invalid Stage 1 operation oracle arguments');
+  try {
+    stage1OperationDigest('validation-run', scenario, client, owner);
+    const { manifest, manifestDirectory } = await loadStage1Manifest(manifestPath);
+    const key = await readKey(resolve(manifestDirectory, manifest.clients[client].credential_file));
+    const gatewayToken = await readGatewayToken(gatewayTokenFile);
+    const core = dependencies.core ?? coreRequest;
+    const l0Matches = await queryOperation({
+      manifest, client, scenario, owner,
+      context: { key, gatewayToken, serviceId: manifest.service_id, coreUrl }, core,
+    });
+    return { status: 'ok', l0_matches: l0Matches };
+  } catch { throw new Error('Stage 1 operation oracle failed'); }
 }
 
 async function mockAggregate(mockUrl) {
@@ -333,38 +367,81 @@ async function mockAggregate(mockUrl) {
   return data;
 }
 
+const stage1MainPath = '/anthropic/v1/messages';
+const stage1OperationPaths = new Set([stage1MainPath, '/openai/v1/chat/completions']);
+
+function stage1Actions() {
+  return [
+    ...clients.map((client) => ({ scenario: 'write', client, owner: undefined })),
+    ...clients.flatMap((client) => clients.filter((owner) => owner !== client).map((owner) => ({ scenario: 'read', client, owner }))),
+  ];
+}
+
+function aggregateRecord(value) {
+  return value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function aggregatePath(paths, path) {
+  const entry = paths?.[path];
+  if (!aggregateRecord(entry) || !Number.isInteger(entry.requests) || entry.requests < 0
+    || !Array.isArray(entry.sequences) || entry.sequences.length !== entry.requests
+    || entry.sequences.some((sequence) => !Number.isInteger(sequence) || sequence < 1)) throw new Error();
+  return entry;
+}
+
+function verifyFinalAggregate(manifest, aggregate) {
+  const sticky = aggregate?.sticky_leaks;
+  if (!aggregateRecord(aggregate) || typeof aggregate.epoch !== 'string' || aggregate.epoch.length === 0
+    || !Number.isInteger(aggregate.sequence) || aggregate.sequence < 1
+    || !Number.isInteger(aggregate.total_requests) || aggregate.total_requests < 1
+    || aggregate.dropped_requests !== 0 || aggregate.truncated !== false
+    || !aggregateRecord(aggregate.paths) || !aggregateRecord(aggregate.fixtures) || !aggregateRecord(aggregate.operations)
+    || !aggregateRecord(sticky) || sticky.credential !== false || sticky.identity !== false || sticky.sentinel !== false
+    || Object.keys(aggregate.paths).some((path) => !stage1OperationPaths.has(path))) throw new Error();
+  let total = 0;
+  for (const path of Object.keys(aggregate.paths)) total += aggregatePath(aggregate.paths, path).requests;
+  if (total !== aggregate.total_requests) throw new Error();
+  const actions = stage1Actions();
+  const expectedHashes = actions.map((action) => stage1OperationHash(manifest.run_id, action.scenario, action.client, action.owner));
+  if (!exactSet(Object.keys(aggregate.operations), expectedHashes)) throw new Error();
+  const mainSequences = [];
+  for (const [index, action] of actions.entries()) {
+    const operation = aggregate.operations[expectedHashes[index]];
+    if (!aggregateRecord(operation) || !Number.isInteger(operation.requests) || operation.requests < 1 || !aggregateRecord(operation.paths)
+      || Object.keys(operation.paths).some((path) => !stage1OperationPaths.has(path)) || !Object.hasOwn(operation.paths, stage1MainPath)) throw new Error();
+    let operationRequests = 0;
+    for (const path of Object.keys(operation.paths)) operationRequests += aggregatePath(operation.paths, path).requests;
+    const main = aggregatePath(operation.paths, stage1MainPath);
+    const markerOwner = action.scenario === 'write' ? action.client : action.owner;
+    const markerHash = createHash('sha256').update(stage1Marker(manifest.run_id, markerOwner)).digest('hex');
+    if (operationRequests !== operation.requests || main.requests !== 1 || !Array.isArray(main.marker_hashes) || !main.marker_hashes.includes(markerHash)) throw new Error();
+    mainSequences.push(main.sequences[0]);
+  }
+  if (mainSequences.some((sequence, index) => index > 0 && sequence <= mainSequences[index - 1])) throw new Error();
+  const globalMain = aggregatePath(aggregate.paths, stage1MainPath);
+  if (globalMain.requests !== actions.length || !globalMain.sequences.every((sequence, index) => sequence === mainSequences[index])) throw new Error();
+  return actions;
+}
+
 export async function runFinalizeGate({ manifestPath, gatewayTokenFile, coreUrl, mockUrl, outputDir }, dependencies = {}) {
   if (![manifestPath, gatewayTokenFile, outputDir].every((path) => isAbsolute(path ?? '')) || ![coreUrl, mockUrl].every((url) => /^https?:\/\//.test(url ?? ''))) throw new Error('invalid Stage 1 final gate arguments');
   let assertion = 'manifest';
   try {
     const { manifest } = await loadStage1Manifest(manifestPath);
     const ownerOracle = dependencies.ownerOracle ?? runOwnerOracle;
+    const operationOracle = dependencies.operationOracle ?? runOperationOracle;
     assertion = 'owner-oracle';
-    for (const client of clients) {
-      const result = await ownerOracle({ manifestPath, gatewayTokenFile, coreUrl, client });
-      if (result?.status !== 'ok') throw new Error();
+    const actions = stage1Actions();
+    for (const action of actions) {
+      const result = action.scenario === 'write'
+        ? await ownerOracle({ manifestPath, gatewayTokenFile, coreUrl, client: action.client })
+        : await operationOracle({ manifestPath, gatewayTokenFile, coreUrl, ...action });
+      if (result?.status !== 'ok' || result.l0_matches !== 1 || (action.scenario === 'write' && (!Number.isInteger(result.l1_matches) || result.l1_matches < 1))) throw new Error();
     }
     assertion = 'operation-aggregate';
     const aggregate = await (dependencies.aggregate ?? (() => mockAggregate(mockUrl)))();
-    const operations = aggregate?.operations;
-    if (!operations || typeof operations !== 'object') throw new Error();
-    let writes = 0;
-    let reads = 0;
-    const hasMarker = (scenario, client, owner) => {
-      const operation = operations[stage1OperationHash(manifest.run_id, scenario, client, owner)];
-      const marker = stage1Marker(manifest.run_id, scenario === 'write' ? client : owner);
-      const markerHash = createHash('sha256').update(marker).digest('hex');
-      return Number.isInteger(operation?.requests) && operation.requests >= 1 && Array.isArray(operation.marker_hashes) && operation.marker_hashes.includes(markerHash);
-    };
-    for (const client of clients) {
-      if (!hasMarker('write', client)) throw new Error();
-      writes += 1;
-      for (const owner of clients.filter((candidate) => candidate !== client)) {
-        if (!hasMarker('read', client, owner)) throw new Error();
-        reads += 1;
-      }
-    }
-    const result = { status: 'ok', owner_oracles: clients.length, write_operations: writes, cross_owner_reads: reads };
+    verifyFinalAggregate(manifest, aggregate);
+    const result = { status: 'ok', owner_oracles: clients.length, l0_operation_oracles: actions.length, write_operations: clients.length, cross_owner_reads: actions.length - clients.length };
     await writeStage1Evidence(outputDir, 'stage1-shared-memory.json', result);
     return result;
   } catch (error) {
@@ -393,9 +470,7 @@ function outsiderOperation(runId, kind) {
   return `STAGE1_OP_${createHash('sha256').update(`${runId}:outsider:${kind}`).digest('hex').toUpperCase()}`;
 }
 
-async function proxyIsolationRequest(kind, { manifest, keys, proxyUrl, mockUrl }) {
-  const reset = await fetch(new URL('/__mock/reset', mockUrl), { method: 'POST', signal: AbortSignal.timeout(2000) });
-  if (!reset.ok) throw new Error();
+export async function proxyIsolationRequest(kind, { manifest, keys, proxyUrl }) {
   const forged = kind === 'forged';
   const source = kind === 'unknown' ? 'unregistered-source' : 'claude-code';
   const actor = forged ? manifest.clients.claude : manifest.outsider;
@@ -408,7 +483,7 @@ async function proxyIsolationRequest(kind, { manifest, keys, proxyUrl, mockUrl }
       'x-team-id': forged ? manifest.team_id : manifest.outsider.team_id,
       'x-agent-id': actor.agent_id,
       'x-task-id': forged ? manifest.task_id : manifest.outsider.task_id,
-      'x-conversation-id': manifest.outsider.session_id,
+      'x-conversation-id': actor.session_id,
     },
     body: JSON.stringify({
       model: 'mock-model',
@@ -421,24 +496,51 @@ async function proxyIsolationRequest(kind, { manifest, keys, proxyUrl, mockUrl }
   return { status: response.status };
 }
 
-async function modelIsolationObservation(kind, { manifest, mockUrl }) {
-  const [{ response: requestsResponse, data: requestsData }, aggregate] = await Promise.all([
-    json(new URL('/__mock/requests', mockUrl), { method: 'GET' }),
-    mockAggregate(mockUrl),
-  ]);
-  if (!requestsResponse.ok || !Array.isArray(requestsData?.requests)) throw new Error();
-  const modelPaths = new Set(['/anthropic/v1/messages', '/anthropic/v1/messages/count_tokens', '/openai/v1/chat/completions']);
-  const requests = requestsData.requests.filter((request) => modelPaths.has(request?.path));
-  const primaryRequests = requests.filter((request) => request.path === '/anthropic/v1/messages');
-  const operationHash = createHash('sha256').update(outsiderOperation(manifest.run_id, kind)).digest('hex');
-  const observedMarkerHashes = aggregate?.operations?.[operationHash]?.marker_hashes ?? [];
-  const ownerMarkerHashes = new Set(clients.map((client) => createHash('sha256').update(stage1Marker(manifest.run_id, client)).digest('hex')));
-  return {
-    count: primaryRequests.length,
-    all_count: requests.length,
-    owner_marker_count: Array.isArray(observedMarkerHashes) ? observedMarkerHashes.filter((value) => ownerMarkerHashes.has(value)).length : -1,
-    safe: requests.every((request) => !isUnsafeObservation(request)),
-  };
+async function resetMock(mockUrl) {
+  const { response, data } = await json(new URL('/__mock/reset', mockUrl), { method: 'POST' });
+  if (!response.ok || data?.status !== 'ok' || typeof data.epoch !== 'string' || !Number.isInteger(data.sequence)) throw new Error();
+  return data;
+}
+
+const modelPaths = ['/anthropic/v1/messages', '/anthropic/v1/messages/count_tokens', '/openai/v1/chat/completions'];
+
+function cleanModelAggregate(value) {
+  const sticky = value?.sticky_leaks;
+  if (!aggregateRecord(value) || typeof value.epoch !== 'string' || value.epoch.length === 0
+    || !Number.isInteger(value.sequence) || value.sequence < 0 || !Number.isInteger(value.total_requests) || value.total_requests < 0
+    || value.dropped_requests !== 0 || value.truncated !== false || !aggregateRecord(value.paths) || !aggregateRecord(value.operations)
+    || !aggregateRecord(sticky) || sticky.credential !== false || sticky.identity !== false || sticky.sentinel !== false) throw new Error();
+  return value;
+}
+
+function optionalAggregatePath(paths, path) {
+  if (!Object.hasOwn(paths, path)) return { requests: 0, sequences: [] };
+  return aggregatePath(paths, path);
+}
+
+function verifyModelDelta(beforeValue, afterValue, expectedRequests, { operationHash, ownerMarkerHashes } = {}) {
+  const before = cleanModelAggregate(beforeValue);
+  const after = cleanModelAggregate(afterValue);
+  if (before.epoch !== after.epoch || after.sequence - before.sequence !== expectedRequests
+    || after.total_requests - before.total_requests !== expectedRequests) throw new Error();
+  let allDelta = 0;
+  for (const path of modelPaths) {
+    const beforePath = optionalAggregatePath(before.paths, path);
+    const afterPath = optionalAggregatePath(after.paths, path);
+    if (beforePath.sequences.some((sequence, index) => afterPath.sequences[index] !== sequence)) throw new Error();
+    allDelta += afterPath.requests - beforePath.requests;
+  }
+  if (allDelta !== expectedRequests) throw new Error();
+  if (expectedRequests === 0) {
+    if (JSON.stringify(before.operations) !== JSON.stringify(after.operations)) throw new Error();
+    return;
+  }
+  const added = Object.keys(after.operations).filter((key) => !Object.hasOwn(before.operations, key));
+  const operation = after.operations[operationHash];
+  const main = operation?.paths?.['/anthropic/v1/messages'];
+  if (Object.hasOwn(before.operations, operationHash) || added.length !== 1 || added[0] !== operationHash
+    || operation?.requests !== 1 || main?.requests !== 1 || !Array.isArray(main.sequences) || main.sequences.length !== 1
+    || !Array.isArray(main.marker_hashes) || main.marker_hashes.some((hash) => ownerMarkerHashes.has(hash))) throw new Error();
 }
 
 async function panelRequest(path, { panelUrl }) {
@@ -457,6 +559,17 @@ export async function runManagementGate({ manifestPath, gatewayTokenFile, coreUr
     const actors = { ...manifest.clients, outsider: manifest.outsider };
     const core = dependencies.core ?? coreRequest;
     const call = (path, actor, body) => core(path, { body, key: keys[actor], gatewayToken, serviceId: manifest.service_id, coreUrl });
+    const reset = dependencies.reset ?? (() => resetMock(mockUrl));
+    const aggregate = dependencies.aggregate ?? (() => mockAggregate(mockUrl));
+    assertion = 'mock-reset-initial';
+    await reset();
+    const isolated = async (action, expectedRequests, options) => {
+      const before = await aggregate();
+      const result = await action();
+      const after = await aggregate();
+      verifyModelDelta(before, after, expectedRequests, options);
+      return result;
+    };
     const items = (result) => {
       const data = requireCore(result);
       if (!Array.isArray(data.items)) throw new Error();
@@ -504,7 +617,8 @@ export async function runManagementGate({ manifestPath, gatewayTokenFile, coreUr
     assertion = 'bindings';
     const bindingLists = {};
     for (const actor of [...clients, 'outsider']) {
-      bindingLists[actor] = items(await call('/v3/meta/agent-fixed-asset/list', actor, { agent_id: actors[actor].agent_id, limit: 100, offset: 0 })).map(bindingInput);
+      const request = () => call('/v3/meta/agent-fixed-asset/list', actor, { agent_id: actors[actor].agent_id, limit: 100, offset: 0 });
+      bindingLists[actor] = items(actor === 'outsider' ? await isolated(request, 0) : await request()).map(bindingInput);
     }
     const ownerAssetIds = Object.values(manifest.shared_memory.owner_asset_ids);
     for (const actor of clients) {
@@ -536,37 +650,41 @@ export async function runManagementGate({ manifestPath, gatewayTokenFile, coreUr
         aclChecks += 1;
       }
     }
-    const outsiderAcl = requireCore(await call('/v3/meta/acl/check', 'outsider', { user_id: manifest.outsider.user_id, asset_id: ownerAssetIds[0], action: 'read' }));
+    const outsiderAcl = requireCore(await isolated(() => call('/v3/meta/acl/check', 'outsider', {
+      user_id: manifest.outsider.user_id, asset_id: ownerAssetIds[0], action: 'read',
+    }), 0));
     if (outsiderAcl.allowed !== false) throw new Error();
     aclChecks += 1;
 
     assertion = 'outsider-accessible';
-    const accessible = items(await call('/v3/meta/asset/list-accessible', 'outsider', {
+    const accessible = items(await isolated(() => call('/v3/meta/asset/list-accessible', 'outsider', {
       user_id: manifest.outsider.user_id, team_id: manifest.team_id, asset_type: 'chat_memory', action: 'read', limit: 100, offset: 0,
-    }));
+    }), 0));
     if (accessible.length !== 0) throw new Error();
 
     assertion = 'outsider-binding-mutation';
     const attemptedBindings = [...outsiderBindings, { asset_id: ownerAssetIds[0], asset_type: 'chat_memory', injection_mode: 'summary', priority: 0, created_by: manifest.outsider.user_id }];
-    const mutation = await call('/v3/meta/agent-fixed-asset/set', 'outsider', { agent_id: manifest.outsider.agent_id, bindings: attemptedBindings });
+    const mutationResult = await isolated(async () => {
+      const mutation = await call('/v3/meta/agent-fixed-asset/set', 'outsider', { agent_id: manifest.outsider.agent_id, bindings: attemptedBindings });
+      const after = items(await call('/v3/meta/agent-fixed-asset/list', 'outsider', { agent_id: manifest.outsider.agent_id, limit: 100, offset: 0 })).map(bindingInput);
+      return { mutation, after };
+    }, 0);
+    const { mutation, after: bindingsAfter } = mutationResult;
     if (mutation.status >= 200 && mutation.status < 300 && mutation.code === 0) throw new Error();
-    const bindingsAfter = items(await call('/v3/meta/agent-fixed-asset/list', 'outsider', { agent_id: manifest.outsider.agent_id, limit: 100, offset: 0 })).map(bindingInput);
     if (JSON.stringify(bindingsAfter) !== JSON.stringify(outsiderBindings)) throw new Error();
 
     const proxy = dependencies.proxy ?? proxyIsolationRequest;
-    const model = dependencies.model ?? modelIsolationObservation;
     assertion = 'outsider-unknown-source';
-    const unknown = await proxy('unknown', { manifest, keys, proxyUrl, mockUrl });
-    const unknownModel = await model('unknown', { manifest, mockUrl });
-    if (unknown.status !== 404 || unknownModel.count !== 0 || unknownModel.all_count !== 0 || unknownModel.safe !== true) throw new Error();
+    const unknown = await isolated(() => proxy('unknown', { manifest, keys, proxyUrl }), 0);
+    if (unknown.status !== 404) throw new Error();
     assertion = 'outsider-forged-identity';
-    const forged = await proxy('forged', { manifest, keys, proxyUrl, mockUrl });
-    const forgedModel = await model('forged', { manifest, mockUrl });
-    if (![401, 403, 409].includes(forged.status) || forgedModel.count !== 0 || forgedModel.all_count !== 0 || forgedModel.safe !== true) throw new Error();
+    const forged = await isolated(() => proxy('forged', { manifest, keys, proxyUrl }), 0);
+    if (![403, 409].includes(forged.status)) throw new Error();
     assertion = 'outsider-legal-own';
-    const legal = await proxy('legal', { manifest, keys, proxyUrl, mockUrl });
-    const legalModel = await model('legal', { manifest, mockUrl });
-    if (legal.status < 200 || legal.status >= 300 || legalModel.count !== 1 || legalModel.owner_marker_count !== 0 || legalModel.safe !== true) throw new Error();
+    const legalOperationHash = createHash('sha256').update(outsiderOperation(manifest.run_id, 'legal')).digest('hex');
+    const ownerMarkerHashes = new Set(clients.map((client) => createHash('sha256').update(stage1Marker(manifest.run_id, client)).digest('hex')));
+    const legal = await isolated(() => proxy('legal', { manifest, keys, proxyUrl }), 1, { operationHash: legalOperationHash, ownerMarkerHashes });
+    if (legal.status < 200 || legal.status >= 300) throw new Error();
 
     assertion = 'panel';
     const panel = dependencies.panel ?? ((path) => panelRequest(path, { panelUrl }));
@@ -574,6 +692,8 @@ export async function runManagementGate({ manifestPath, gatewayTokenFile, coreUr
     const root = await panel('/');
     if (health.status !== 200 || !/^application\/json(?:;|$)/i.test(health.contentType) || root.status !== 200 || !/^text\/html(?:;|$)/i.test(root.contentType)) throw new Error();
 
+    assertion = 'mock-reset-final';
+    await reset();
     const result = {
       status: 'ok', users: 4, teams: 2, members: 4, agents: 4, tasks: 2, assets: 4,
       bindings: [...clients, 'outsider'].reduce((count, actor) => count + bindingLists[actor].length, 0),
