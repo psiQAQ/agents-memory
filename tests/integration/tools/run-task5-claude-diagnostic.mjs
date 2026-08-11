@@ -11,7 +11,8 @@ const composeFiles = [
   'compose.four-cli.diagnostic.yaml',
 ];
 const resultKeys = [
-  'status', 'launch', 'continuity', 'sequence_delta', 'total_delta',
+  'status', 'launch', 'launch_phase', 'launch_category', 'output_present',
+  'proxy_dns_ok', 'proxy_tcp_ok', 'continuity', 'sequence_delta', 'total_delta',
   'expected_operation_present', 'expected_operation_valid', 'expected_main_count',
   'unexpected_operation_count', 'unexpected_path_count', 'unsafe', 'dropped', 'truncated',
 ];
@@ -90,14 +91,23 @@ function canonicalResult(stdout) {
     || JSON.stringify(Object.keys(value).sort()) !== JSON.stringify([...resultKeys].sort())) throw new Error();
 
   if (value.status !== 'classified' || !['not_run', 'code0', 'nonzero', 'throw'].includes(value.launch)
+    || !['not-run', 'cli-zero', 'cli-nonzero', 'spawn-failure', 'signal', 'timeout', 'overflow', 'sensitive-output', 'setup-error'].includes(value.launch_phase)
+    || !['none', 'filesystem', 'settings', 'auth-onboarding', 'transport', 'http4xx', 'http5xx', 'unknown'].includes(value.launch_category)
     || !['ok', 'failed'].includes(value.continuity)) throw new Error();
   for (const name of ['sequence_delta', 'total_delta', 'expected_main_count', 'unexpected_operation_count', 'unexpected_path_count', 'dropped']) {
     if (!Number.isSafeInteger(value[name])) throw new Error();
   }
-  for (const name of ['expected_operation_present', 'expected_operation_valid', 'unsafe', 'truncated']) {
+  for (const name of ['output_present', 'proxy_dns_ok', 'proxy_tcp_ok', 'expected_operation_present', 'expected_operation_valid', 'unsafe', 'truncated']) {
     if (typeof value[name] !== 'boolean') throw new Error();
   }
-  if (value.expected_main_count < 0 || value.unexpected_operation_count < 0 || value.unexpected_path_count < 0 || value.dropped < 0
+  const launchValid = (value.launch === 'not_run' && value.launch_phase === 'not-run' && value.launch_category === 'none' && !value.output_present && !value.proxy_dns_ok && !value.proxy_tcp_ok)
+    || (value.launch === 'code0' && value.launch_phase === 'cli-zero' && value.launch_category === 'none')
+    || (value.launch === 'nonzero' && value.launch_phase === 'cli-nonzero' && value.launch_category !== 'none')
+    || (value.launch === 'throw' && ['spawn-failure', 'signal', 'timeout', 'overflow', 'sensitive-output', 'setup-error'].includes(value.launch_phase) && value.launch_category === 'none');
+  if (!launchValid || (value.proxy_tcp_ok && !value.proxy_dns_ok)
+    || (['overflow', 'sensitive-output'].includes(value.launch_phase) && !value.output_present)
+    || (value.launch_phase === 'setup-error' && value.output_present)
+    || value.expected_main_count < 0 || value.unexpected_operation_count < 0 || value.unexpected_path_count < 0 || value.dropped < 0
     || (value.continuity === 'failed' && (value.sequence_delta !== -1 || value.total_delta !== -1
       || value.expected_operation_present || value.expected_operation_valid || value.expected_main_count !== 0
       || value.unexpected_operation_count !== 0 || value.unexpected_path_count !== 0))

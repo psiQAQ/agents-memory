@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { isAbsolute, join } from 'node:path';
+import { stripVTControlCharacters } from 'node:util';
 import { isMain } from './runtime-lib.mjs';
 import { renderSettings } from './render-settings.mjs';
 
@@ -9,8 +10,16 @@ const clients = {
   pi: { command: 'pi', target: 'pi', config: ['.pi', 'agent'] },
 };
 const privateEnvironment = ['MEMORY_USER_KEY', 'TDAI_MEMORY_USER_KEY', 'MEMORY_TEAM_ID', 'MEMORY_AGENT_ID', 'MEMORY_TASK_ID', 'MEMORY_SESSION_ID'];
+const categoryPatterns = [
+  ['filesystem', [/\b(?:EACCES|EPERM|ENOENT)\b/i, /permission denied|read-only file system/i]],
+  ['settings', [/invalid (?:settings|configuration)/i, /failed to (?:parse|load) (?:settings|configuration)/i]],
+  ['auth-onboarding', [/not logged in/i, /please (?:run )?\/login/i, /authentication required/i, /api key (?:is )?(?:missing|required)/i]],
+  ['transport', [/\b(?:ECONNREFUSED|ECONNRESET|ENOTFOUND|EAI_AGAIN|ETIMEDOUT)\b/i, /network error|fetch failed|connection refused/i]],
+  ['http4xx', [/\b(?:HTTP(?: status)?|status(?: code)?|response)\s*[:=]?\s*4\d\d\b/i]],
+  ['http5xx', [/\b(?:HTTP(?: status)?|status(?: code)?|response)\s*[:=]?\s*5\d\d\b/i]],
+];
 
-export async function launchClient({ client, homeDir, bundleFile, spaceId, args = [], template, capture, spawnProcess = spawn, parentEnvironment = process.env }) {
+async function prepareClient({ client, homeDir, bundleFile, spaceId, args, template, capture, parentEnvironment }) {
   const definition = clients[client];
   if (!definition) throw new Error('invalid client');
   if (![homeDir, bundleFile].every((path) => isAbsolute(path ?? '')) || bundleFile !== join(homeDir, '.memory', 'agent-bundle.json') || !Array.isArray(args) || args.some((argument) => typeof argument !== 'string') || (client === 'claude' && !isAbsolute(template ?? ''))) throw new Error('invalid launcher arguments');
@@ -20,29 +29,73 @@ export async function launchClient({ client, homeDir, bundleFile, spaceId, args 
   const environment = { ...parentEnvironment };
   for (const name of privateEnvironment) delete environment[name];
   Object.assign(environment, rendered.environment, { TDAI_MEMORY_USER_KEY: rendered.environment.MEMORY_USER_KEY });
-  const child = spawnProcess(definition.command, args, { env: environment, stdio: capture ? ['ignore', 'pipe', 'pipe'] : 'inherit' });
-  if (capture) {
-    const chunks = [];
-    let size = 0;
-    let overflow = false;
-    const collect = (chunk) => {
-      const value = Buffer.from(chunk);
-      size += value.length;
-      if (size <= capture.maxBytes) chunks.push(value);
-      else overflow = true;
+  return { definition, environment, rendered };
+}
+
+function classifyOutput(output) {
+  const text = stripVTControlCharacters(output);
+  const matches = categoryPatterns.filter(([, patterns]) => patterns.some((pattern) => pattern.test(text)));
+  return matches.length === 1 ? matches[0][0] : 'unknown';
+}
+
+function captureChild(child, rendered, capture, timeoutMs) {
+  const chunks = [];
+  let size = 0;
+  let overflow = false;
+  const collect = (chunk) => {
+    const value = Buffer.from(chunk);
+    size += value.length;
+    if (size <= capture.maxBytes) chunks.push(value);
+    else overflow = true;
+  };
+  if (!child.stdout?.on || !child.stderr?.on) return Promise.resolve({ phase: 'spawn-failure', category: 'none', outputPresent: false, code: null });
+  child.stdout.on('data', collect);
+  child.stderr.on('data', collect);
+  const sensitiveValues = [...new Set([...Object.values(rendered.environment), ...capture.sensitiveValues])];
+  return new Promise((resolve) => {
+    let settled = false;
+    let timer;
+    const finish = (basePhase, code = null) => {
+      if (settled) return;
+      settled = true;
+      if (timer !== undefined) clearTimeout(timer);
+      const outputPresent = size > 0;
+      if (overflow) return resolve({ phase: 'overflow', category: 'none', outputPresent, code: null });
+      const output = Buffer.concat(chunks).toString('utf8');
+      if (sensitiveValues.some((value) => output.includes(value))) return resolve({ phase: 'sensitive-output', category: 'none', outputPresent, code: null });
+      if (basePhase !== 'exit') return resolve({ phase: basePhase, category: 'none', outputPresent, code: null });
+      if (code === 0) return resolve({ phase: 'cli-zero', category: 'none', outputPresent, code });
+      return resolve({ phase: 'cli-nonzero', category: classifyOutput(output), outputPresent, code: code ?? 1 });
     };
-    if (!child.stdout?.on || !child.stderr?.on) throw new Error('client process failed');
-    child.stdout.on('data', collect);
-    child.stderr.on('data', collect);
-    const sensitiveValues = [...new Set([...Object.values(rendered.environment), ...capture.sensitiveValues])];
-    return await new Promise((resolve, reject) => {
-      child.once('error', () => reject(new Error('client process failed')));
-      child.once('close', (code, signal) => {
-        const output = overflow ? '' : Buffer.concat(chunks).toString('utf8');
-        if (signal || overflow || sensitiveValues.some((value) => output.includes(value))) reject(new Error('client process failed'));
-        else resolve(code ?? 1);
-      });
-    });
+    child.once('error', () => finish('spawn-failure'));
+    child.once('close', (code, signal) => finish(signal ? 'signal' : 'exit', code));
+    if (timeoutMs !== undefined) timer = setTimeout(() => {
+      try { child.kill?.(); } catch {}
+      finish('timeout');
+    }, timeoutMs);
+  });
+}
+
+export async function diagnoseClientLaunch({ client, homeDir, bundleFile, spaceId, args = [], template, capture, timeoutMs = 180000, spawnProcess = spawn, parentEnvironment = process.env }) {
+  if (!capture || !Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 600000) throw new Error('invalid launcher arguments');
+  const prepared = await prepareClient({ client, homeDir, bundleFile, spaceId, args, template, capture, parentEnvironment });
+  let child;
+  try {
+    child = spawnProcess(prepared.definition.command, args, { env: prepared.environment, stdio: ['ignore', 'pipe', 'pipe'] });
+  } catch {
+    return { phase: 'spawn-failure', category: 'none', outputPresent: false };
+  }
+  const { phase, category, outputPresent } = await captureChild(child, prepared.rendered, capture, timeoutMs);
+  return { phase, category, outputPresent };
+}
+
+export async function launchClient({ client, homeDir, bundleFile, spaceId, args = [], template, capture, spawnProcess = spawn, parentEnvironment = process.env }) {
+  const prepared = await prepareClient({ client, homeDir, bundleFile, spaceId, args, template, capture, parentEnvironment });
+  const child = spawnProcess(prepared.definition.command, args, { env: prepared.environment, stdio: capture ? ['ignore', 'pipe', 'pipe'] : 'inherit' });
+  if (capture) {
+    const result = await captureChild(child, prepared.rendered, capture);
+    if (result.phase === 'cli-zero' || result.phase === 'cli-nonzero') return result.code;
+    throw new Error('client process failed');
   }
   return await new Promise((resolve, reject) => {
     child.once('error', () => reject(new Error('client process failed')));

@@ -74,6 +74,7 @@ test('launcher headless capture is bounded, scans prompt and private identity in
   const { launchClient } = await import('../tools/launch-client.mjs');
   const cases = [
     { name: 'safe', chunks: [['fixed output'], []], status: 0 },
+    { name: 'safe-nonzero', chunks: [[], ['fixed failure']], status: 7 },
     { name: 'split-prompt', chunks: [['RAW_', 'PROMPT'], []], error: /client process failed/ },
     { name: 'identity', chunks: [[], [identity.agent_id]], error: /client process failed/ },
     { name: 'overflow', chunks: [['x'.repeat(65)], []], error: /client process failed/ },
@@ -95,7 +96,7 @@ test('launcher headless capture is bounded, scans prompt and private identity in
           for (const chunk of entry.chunks[1]) child.stderr.write(chunk);
           child.stdout.end();
           child.stderr.end();
-          child.emit('close', 0, null);
+          child.emit('close', entry.status ?? 0, null);
         });
         return child;
       };
@@ -106,6 +107,66 @@ test('launcher headless capture is bounded, scans prompt and private identity in
       if (entry.error) await assert.rejects(promise, entry.error);
       else assert.equal(await promise, entry.status);
       assert.deepEqual(invocation.options.stdio, ['ignore', 'pipe', 'pipe']);
+    } finally { await rm(homeDir, { recursive: true, force: true }); }
+  });
+});
+
+test('launcher diagnostic classifies bounded child outcomes without returning captured output', async (context) => {
+  const { diagnoseClientLaunch } = await import('../tools/launch-client.mjs');
+  assert.equal(typeof diagnoseClientLaunch, 'function', 'diagnostic-only launcher must exist');
+  const cases = [
+    { name: 'cli-zero', chunks: [['ok'], []], code: 0, expected: { phase: 'cli-zero', category: 'none', outputPresent: true } },
+    { name: 'filesystem', chunks: [[], ['EACCES: permission denied']], code: 1, expected: { phase: 'cli-nonzero', category: 'filesystem', outputPresent: true } },
+    { name: 'settings', chunks: [[], ['Invalid \u001b[31msettings\u001b[0m configuration']], code: 1, expected: { phase: 'cli-nonzero', category: 'settings', outputPresent: true } },
+    { name: 'auth-onboarding', chunks: [[], ['Please run /login']], code: 1, expected: { phase: 'cli-nonzero', category: 'auth-onboarding', outputPresent: true } },
+    { name: 'transport', chunks: [[], ['connect ECONNREFUSED']], code: 1, expected: { phase: 'cli-nonzero', category: 'transport', outputPresent: true } },
+    { name: 'http4xx', chunks: [[], ['HTTP status 429']], code: 1, expected: { phase: 'cli-nonzero', category: 'http4xx', outputPresent: true } },
+    { name: 'http5xx', chunks: [[], ['HTTP status 503']], code: 1, expected: { phase: 'cli-nonzero', category: 'http5xx', outputPresent: true } },
+    { name: 'unknown-empty', chunks: [[], []], code: 1, expected: { phase: 'cli-nonzero', category: 'unknown', outputPresent: false } },
+    { name: 'multiple-is-unknown', chunks: [[], ['EACCES and HTTP status 503']], code: 1, expected: { phase: 'cli-nonzero', category: 'unknown', outputPresent: true } },
+    { name: 'split-sensitive', chunks: [['RAW_', 'PROMPT'], []], code: 1, expected: { phase: 'sensitive-output', category: 'none', outputPresent: true } },
+    { name: 'overflow', chunks: [['x'.repeat(65)], []], code: 1, expected: { phase: 'overflow', category: 'none', outputPresent: true } },
+    { name: 'signal', chunks: [[], []], code: null, signal: 'SIGTERM', expected: { phase: 'signal', category: 'none', outputPresent: false } },
+    { name: 'spawn-failure', spawnError: true, expected: { phase: 'spawn-failure', category: 'none', outputPresent: false } },
+    { name: 'spawn-throw', spawnThrow: true, expected: { phase: 'spawn-failure', category: 'none', outputPresent: false } },
+    { name: 'timeout', timeout: true, expected: { phase: 'timeout', category: 'none', outputPresent: false } },
+  ];
+  for (const entry of cases) await context.test(entry.name, async () => {
+    const homeDir = await mkdtemp(join(tmpdir(), 'memory-client-diagnostic-'));
+    await mkdir(join(homeDir, '.memory'));
+    const bundleFile = join(homeDir, '.memory', 'agent-bundle.json');
+    await writeFile(bundleFile, JSON.stringify({ memory_user_key: key, identity }));
+    let kills = 0;
+    try {
+      const spawnProcess = () => {
+        if (entry.spawnThrow) throw new Error('RAW_SYNC_SPAWN_ERROR');
+        const child = new EventEmitter();
+        child.stdout = new PassThrough();
+        child.stderr = new PassThrough();
+        child.kill = () => {
+          kills += 1;
+          process.nextTick(() => child.emit('close', null, 'SIGTERM'));
+          return true;
+        };
+        process.nextTick(() => {
+          if (entry.spawnError) child.emit('error', new Error('RAW_SPAWN_ERROR'));
+          else if (!entry.timeout) {
+            for (const chunk of entry.chunks[0]) child.stdout.write(chunk);
+            for (const chunk of entry.chunks[1]) child.stderr.write(chunk);
+            child.stdout.end();
+            child.stderr.end();
+            child.emit('close', entry.code, entry.signal ?? null);
+          }
+        });
+        return child;
+      };
+      const result = await diagnoseClientLaunch({
+        client: 'opencode', homeDir, bundleFile, spaceId: 'default', args: ['run'], spawnProcess,
+        capture: { maxBytes: 64, sensitiveValues: ['RAW_PROMPT'] }, timeoutMs: entry.timeout ? 5 : 1000,
+      });
+      assert.deepEqual(result, entry.expected);
+      assert.equal(kills, entry.timeout ? 1 : 0);
+      assert.doesNotMatch(JSON.stringify(result), /RAW_|permission denied|HTTP status|ECONNREFUSED|Invalid settings|Please run/i);
     } finally { await rm(homeDir, { recursive: true, force: true }); }
   });
 });

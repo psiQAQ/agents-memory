@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { EventEmitter } from 'node:events';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -34,11 +35,17 @@ function operation(sequence = 1, requests = 1, paths = { '/anthropic/v1/messages
   return { requests, paths };
 }
 
-function harness(before, after, launchOutcome) {
+function launchResult(phase, category = 'none', outputPresent = false) {
+  return { phase, category, outputPresent };
+}
+
+function harness(before, after, launchOutcome, probeOutcome = { dnsOk: true, tcpOk: true }) {
   let reads = 0;
   const launches = [];
+  let probes = 0;
   return {
     launches,
+    get probes() { return probes; },
     dependencies: {
       aggregate: async () => {
         const value = reads++ === 0 ? before : after;
@@ -50,33 +57,45 @@ function harness(before, after, launchOutcome) {
         if (launchOutcome instanceof Error) throw launchOutcome;
         return launchOutcome;
       },
+      probe: async () => {
+        probes += 1;
+        if (probeOutcome instanceof Error) throw probeOutcome;
+        return probeOutcome;
+      },
     },
   };
 }
 
 const fixedKeys = [
-  'status', 'launch', 'continuity', 'sequence_delta', 'total_delta',
+  'status', 'launch', 'launch_phase', 'launch_category', 'output_present',
+  'proxy_dns_ok', 'proxy_tcp_ok', 'continuity', 'sequence_delta', 'total_delta',
   'expected_operation_present', 'expected_operation_valid', 'expected_main_count',
   'unexpected_operation_count', 'unexpected_path_count', 'unsafe', 'dropped', 'truncated',
 ].sort();
 
-test('Claude diagnostic classifies code0, nonzero, and throw with at most one launch', async (context) => {
+test('Claude diagnostic classifies structured launch outcomes with one connectivity probe and at most one launch', async (context) => {
   const before = aggregate();
   const validAfter = aggregate({
     sequence: 1, total: 1,
     paths: { '/anthropic/v1/messages': { requests: 1, sequences: [1] } },
     operations: { [operationHash]: operation() },
   });
-  for (const [name, outcome, expectedLaunch, after] of [
-    ['code0', 0, 'code0', validAfter],
-    ['nonzero', 7, 'nonzero', before],
-    ['throw', new Error('MEMORY_LEAK_SENTINEL_MUST_NOT_APPEAR'), 'throw', before],
+  for (const [name, outcome, expectedLaunch, expectedPhase, expectedCategory, outputPresent, after] of [
+    ['code0', launchResult('cli-zero'), 'code0', 'cli-zero', 'none', false, validAfter],
+    ['nonzero', launchResult('cli-nonzero', 'filesystem', true), 'nonzero', 'cli-nonzero', 'filesystem', true, before],
+    ['spawn-failure', launchResult('spawn-failure'), 'throw', 'spawn-failure', 'none', false, before],
+    ['setup-error', new Error('MEMORY_LEAK_SENTINEL_MUST_NOT_APPEAR'), 'throw', 'setup-error', 'none', false, before],
   ]) await context.test(name, async () => {
     const value = harness(before, after, outcome);
     const result = await runClaudeDiagnostic(args, environment, value.dependencies);
     assert.deepEqual(Object.keys(result).sort(), fixedKeys);
     assert.equal(result.status, 'classified');
     assert.equal(result.launch, expectedLaunch);
+    assert.equal(result.launch_phase, expectedPhase);
+    assert.equal(result.launch_category, expectedCategory);
+    assert.equal(result.output_present, outputPresent);
+    assert.equal(result.proxy_dns_ok, true);
+    assert.equal(result.proxy_tcp_ok, true);
     assert.equal(result.continuity, 'ok');
     assert.equal(result.sequence_delta, expectedLaunch === 'code0' ? 1 : 0);
     assert.equal(result.total_delta, expectedLaunch === 'code0' ? 1 : 0);
@@ -89,11 +108,65 @@ test('Claude diagnostic classifies code0, nonzero, and throw with at most one la
     assert.equal(result.dropped, 0);
     assert.equal(result.truncated, false);
     assert.equal(value.launches.length, 1);
+    assert.equal(value.probes, 1);
     assert.equal(value.launches[0].client, 'claude');
     assert.equal(value.launches[0].capture.maxBytes, 256 * 1024);
     assert.equal(value.launches[0].capture.sensitiveValues.length, 3);
     assert.doesNotMatch(JSON.stringify(result), /MEMORY_|STAGE1_|sentinel|prompt|identity|key|epoch|hash|path\//i);
   });
+});
+
+test('Claude diagnostic probes memory-proxy DNS and TCP once with fixed bounds and only returns booleans', async () => {
+  const before = aggregate();
+  const socket = new EventEmitter();
+  let lookupCalls = 0;
+  let connectCalls = 0;
+  let destroys = 0;
+  const delays = [];
+  const order = [];
+  socket.destroy = () => { destroys += 1; };
+  const dependencies = {
+    aggregate: async () => before,
+    launch: async () => { order.push('launch'); return launchResult('cli-nonzero', 'unknown'); },
+    lookup: async (hostname) => {
+      order.push('dns');
+      lookupCalls += 1;
+      assert.equal(hostname, 'memory-proxy');
+      return { address: '127.0.0.1', family: 4 };
+    },
+    connect: (options) => {
+      order.push('tcp');
+      connectCalls += 1;
+      assert.deepEqual(options, { host: '127.0.0.1', family: 4, port: 8096 });
+      process.nextTick(() => socket.emit('connect'));
+      return socket;
+    },
+    setTimer: (callback, delay) => { delays.push(delay); return callback; },
+    clearTimer: () => {},
+  };
+  const result = await runClaudeDiagnostic(args, environment, dependencies);
+  assert.equal(lookupCalls, 1);
+  assert.equal(connectCalls, 1);
+  assert.deepEqual(order, ['dns', 'tcp', 'launch']);
+  assert.deepEqual(delays, [5000, 5000]);
+  assert.equal(destroys, 1);
+  assert.equal(result.proxy_dns_ok, true);
+  assert.equal(result.proxy_tcp_ok, true);
+  assert.doesNotMatch(JSON.stringify(result), /127\.0\.0\.1|memory-proxy|8096|error|key/i);
+
+  let failedConnectCalls = 0;
+  const failed = await runClaudeDiagnostic(args, environment, {
+    aggregate: async () => before,
+    launch: async () => launchResult('cli-nonzero', 'unknown'),
+    lookup: async () => { throw new Error('RAW_DNS_ERROR'); },
+    connect: () => { failedConnectCalls += 1; throw new Error('must not connect'); },
+    setTimer: (callback) => callback,
+    clearTimer: () => {},
+  });
+  assert.equal(failedConnectCalls, 0);
+  assert.equal(failed.proxy_dns_ok, false);
+  assert.equal(failed.proxy_tcp_ok, false);
+  assert.doesNotMatch(JSON.stringify(failed), /RAW_DNS_ERROR|must not connect/i);
 });
 
 test('Claude diagnostic classifies invalid expected operations and unexpected requests without details', async () => {
@@ -104,7 +177,7 @@ test('Claude diagnostic classifies invalid expected operations and unexpected re
     paths: { '/anthropic/v1/messages': { requests: 1, sequences: [1] } },
     operations: { [operationHash]: operation(1, 1, { '/anthropic/v1/messages': { requests: 1, sequences: [1], marker_hashes: [] } }) },
   });
-  const missingMarkerHarness = harness(before, missingMarkerAfter, 0);
+  const missingMarkerHarness = harness(before, missingMarkerAfter, launchResult('cli-zero'));
   const missingMarker = await runClaudeDiagnostic(args, environment, missingMarkerHarness.dependencies);
   assert.equal(missingMarker.expected_operation_present, true);
   assert.equal(missingMarker.expected_operation_valid, false);
@@ -114,7 +187,7 @@ test('Claude diagnostic classifies invalid expected operations and unexpected re
     paths: { '/anthropic/v1/messages': { requests: 2, sequences: [1, 2] } },
     operations: { [operationHash]: operation(1, 2, { '/anthropic/v1/messages': { requests: 2, sequences: [1, 2], marker_hashes: [] } }) },
   });
-  const invalidHarness = harness(before, invalidExpected, 0);
+  const invalidHarness = harness(before, invalidExpected, launchResult('cli-zero'));
   const invalid = await runClaudeDiagnostic(args, environment, invalidHarness.dependencies);
   assert.equal(invalid.expected_operation_present, true);
   assert.equal(invalid.expected_operation_valid, false);
@@ -134,7 +207,7 @@ test('Claude diagnostic classifies invalid expected operations and unexpected re
       [extraHash]: operation(2, 1, { '/unexpected': { requests: 1, sequences: [2], marker_hashes: [] } }),
     },
   });
-  const unexpectedHarness = harness(before, unexpectedAfter, 0);
+  const unexpectedHarness = harness(before, unexpectedAfter, launchResult('cli-zero'));
   const unexpected = await runClaudeDiagnostic(args, environment, unexpectedHarness.dependencies);
   assert.equal(unexpected.expected_operation_present, true);
   assert.equal(unexpected.expected_operation_valid, false);
@@ -153,7 +226,7 @@ test('Claude diagnostic reports sticky, dropped, truncated, and aggregate failur
     paths: { '/anthropic/v1/messages': { requests: 1, sequences: [1] } },
     operations: { [operationHash]: operation() },
   });
-  const unsafeHarness = harness(before, unsafeAfter, 0);
+  const unsafeHarness = harness(before, unsafeAfter, launchResult('cli-zero'));
   const unsafe = await runClaudeDiagnostic(args, environment, unsafeHarness.dependencies);
   assert.equal(unsafe.continuity, 'ok');
   assert.equal(unsafe.unsafe, true);
@@ -161,7 +234,7 @@ test('Claude diagnostic reports sticky, dropped, truncated, and aggregate failur
   assert.equal(unsafe.truncated, true);
   assert.equal(unsafeHarness.launches.length, 1);
 
-  const beforeFailure = harness(new Error('before raw error'), aggregate(), 0);
+  const beforeFailure = harness(new Error('before raw error'), aggregate(), launchResult('cli-zero'));
   const notRun = await runClaudeDiagnostic(args, environment, beforeFailure.dependencies);
   assert.equal(notRun.launch, 'not_run');
   assert.equal(notRun.continuity, 'failed');
@@ -171,7 +244,7 @@ test('Claude diagnostic reports sticky, dropped, truncated, and aggregate failur
   assert.equal(notRun.unsafe, false);
   assert.equal(beforeFailure.launches.length, 0);
 
-  const afterFailure = harness(before, new Error('after raw error'), 0);
+  const afterFailure = harness(before, new Error('after raw error'), launchResult('cli-zero'));
   const failed = await runClaudeDiagnostic(args, environment, afterFailure.dependencies);
   assert.equal(failed.launch, 'code0');
   assert.equal(failed.continuity, 'failed');
@@ -195,7 +268,7 @@ test('Claude diagnostic does not launch from any preexisting aggregate state', a
     ['truncated', aggregate({ truncated: true }), false, 0, true],
     ['sticky', aggregate({ sticky: { credential: true } }), true],
   ]) await context.test(name, async () => {
-    const baselineHarness = harness(baseline, aggregate(), 0);
+    const baselineHarness = harness(baseline, aggregate(), launchResult('cli-zero'));
     const result = await runClaudeDiagnostic(args, environment, baselineHarness.dependencies);
     assert.equal(result.launch, 'not_run');
     assert.equal(result.continuity, 'failed');
@@ -232,7 +305,7 @@ test('Claude diagnostic rejects invalid space identifiers before observation or 
   for (const value of [invalidSpace, '-leading', '.leading', 'team/path', 'team value']) {
     const functionArgs = [...args];
     functionArgs[functionArgs.indexOf('--space-id') + 1] = value;
-    const functionHarness = harness(aggregate(), aggregate(), 0);
+    const functionHarness = harness(aggregate(), aggregate(), launchResult('cli-zero'));
     await assert.rejects(runClaudeDiagnostic(functionArgs, environment, functionHarness.dependencies), /invalid diagnostic arguments/);
     assert.equal(functionHarness.launches.length, 0);
   }

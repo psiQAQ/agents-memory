@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
+import { lookup } from 'node:dns/promises';
+import { createConnection } from 'node:net';
 import { isAbsolute, posix } from 'node:path';
-import { launchClient } from './launch-client.mjs';
+import { diagnoseClientLaunch } from './launch-client.mjs';
 import { isMain } from './runtime-lib.mjs';
 import { headlessInvocation, stage1Marker } from './task5-headless-client.mjs';
 import { stage1OperationHash } from './task5-contract.mjs';
@@ -19,6 +21,11 @@ function fixedResult(overrides = {}) {
   return {
     status: 'classified',
     launch: 'not_run',
+    launch_phase: 'not-run',
+    launch_category: 'none',
+    output_present: false,
+    proxy_dns_ok: false,
+    proxy_tcp_ok: false,
     continuity: 'failed',
     sequence_delta: -1,
     total_delta: -1,
@@ -91,12 +98,12 @@ function stickyLeak(value) {
 }
 
 function classify(before, after, launch, expectedHash, expectedMarkerHash) {
-  if (!validAggregate(after)) return fixedResult({ launch });
+  if (!validAggregate(after)) return fixedResult(launch);
   const sequenceDelta = after.sequence - before.sequence;
   const totalDelta = after.total_requests - before.total_requests;
   const continuous = after.epoch === before.epoch && sequenceDelta >= 0 && sequenceDelta === totalDelta;
   if (!continuous) return fixedResult({
-    launch, unsafe: stickyLeak(after), dropped: after.dropped_requests, truncated: after.truncated,
+    ...launch, unsafe: stickyLeak(after), dropped: after.dropped_requests, truncated: after.truncated,
   });
 
   const expectedPresent = Object.hasOwn(after.operations, expectedHash);
@@ -113,7 +120,7 @@ function classify(before, after, launch, expectedHash, expectedMarkerHash) {
   }, 0);
 
   return fixedResult({
-    launch,
+    ...launch,
     continuity: 'ok',
     sequence_delta: sequenceDelta,
     total_delta: totalDelta,
@@ -126,6 +133,73 @@ function classify(before, after, launch, expectedHash, expectedMarkerHash) {
     dropped: after.dropped_requests,
     truncated: after.truncated,
   });
+}
+
+function launchFields(value) {
+  const categories = new Set(['filesystem', 'settings', 'auth-onboarding', 'transport', 'http4xx', 'http5xx', 'unknown']);
+  if (!record(value) || typeof value.outputPresent !== 'boolean') throw new Error();
+  if (value.phase === 'cli-zero' && value.category === 'none') return {
+    launch: 'code0', launch_phase: value.phase, launch_category: value.category, output_present: value.outputPresent,
+  };
+  if (value.phase === 'cli-nonzero' && categories.has(value.category)) return {
+    launch: 'nonzero', launch_phase: value.phase, launch_category: value.category, output_present: value.outputPresent,
+  };
+  if (['spawn-failure', 'signal', 'timeout', 'overflow', 'sensitive-output'].includes(value.phase) && value.category === 'none') return {
+    launch: 'throw', launch_phase: value.phase, launch_category: value.category, output_present: value.outputPresent,
+  };
+  throw new Error();
+}
+
+function setupErrorFields() {
+  return { launch: 'throw', launch_phase: 'setup-error', launch_category: 'none', output_present: false };
+}
+
+async function withTimeout(promise, dependencies) {
+  const setTimer = dependencies.setTimer ?? setTimeout;
+  const clearTimer = dependencies.clearTimer ?? clearTimeout;
+  let timer;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((resolve, reject) => { timer = setTimer(() => reject(new Error()), 5000); }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimer(timer);
+  }
+}
+
+async function probeMemoryProxy(dependencies) {
+  const lookupHost = dependencies.lookup ?? lookup;
+  const connect = dependencies.connect ?? createConnection;
+  let address;
+  try {
+    address = await withTimeout(Promise.resolve().then(() => lookupHost('memory-proxy')), dependencies);
+  } catch {
+    return { dnsOk: false, tcpOk: false };
+  }
+  const tcpOk = await new Promise((resolve) => {
+    const setTimer = dependencies.setTimer ?? setTimeout;
+    const clearTimer = dependencies.clearTimer ?? clearTimeout;
+    let socket;
+    let timer;
+    let settled = false;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      if (timer !== undefined) clearTimer(timer);
+      try { socket?.destroy(); } catch {}
+      resolve(value);
+    };
+    try {
+      socket = connect({ host: address.address, family: address.family, port: 8096 });
+      socket.once('connect', () => finish(true));
+      socket.once('error', () => finish(false));
+      timer = setTimer(() => finish(false), 5000);
+    } catch {
+      finish(false);
+    }
+  });
+  return { dnsOk: true, tcpOk };
 }
 
 function parse(argv, environment) {
@@ -168,7 +242,7 @@ export async function runClaudeDiagnostic(argv, environment = process.env, depen
   const runId = values['--run-id'];
   const expectedHash = stage1OperationHash(runId, 'write', 'claude');
   const aggregate = dependencies.aggregate ?? (() => fetchAggregate(environment.MOCK_BASE_URL));
-  const launch = dependencies.launch ?? launchClient;
+  const launch = dependencies.launch ?? diagnoseClientLaunch;
   let before;
   try {
     before = await aggregate();
@@ -179,13 +253,22 @@ export async function runClaudeDiagnostic(argv, environment = process.env, depen
     ? fixedResult({ unsafe: stickyLeak(before), dropped: before.dropped_requests, truncated: before.truncated })
     : fixedResult();
 
+  let proxyDnsOk = false;
+  let proxyTcpOk = false;
+  try {
+    const probe = dependencies.probe ? await dependencies.probe() : await probeMemoryProxy(dependencies);
+    proxyDnsOk = probe?.dnsOk === true;
+    proxyTcpOk = proxyDnsOk && probe?.tcpOk === true;
+  } catch {}
+  const proxy = { proxy_dns_ok: proxyDnsOk, proxy_tcp_ok: proxyTcpOk };
+
   const invocation = headlessInvocation('claude', 'write', runId);
   const marker = stage1Marker(runId, 'claude');
   const expectedMarkerHash = createHash('sha256').update(marker).digest('hex');
   const operation = `STAGE1_OP_${invocation.operation_digest.toUpperCase()}`;
   let launchStatus;
   try {
-    const code = await launch({
+    launchStatus = launchFields(await launch({
       client: 'claude',
       homeDir: values['--home-dir'],
       bundleFile: values['--bundle-file'],
@@ -193,16 +276,15 @@ export async function runClaudeDiagnostic(argv, environment = process.env, depen
       template: values['--template'],
       args: invocation.args,
       capture: { maxBytes: 256 * 1024, sensitiveValues: [invocation.args.at(-1), marker, operation] },
-    });
-    launchStatus = code === 0 ? 'code0' : 'nonzero';
+    }));
   } catch {
-    launchStatus = 'throw';
+    launchStatus = setupErrorFields();
   }
 
   try {
-    return classify(before, await aggregate(), launchStatus, expectedHash, expectedMarkerHash);
+    return classify(before, await aggregate(), { ...launchStatus, ...proxy }, expectedHash, expectedMarkerHash);
   } catch {
-    return fixedResult({ launch: launchStatus });
+    return fixedResult({ ...launchStatus, ...proxy });
   }
 }
 
