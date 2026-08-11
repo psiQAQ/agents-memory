@@ -6,7 +6,7 @@
 
 **Fact**：upstream base 锁定 `feat/server_team@0a568c328ea1aae3f22ed3656e7900da7ea565c1`，active fork/gitlink 为 reviewed Task 5 auth service-token fix `9e456a5b7bb47ae40596237d0f0b87c1edfc098f`。该 commit 是 local-only；`origin/codex/four-agent-memory-upstream` 仍为 `38ced16f46fed640bcb7360fb1ca45f9f9918628`，未经单独授权不得 push，fresh clone 暂不可取得。Stage 1 是 Claude Code `2.1.226`、OpenCode `1.18.16`、Pi `0.84.1`，Stage 2 是 Codex `0.147.0`。
 
-**Fact**：Task 5 auth service-token、Mock fixture、Claude EROFS/tmpfs 与 OpenCode fixed-title fixes/replacement images 均已 Passed。`opentitle-4f056ee6` 的单次 full Mock launcher 在 fixed step 9 fail-stop；steps 1–8 exit `0`，唯一脱敏 aggregate probe 看到 OpenCode main request 精确一次，但不能定位具体失败项。exact project 已 cleanup 为 `0/0/0`，evidence count `2` 与 active images `7/7` 保留；当前是 Blocked / OpenCode typed diagnostic pending。完整三写六读/final、TUI 与真实/Paid 模型仍无通过证明。
+**Fact**：Task 5 auth service-token、Mock fixture、Claude EROFS/tmpfs 与 OpenCode fixed-title fixes/replacement images 均已 Passed。`opentitle-4f056ee6` 的单次 full Mock launcher 在 fixed step 9 fail-stop；steps 1–8 exit `0`，唯一脱敏 aggregate probe 看到 OpenCode main request 精确一次，但不能定位具体失败项。exact project 已 cleanup 为 `0/0/0`。OpenCode typed diagnostic 已在 `c163b6c...` 完成 TDD、focused `60/60`、root `239/239`、Compose `7/7 + 1/1` 与 `C0/I0/M0` review；全新 `89398d1d` tuple 的 preflight 为 Ready/Not Run。当前业务 Gate 仍是 Blocked；完整三写六读/final、TUI 与真实/Paid 模型仍无通过证明。
 
 **Fact**：legacy ref `codex/legacy-proxy-hardening-69fd8b@69fd8b31e3fd4362af6c65407b92b26dfabebd0c` 是 local-only、未 push；fresh clone 不可取得，未经授权不得 push。跨 clone 可重建保全需要 push 或外部归档授权，在此之前仍未完成。
 
@@ -14,7 +14,7 @@
 
 ## 静态验证
 
-在根仓库执行完整 Node suite；当前预期为 233/233。它只验证当前根集成契约，不能证明 active Docker 业务流：
+在根仓库执行完整 Node suite；当前预期为 239/239。它只验证当前根集成契约，不能证明 active Docker 业务流：
 
 ```powershell
 node --test tests/integration/test/*.test.mjs
@@ -97,17 +97,17 @@ formal review 后，bootstrap 在发布 private/public artifact 前验证三 own
 - 三个 active client Dockerfile 在 `USER agent` 前创建 `/client-evidence` 并归属 10001:10001；headless 仍以 `10001:10001` 运行且三个 evidence named volume 彼此独立。三镜像已验证该目录归属与 UID10001 写入；named volume 的业务流使用仍为 Not Run。
 - launcher 删除继承的所有私有 identity/key 变量，再从选定 private bundle 的同一 `memory_user_key` 设置 `MEMORY_USER_KEY` 与 product-required request-local `TDAI_MEMORY_USER_KEY`；值不进入 Compose、prompt、cache、log、evidence 或 tracked file。
 
-Root full Node 为 233/233，base + `mock`、`real`、`claude`、`opencode`、`pi`、`management` Compose config 为 7/7。fixture fix 的 mock `8/9` RED→`9/9` GREEN、固定 step 输出 `6/7` RED→`7/7` GREEN、OpenCode fixed-title runner `42/43` RED→`43/43` GREEN 与 root 静态合同均为 **Passed**。
+Root full Node 为 239/239，base + `mock`、`real`、`claude`、`opencode`、`pi`、`management` Compose config 为 7/7，OpenCode diagnostic overlay config 为 1/1。fixture fix 的 mock `8/9` RED→`9/9` GREEN、固定 step 输出 `6/7` RED→`7/7` GREEN、OpenCode fixed-title runner `42/43` RED→`43/43` GREEN，以及 typed diagnostic 的两个 missing-export RED→focused `60/60` GREEN 与 root 静态合同均为 **Passed**；typed diagnostic review 为 `C0/I0/M0`。
 
 产品 auth service-token fix 固定为 `9e456a5b7bb47ae40596237d0f0b87c1edfc098f`；focused `3/3`、fresh full `38/38` suites / `276/276` tests、typecheck exact six baseline errors与最终 review `CLEAN`。Compose 固定使用 `local/refine-memory-proxy:9e456a5-auth-fix@sha256:55fedae3f6a3a0a45ac8be45461d8cab23c52f11cc089c1c1e54c7d236de764b`；replacement image 已完成唯一 build、离线 tests/assets 与 root exact pin，状态为 **Ready（build/assets only）**。旧 image 只保留历史证据，不得进入新的 Task 5 runtime。
 
-完整前置链见 [privacy/build Passed](../../docs/reproduction/2026-08-11-task5-proxy-privacy-build-passed.md)、[EROFS/tmpfs fix Passed](../../docs/reproduction/2026-08-12-task5-claude-erofs-tmpfs-fix-passed.md)、[113ca669 diagnostic Passed](../../docs/reproduction/2026-08-12-task5-diag-claude-p-20260812-113ca669-passed.md)、[OpenCode fixed-title replacement image Passed](../../docs/reproduction/2026-08-12-task5-opencode-title-replacement-image-passed.md)、[opentitle-4f056ee6 OpenCode write Blocked](../../docs/reproduction/2026-08-12-task5-mock-20260812-opentitle-4f056ee6-opencode-write-blocked.md) 与 [opentitle-4f056ee6 exact cleanup](../../docs/reproduction/2026-08-12-task5-mock-20260812-opentitle-4f056ee6-exact-cleanup-passed.md)。下一步仅为全新 tuple 的 OpenCode typed diagnostic；不得将 steps 1–8、单次 Mock request 或 replacement build/assets 扩写为完整三写六读/final/TUI/real 通过。
+完整前置链见 [privacy/build Passed](../../docs/reproduction/2026-08-11-task5-proxy-privacy-build-passed.md)、[EROFS/tmpfs fix Passed](../../docs/reproduction/2026-08-12-task5-claude-erofs-tmpfs-fix-passed.md)、[113ca669 diagnostic Passed](../../docs/reproduction/2026-08-12-task5-diag-claude-p-20260812-113ca669-passed.md)、[OpenCode fixed-title replacement image Passed](../../docs/reproduction/2026-08-12-task5-opencode-title-replacement-image-passed.md)、[opentitle-4f056ee6 OpenCode write Blocked](../../docs/reproduction/2026-08-12-task5-mock-20260812-opentitle-4f056ee6-opencode-write-blocked.md)、[opentitle-4f056ee6 exact cleanup](../../docs/reproduction/2026-08-12-task5-mock-20260812-opentitle-4f056ee6-exact-cleanup-passed.md) 与 [OpenCode typed diagnostic `89398d1d` Ready](../../docs/reproduction/2026-08-12-task5-diag-opencode-20260812-89398d1d-ready.md)。下一步仅为单次 tracked diagnostic；不得将 steps 1–8、单次 Mock request、typed static contract 或 replacement build/assets 扩写为完整三写六读/final/TUI/real 通过。
 
 ## Task 5 Mock runtime 启动器（opentitle-4f056ee6 step 9 Blocked / cleaned）
 
-历史固定 Mock/diagnostic runs 均保持 append-only。`e83748e2`、`stepfix-2df660d8` 与 `opentitle-4f056ee6` 均已 exact cleanup，不得复用或 retry。`opentitle-4f056ee6` 的唯一 launcher 在 fixed step 9 fail-stop；唯一脱敏 aggregate probe 只把范围收窄为 OpenCode main request 精确一次到达 Mock，未定位复合 step 的具体失败项。当前下一 Gate 是先对 typed diagnostic 做 TDD，再固定全新 tuple 和 preflight；full Mock launcher、TUI 与真实模型均不得启动。
+历史固定 Mock/diagnostic runs 均保持 append-only。`e83748e2`、`stepfix-2df660d8` 与 `opentitle-4f056ee6` 均已 exact cleanup，不得复用或 retry。`opentitle-4f056ee6` 的唯一 launcher 在 fixed step 9 fail-stop；唯一脱敏 aggregate probe 只把范围收窄为 OpenCode main request 精确一次到达 Mock，未定位复合 step 的具体失败项。typed diagnostic 的 TDD/review 与全新 `task5-diag-opencode-20260812-89398d1d` tuple preflight 已完成；当前唯一允许的 workload 是 tracked `tests/integration/tools/run-task5-opencode-diagnostic.mjs` 单次运行。
 
-启动器不读取 Tencent `.env`、模型 key、settings、home 或旧 evidence；它只运行固定的 Mock 顺序，不接受任意命令，也不会执行 build、`down`、`down -v` 或 prune。以下命令只保留为合同参考；当前 Blocked 状态不授权执行，且不得用于覆盖或复用上述失败 tuple。
+diagnostic coordinator 不读取 Tencent `.env`、模型 key、宿主本地 settings/home 或旧 evidence；只返回 canonical 18-key typed result 或固定失败，不接受任意命令，也不会执行 build、cleanup 或 prune。禁止 build、retry、full Mock、raw child/log/evidence 读取、TUI 与真实模型。仅在 coordinator freshness 通过且本次运行创建 exact project 后，才对该 project 使用对应 overlays/profiles 执行 `down --volumes --remove-orphans`；label collision/preflight failure 必须保留资源并先审计。不得使用 `--rmi` 或全局 prune。下方 full Mock 命令只保留为合同参考，当前 Blocked 状态不授权执行。
 
 `COMPOSE_PROJECT_NAME` 必须由 launcher 验证为 `refine-memory-${RUN_ID}`，不能复用无关 project 名。创建 evidence 目录或执行首个 Compose step 前，launcher 内部实际执行以下只读探针：
 
@@ -151,7 +151,7 @@ try {
 1. **Task 2（Passed，build/assets only）**：固定 image ID/digest 与不可变 RED→GREEN 已归档；不扩写为服务或业务通过。
 2. **Task 3（Passed，handler/route + build/assets only）**：三平台 literal Messages/`count_tokens` route、source/session fail-closed、Anthropic system context 与选定 console privacy 已固定；不扩写为服务业务或 comprehensive leak Gate 通过。
 3. **Task 4（Passed，client build/config assets only）**：active Compose、三客户端身份/config/image 已固定；不扩写为服务或业务流通过。
-4. **Task 5（Blocked / OpenCode typed diagnostic pending）**：`opentitle-4f056ee6` 单次 launcher fixed step 9 fail-stop，exact project 已 cleanup；下一步只为 typed diagnostic 做 TDD、全新 tuple 与 preflight，不得进入 full Mock/TUI/real。
+4. **Task 5（Blocked；OpenCode typed diagnostic Ready/Not Run）**：`opentitle-4f056ee6` 单次 launcher fixed step 9 fail-stop且 exact cleanup；`89398d1d` 已完成 TDD/review/preflight，下一步只允许单次 tracked diagnostic，结果后 exact cleanup，不得进入 full Mock/TUI/real。
 5. **Task 6**：完整 Mock Gate 后且负责人明确授权，才可使用 host-only 双 key 与预算限制做真实 Stage 1。
 6. **Task 7–8**：在 Stage 1 后实现/验证 Codex Responses 与四客户端 binding 上限。
 

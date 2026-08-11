@@ -2,7 +2,7 @@
 
 ## 结论
 
-当前 active 目标是四 Docker CLI 共享记忆实验。Task 5 的 Proxy→Core auth service-token、Mock fixture、Claude EROFS/tmpfs 与 OpenCode fixed-title 缺口均已完成 TDD、replacement images 与 scoped review。`opentitle-4f056ee6` 的单次 full Mock launcher 在 fixed step 9 fail-stop；steps 1–8 exit `0`，唯一脱敏 aggregate probe 看到 OpenCode main request 精确一次，但未定位 step 9 的具体失败项。exact project 已 cleanup 为 `0/0/0`；当前为 **Blocked / OpenCode typed diagnostic pending**。三写六读、final、TUI 与真实 API/模型仍未获得通过证明。
+当前 active 目标是四 Docker CLI 共享记忆实验。Task 5 的 Proxy→Core auth service-token、Mock fixture、Claude EROFS/tmpfs 与 OpenCode fixed-title 缺口均已完成 TDD、replacement images 与 scoped review。`opentitle-4f056ee6` 的单次 full Mock launcher 在 fixed step 9 fail-stop；steps 1–8 exit `0`，唯一脱敏 aggregate probe 看到 OpenCode main request 精确一次，但未定位 step 9 的具体失败项。exact project 已 cleanup 为 `0/0/0`。OpenCode typed diagnostic 已在 `c163b6c...` 完成 TDD/static review，全新 `89398d1d` tuple 的 preflight 为 **Ready / Not Run**；当前业务 Gate 仍为 **Blocked**。三写六读、final、TUI 与真实 API/模型仍未获得通过证明。
 
 旧 Windows 原生 Claude + Docker Claude 证据一律是 **Legacy**：保留原文供追溯，但不用于推断新的四 CLI 架构已通过。
 
@@ -19,7 +19,7 @@
 | Legacy preservation | `codex/legacy-proxy-hardening-69fd8b@69fd8b31e3fd4362af6c65407b92b26dfabebd0c` | local-only、未 push；fresh clone 不可取得，未经授权不得 push；跨 clone 可重建保全仍未完成 |
 | Legacy runtime lifecycle | 3 projects / 20 containers / 4 networks / 27 volumes / 6 image candidates absent | 2026-08-10 Runtime Cleanup Passed；旧栈需从 Git 历史重新构建并创建新资源 |
 | Claude Code | `2.1.226` / image `sha256:261a917376f791d9b5e092040c2f488f23588b7103a27606226426f273b040dd` | EROFS classifier、version/help、UID10001、host/image hash/export、64MiB hardened tmpfs runtime probe 与 single diagnostic Passed；完整 Mock/TUI Not Run |
-| OpenCode | `1.18.16` / image `sha256:263a6d0eade24b72b4b2627984a930fc69a3e621519b1ec050a0320398b890a1` | fixed-title TDD、单次 rebuild、version/help、UID10001、host/image hash、evidence ownership/writability Passed；full Mock step 9 Blocked，typed diagnostic pending |
+| OpenCode | `1.18.16` / image `sha256:263a6d0eade24b72b4b2627984a930fc69a3e621519b1ec050a0320398b890a1` | fixed-title TDD、单次 rebuild、version/help、UID10001、host/image hash、evidence ownership/writability Passed；full Mock step 9 Blocked；typed diagnostic `89398d1d` Ready/Not Run |
 | Pi | `0.84.1` / image `sha256:56582fd216db259342f4414ebdc6c9c9188229678d77eb2f360959c9af2e4538` | rebuild、version/help、UID 10001、evidence ownership/writability、headless assets Passed；prompt/TUI Not Run |
 | Codex | `0.147.0` | 固定版本；Not Run |
 
@@ -54,9 +54,9 @@ flowchart LR
 | Stage 1 upstream source-build | Runtime Passed | 全部 tracked/image shell、Core/Proxy 新构建与必要 runtime assets Passed；Hub 保持原 Passed 镜像；不等于服务/业务 Runtime Passed |
 | Stage 1 Claude/OpenCode/Pi 原生路由 | Runtime Passed | Task 3 route 证据保持；active product auth fix 的 fresh full 为 38/38 suites / 276/276 tests，仍不等于服务/客户端业务流 Passed |
 | Stage 1 client Compose/bootstrap/config/images | Runtime Passed | tools 与三 client 原 build/assets、Claude EROFS replacement、OpenCode fixed-title replacement；version/help、UID10001、evidence ownership/writability、headless assets；仅 client build/config assets |
-| Stage 1 Task 5 root harness | Static/contract Passed | root Node 233/233 与 Compose config 7/7；fixture array text-block、固定 step allowlist、固定 epoch/path、strict fixture、逐 operation oracle、outsider、exact project freshness、run/build/evidence 与 request-local credential 合同，不是业务运行 |
+| Stage 1 Task 5 root harness | Static/contract Passed | root Node 239/239、active Compose config 7/7 与 OpenCode diagnostic overlay 1/1；fixture array text-block、固定 step allowlist、typed client diagnostic、固定 epoch/path、strict fixture、逐 operation oracle、outsider、exact project freshness、run/build/evidence 与 request-local credential 合同，不是业务运行 |
 | Stage 1 Proxy privacy/build | Runtime Passed | reviewed `9e456a5` auth service-token fix、38/38 suites / 276/276 tests、exact six baseline typecheck errors、Proxy `sha256:55fedae3...`；replacement image Ready，product tests + build/assets only |
-| Stage 1 Mock identity/share/isolation/leak | Blocked | `opentitle-4f056ee6` 单次 launcher fixed step 9 fail-stop；OpenCode main request 精确一次到达 Mock，但复合 step 的具体失败项未定位；exact project 已 cleanup |
+| Stage 1 Mock identity/share/isolation/leak | Blocked | `opentitle-4f056ee6` 单次 launcher fixed step 9 fail-stop且 exact cleanup；OpenCode main request 精确一次到达 Mock，但复合 step 的具体失败项未定位；typed diagnostic `89398d1d` Ready/Not Run |
 | Stage 1 TUI | Not Run | 仅在 headless Gate 通过后由用户确认 |
 | Stage 1 真实模型 | Not Run | 需完整 Mock Gate 与明确授权 |
 | Stage 2 Codex Responses | Not Run | 在 Stage 1 后执行 |
@@ -81,4 +81,4 @@ flowchart LR
 
 ## 下一 Gate
 
-[opentitle-4f056ee6 OpenCode write Blocked](reproduction/2026-08-12-task5-mock-20260812-opentitle-4f056ee6-opencode-write-blocked.md) 固定单次 step 9 fail-stop 与脱敏 aggregate 边界；[exact cleanup](reproduction/2026-08-12-task5-mock-20260812-opentitle-4f056ee6-exact-cleanup-passed.md) 已使该 project 为 `0/0/0`。下一 Gate 是为 OpenCode typed diagnostic 完成 TDD、固定全新 run/project/evidence tuple 并做 preflight；不得复用或 retry `opentitle-4f056ee6`，也不得读取 raw logs/evidence、进入 full Mock/TUI 或真实模型。真实 API、TUI 与 Codex Stage 2 仍为 Not Run。active gitlink 在获得独立 push/归档授权前仍无法由 fresh clone 获取。
+[opentitle-4f056ee6 OpenCode write Blocked](reproduction/2026-08-12-task5-mock-20260812-opentitle-4f056ee6-opencode-write-blocked.md) 固定单次 step 9 fail-stop 与脱敏 aggregate 边界；[exact cleanup](reproduction/2026-08-12-task5-mock-20260812-opentitle-4f056ee6-exact-cleanup-passed.md) 已使该 project 为 `0/0/0`。[OpenCode typed diagnostic `89398d1d` Ready](reproduction/2026-08-12-task5-diag-opencode-20260812-89398d1d-ready.md) 已固定 TDD/review、全新 run/project/evidence tuple 与 preflight。下一 Gate 唯一动作是单次运行 tracked `run-task5-opencode-diagnostic.mjs`；不得 build、retry、复用旧 tuple、读取 raw logs/evidence、进入 full Mock/TUI 或真实模型。仅在 coordinator freshness 通过且本次运行创建 exact project 后执行 exact cleanup；label collision/preflight failure 必须保留资源并先审计。真实 API、TUI 与 Codex Stage 2 仍为 Not Run。active gitlink 在获得独立 push/归档授权前仍无法由 fresh clone 获取。
