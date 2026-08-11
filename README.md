@@ -8,12 +8,12 @@
 
 | 阶段 | 客户端 | 协议与状态 |
 | --- | --- | --- |
-| Stage 1 | Claude Code `2.1.226`、OpenCode `1.18.16`、Pi `0.84.1` | 原生 route、Task 4 client assets、Task 5 round 1 root contracts Static Passed；产品 session fix/rebuild/re-review Pending，Docker 业务运行 Not Run |
+| Stage 1 | Claude Code `2.1.226`、OpenCode `1.18.16`、Pi `0.84.1` | 原生 route、Task 4 client assets、Task 5 round 2 root contracts Static Passed；产品 session fix/rebuild/scoped re-review Pending，Docker 业务运行 Not Run |
 | Stage 2 | Codex `0.147.0` | 原生身份，经 `/codex/<space>/v1/responses`；Not Run |
 
 **Fact**：upstream base 锁定 `feat/server_team@0a568c328ea1aae3f22ed3656e7900da7ea565c1`；active fork/gitlink 为 Task 5 product-privacy hardening 产品提交 `d6afcd835467c56a29d89e9befcb796ab612da78`。Claude Code、OpenCode、Pi 的三条 literal Messages 与 `count_tokens` route 已通过真实 handler tests；unknown/unbound/conflict/missing/invalid source/session 在副作用前 fail closed，平台 source 保留到 session/Core record。OpenCode/Pi 的 Anthropic session context 位于顶层 `system`，不会伪造 Claude Code 或把 `role=system` 塞入 Messages。每个 CLI 使用不同的 user、Agent、Session、user key、home、workspace 和 evidence；仅显式 team-visible memory 可在同一 Team/Task 中共享。
 
-**Boundary**：Task 5 round 1 修正后的 143/143 Node tests 与 6/6 Compose config 只证明静态契约。原产品 `d6afcd8` 的 113/113 与固定 Proxy `sha256:d79751b6...` 仍证明既定 privacy/build-assets 范围，但 pre-runtime review 另复现跨 identity terminal L1 session cache 风险；产品修复、替代镜像与 scoped re-review 均 Pending，旧镜像不得进入本轮业务运行。tools/三客户端新镜像、live Proxy→Mock、真实 CLI headless、三写六读、outsider/management、TUI 与真实模型仍是 **Not Run**。旧 Windows + Claude 方案及其运行记录均归档为 **Legacy**。
+**Boundary**：Task 5 round 2 修正后的 149/149 Node tests 与 6/6 Compose config 只证明静态契约；project/run exact binding、Docker label freshness preflight 与三个 image 的 `/client-evidence` UID10001 前置均未经过实际 build/runtime。原产品 `d6afcd8` 的 113/113 与固定 Proxy `sha256:d79751b6...` 仍只证明既定 privacy/build-assets 范围，但 pre-runtime review 另复现跨 identity terminal L1 session cache 风险；产品修复、替代镜像、tools/三客户端 rebuild 与 scoped re-review 均 Pending，旧镜像不得进入本轮业务运行。live Proxy→Mock、真实 CLI headless、三写六读、outsider/management、TUI 与真实模型仍是 **Not Run**。旧 Windows + Claude 方案及其运行记录均归档为 **Legacy**。
 
 ## 起点
 

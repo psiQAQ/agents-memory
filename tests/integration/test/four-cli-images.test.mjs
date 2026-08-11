@@ -28,6 +28,17 @@ test('Task 4 client images pin official artifacts, verify installs, and end as u
   }
 });
 
+test('Task 5 client images initialize the evidence mountpoint for uid 10001 before dropping root', async (t) => {
+  for (const client of ['claude', 'opencode', 'pi']) {
+    await t.test(client, async () => {
+      const dockerfile = await read(client);
+      const beforeRuntimeUser = dockerfile.slice(0, dockerfile.indexOf('\nUSER agent\n'));
+      assert.match(beforeRuntimeUser, /mkdir -p[^\n]*\/client-evidence/);
+      assert.match(beforeRuntimeUser, /chown -R 10001:10001[^\n]*\/client-evidence/);
+    });
+  }
+});
+
 test('Task 4 tools context includes only the tracked manifest needed by bootstrap', async () => {
   const tools = await readFile(new URL('../images/tools/Dockerfile', import.meta.url), 'utf8');
   const ignore = await readFile(new URL('../.dockerignore', import.meta.url), 'utf8');

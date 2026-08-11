@@ -6,7 +6,7 @@
 
 | 入口 | 用途 | 当前状态 |
 | --- | --- | --- |
-| [企业智能体记忆系统评估](enterprise-memory-system-evaluation.md) | 当前范围、风险、下一 Gate | Task 5 round 1 root contracts Static Passed；产品修复/重建/复审 Pending；Stage 1 business/API/TUI Not Run |
+| [企业智能体记忆系统评估](enterprise-memory-system-evaluation.md) | 当前范围、风险、下一 Gate | Task 5 round 2 root contracts Static Passed；产品修复/重建/scoped re-review Pending；Stage 1 business/API/TUI Not Run |
 | [四 Docker CLI 实施计划](superpowers/plans/2026-08-10-four-docker-cli-memory.md) | 任务顺序与验收边界 | 计划，不是运行证据 |
 | [架构 ADR](decisions/2026-08-10-four-docker-cli-baseline.md) | 四 CLI 分阶段与身份隔离决策 | Accepted；runtime Not Run |
 | [baseline reproduction](reproduction/2026-08-10-four-docker-cli-baseline.md) | 固定版本、gitlink 与本轮未运行边界 | Append-only；Static baseline |
@@ -28,7 +28,7 @@
 | [Task 5 Proxy privacy hardening RED](reproduction/2026-08-11-task5-proxy-privacy-hardening-red.md) | upstream header/credential、telemetry sink 与 active diagnostics 产品缺陷 | Failed / Reproduced；修复前不可变证据 |
 | [Task 5 Proxy privacy/build Passed](reproduction/2026-08-11-task5-proxy-privacy-build-passed.md) | 产品 113 tests、独立 review、唯一 Proxy build/assets 与 root harness | Runtime Passed（product tests + build/assets only）/ Static contract Passed；business Not Run |
 | [Task 5 pre-runtime round 1 erratum/RED](reproduction/2026-08-11-task5-pre-runtime-review-round1-erratum.md) | 七项 root contract 缺口与跨 identity terminal L1 风险 | Failed / Reproduced；收窄旧 harness 证明范围 |
-| [Task 5 pre-runtime round 1 root static Passed](reproduction/2026-08-11-task5-pre-runtime-review-round1-root-static-passed.md) | epoch/oracle/outsider/build/run/evidence 合同修正与 143 tests | Static/contract Passed；产品修复/复审与 business runtime Pending |
+| [Task 5 pre-runtime root static Passed + round 2 erratum](reproduction/2026-08-11-task5-pre-runtime-review-round1-root-static-passed.md) | epoch/oracle/outsider 与 project freshness/evidence ownership 合同；149 tests | Static/contract Passed；产品修复/rebuild/scoped re-review 与 business runtime Pending |
 | [Legacy Docker 运行资源精确清理](reproduction/2026-08-10-legacy-docker-resources-cleanup.md) | 旧 Compose projects、容器、网络、卷和镜像的不可恢复清理审计 | Runtime Cleanup Passed；不改变四 CLI 业务 Gate |
 | [集成实验 SOP](../tests/integration/README.md) | 后续静态验证与受控运行入口 | Task 5 root static Passed；先完成产品修复/镜像/复审，再运行 deterministic Mock |
 

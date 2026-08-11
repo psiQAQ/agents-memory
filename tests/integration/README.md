@@ -6,7 +6,7 @@
 
 **Fact**：upstream base 锁定 `feat/server_team@0a568c328ea1aae3f22ed3656e7900da7ea565c1`，active fork/gitlink 为 Task 5 product-privacy hardening 产品提交 `d6afcd835467c56a29d89e9befcb796ab612da78`。Stage 1 是 Claude Code `2.1.226`、OpenCode `1.18.16`、Pi `0.84.1`，Stage 2 是 Codex `0.147.0`。
 
-**Fact**：Task 4 的 active Compose/profile overlays、三客户端 manifest/identity/bootstrap、三 owner team-visible Chat Memory、六条 cross-owner binding、独立 outsider、私有 bundle/config 与三款固定 CLI image 已 Passed。Task 5 round 1 root contracts 143/143、Compose config 6/6；原 `d6afcd8` Proxy privacy tests/build-assets 只在既定范围内保持历史 Passed。跨 identity terminal L1 session cache 风险的产品修复、替代镜像和 scoped re-review Pending；tools/三客户端 Task 5 镜像、服务启动、真实 CLI headless、Mock 三写六读、live ACL/management、真实 API、TUI 与端口探针仍为 Not Run。既有 Windows + Claude 命令、Compose 路径和运行证据是 Legacy，不能直接复用到四 CLI 路线。
+**Fact**：Task 4 的 active Compose/profile overlays、三客户端 manifest/identity/bootstrap、三 owner team-visible Chat Memory、六条 cross-owner binding、独立 outsider、私有 bundle/config 与三款固定 CLI image 已 Passed。Task 5 round 2 root contracts 149/149、Compose config 6/6；project/run exact binding、exact Compose-label freshness 和 `/client-evidence` UID10001 image contract 仅为 Static Passed。原 `d6afcd8` Proxy privacy tests/build-assets 只在既定范围内保持历史 Passed。跨 identity terminal L1 session cache 风险的产品修复、替代镜像、tools/三客户端 rebuild 和 scoped re-review Pending；服务启动、真实 CLI headless、Mock 三写六读、live ACL/management、真实 API、TUI 与端口探针仍为 Not Run。既有 Windows + Claude 命令、Compose 路径和运行证据是 Legacy，不能直接复用到四 CLI 路线。
 
 **Fact**：legacy ref `codex/legacy-proxy-hardening-69fd8b@69fd8b31e3fd4362af6c65407b92b26dfabebd0c` 是 local-only、未 push；fresh clone 不可取得，未经授权不得 push。跨 clone 可重建保全需要 push 或外部归档授权，在此之前仍未完成。
 
@@ -14,7 +14,7 @@
 
 ## 静态验证
 
-在根仓库执行完整 Node suite；当前预期为 143/143。它只验证当前根集成契约，不能证明 active Docker 业务流：
+在根仓库执行完整 Node suite；当前预期为 149/149。它只验证当前根集成契约，不能证明 active Docker 业务流：
 
 ```powershell
 node --test tests/integration/test/*.test.mjs
@@ -28,7 +28,7 @@ active Compose 静态入口固定为 `compose.four-cli.yaml` 加所需 overlay�
 $base = 'tests/integration/compose.four-cli.yaml'
 $env:MEMORY_CORE_GATEWAY_API_KEY = 'task4-static-gateway-key'
 $env:RUN_ID = 'task5-static'
-$env:COMPOSE_PROJECT_NAME = 'task5-static'
+$env:COMPOSE_PROJECT_NAME = 'refine-memory-task5-static'
 $env:EVIDENCE_DIR = [System.IO.Path]::GetFullPath((Join-Path $PWD '.runtime\static\task5-static'))
 try {
   foreach ($profile in @('mock', 'real', 'claude', 'opencode', 'pi', 'management')) {
@@ -84,16 +84,17 @@ formal review 后，bootstrap 在发布 private/public artifact 前验证三 own
 
 ## Task 5 harness 与 Proxy privacy/build 结果
 
-初始 harness commits `5bb2d65`、`a10e825`、`a2ed161`、`4cae880` 之后，pre-runtime round 1 以 `192f81b`、`a1e91fd`、`99a9964`、`d4894df`、`4f751df` 收紧了以下 deterministic contracts：
+初始 harness commits `5bb2d65`、`a10e825`、`a2ed161`、`4cae880` 之后，pre-runtime round 1 以 `192f81b`、`a1e91fd`、`99a9964`、`d4894df`、`4f751df` 收紧主要 deterministic contracts；formal review 的 I6/I7 round 2 再补齐以下 project freshness 与 evidence ownership 边界：
 
 - 三个平台各 8 类 Anthropic fixture：text、SSE stream、tool、count、400、429、500、timeout；content-type、完整 JSON/SSE 事件顺序、usage/error/tool/count shape 与内存 sensitive scan 全部固定。Mock 每次 reset 生成新 epoch，以单调 sequence、per-path count/sequence/marker 和 sticky dropped/truncated/leak flags 保存 bounded redacted aggregate。
 - 三次顺序写入必须由 Core L0 后 L1 oracle 精确核对 owner/Team/Agent/Task/Session/role；六次读取按固定顺序逐 operation 核对 reader tuple，read prompt 不含目标 owner marker，模型自然语言回复不能作为证明。final 只接受同 epoch 精确三写六读 `/anthropic/v1/messages` 主请求，拒绝额外/错 path/乱序/dropped/sticky operation。
 - outsider 的 accessible asset、ACL、binding mutation 与 forged Proxy identity 分别由同 epoch all-model delta 0 包围；forged 请求使用 outsider key 与完整 victim source/team/agent/task/session，只接受 403/409。合法 outsider own request 必须 all-model delta 1 且不能命中 owner marker。
 - management Gate 核对 users、teams/members、agents、tasks、assets、bindings、ACL、Panel；Panel 只在 `127.0.0.1` 发布，Knowledge 不发布宿主端口。
 - 三个 CLI 的非交互 argv、独立 writable home/workspace/credential/evidence volumes 和原子 0600 脱敏 evidence shape 均由测试固定，不接受 ambient command/options。headless stdout/stderr 只做 bounded in-memory scan，不继承或持久化；TUI 仍保留 interactive stdio。
-- runtime Compose 不含 `build:`；build-only overlay 明确覆盖 bootstrap 与三客户端。`RUN_ID`、`COMPOSE_PROJECT_NAME`、`EVIDENCE_DIR` 必填且同 run 绑定，host launcher 只执行固定 17 步 `--no-build` 流程并 fail-stop。
+- runtime Compose 不含 `build:`；build-only overlay 明确覆盖 bootstrap 与三客户端。`RUN_ID`、`COMPOSE_PROJECT_NAME`、`EVIDENCE_DIR` 必填，project 必须精确为 `refine-memory-${RUN_ID}`。host launcher 先对 container/network/volume 执行 exact Compose-project label freshness probe，再执行固定 17 步 `--no-build` 流程；任一探针或步骤失败立即停止。
+- 三个 active client Dockerfile 在 `USER agent` 前创建 `/client-evidence` 并归属 10001:10001；headless 仍以 `10001:10001` 运行且三个 evidence named volume 彼此独立。该 ownership 尚待统一镜像 rebuild/runtime 验证。
 
-Root full Node 为 143/143，base + `mock`、`real`、`claude`、`opencode`、`pi`、`management` Compose config 为 6/6。它们是 **Static/contract Passed**。
+Root full Node 为 149/149，base + `mock`、`real`、`claude`、`opencode`、`pi`、`management` Compose config 为 6/6。它们是 **Static/contract Passed**。
 
 产品范围 `0bba4d7..d6afcd8` 对 upstream header/credential origin/redirect、结构化 telemetry sinks 与 active/auxiliary/injection/bootstrap diagnostics 的 113/113 和原 build-assets 结论保持。其唯一旧 build 是 `local/refine-memory-proxy:d6afcd8-task5@sha256:d79751b6dca733c5aec2ea11a4484cc4184068373dde14c0f01e6793c6bc30e8`。pre-runtime review 随后复现跨 identity terminal L1 session cache 风险；产品修复、全量复验与替代镜像 Pending，因此旧 image 不得进入 Task 5 runtime。
 
@@ -102,6 +103,16 @@ Root full Node 为 143/143，base + `mock`、`real`、`claude`、`opencode`、`p
 ## Task 5 Mock runtime 启动器（下一 Gate，尚未运行）
 
 只有独立根集成 review、所需 tools/三客户端镜像重建与产品安全修复全部通过后，才能执行本节。启动器不读取 Tencent `.env`、模型 key、settings、home 或旧 evidence；它只运行固定的 Mock 顺序，不接受任意命令，也不会执行 build、`down`、`down -v` 或 prune。
+
+`COMPOSE_PROJECT_NAME` 必须由 launcher 验证为 `refine-memory-${RUN_ID}`，不能复用无关 project 名。创建 evidence 目录或执行首个 Compose step 前，launcher 内部实际执行以下只读探针：
+
+```powershell
+docker container ls --all --quiet --filter "label=com.docker.compose.project=$env:COMPOSE_PROJECT_NAME"
+docker network ls --quiet --filter "label=com.docker.compose.project=$env:COMPOSE_PROJECT_NAME"
+docker volume ls --quiet --filter "label=com.docker.compose.project=$env:COMPOSE_PROJECT_NAME"
+```
+
+任一命令非零或输出非空都必须停止；launcher 不输出资源 ID/name，也不创建 evidence 目录或进入 17 个 business steps。碰撞资源保留供诊断，不得据此执行 cleanup；应先审计其归属，再选择全新的 run/project/evidence tuple。
 
 ```powershell
 $runId = "task5-mock-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
@@ -135,7 +146,7 @@ try {
 1. **Task 2（Passed，build/assets only）**：固定 image ID/digest 与不可变 RED→GREEN 已归档；不扩写为服务或业务通过。
 2. **Task 3（Passed，handler/route + build/assets only）**：三平台 literal Messages/`count_tokens` route、source/session fail-closed、Anthropic system context 与选定 console privacy 已固定；不扩写为服务业务或 comprehensive leak Gate 通过。
 3. **Task 4（Passed，client build/config assets only）**：active Compose、三客户端身份/config/image 已固定；不扩写为服务或业务流通过。
-4. **Task 5（in progress）**：round 1 root contracts 已 Static Passed；先完成产品 session fix、新 Proxy、tools/三客户端镜像与 scoped re-review，再执行 deterministic Mock Docker runtime；headless 通过后才进行用户 TUI 确认。
+4. **Task 5（in progress）**：round 2 root contracts 已 Static Passed；先完成产品 session fix、新 Proxy、tools/三客户端镜像 rebuild/runtime assets 与 scoped re-review，再执行 deterministic Mock Docker runtime；headless 通过后才进行用户 TUI 确认。
 5. **Task 6**：完整 Mock Gate 后且负责人明确授权，才可使用 host-only 双 key 与预算限制做真实 Stage 1。
 6. **Task 7–8**：在 Stage 1 后实现/验证 Codex Responses 与四客户端 binding 上限。
 

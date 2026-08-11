@@ -2,7 +2,7 @@
 
 ## 结论
 
-当前 active 目标是四 Docker CLI 共享记忆实验。Task 5 pre-runtime review round 1 修正后的 root harness 已把 epoch/path aggregate、完整 Anthropic fixture、逐 operation owner oracle、outsider bracketing、build/run 与 headless evidence 固定为 **Static/contract Passed**。原 `d6afcd8` privacy tests/build image 仍只在原范围内有效；新发现的跨 identity terminal L1 session cache 风险使产品修复、替代镜像与 scoped re-review 保持 Pending。尚无服务健康、真实 CLI headless、Mock 三写六读、live outsider/management、真实 API、TUI 或跨客户端业务流的 Runtime Passed 证据。
+当前 active 目标是四 Docker CLI 共享记忆实验。Task 5 round 2 root harness 已把 epoch/path aggregate、完整 Anthropic fixture、逐 operation owner oracle、outsider bracketing、project/run exact binding、Docker label freshness preflight 与非 root evidence mountpoint 固定为 **Static/contract Passed**。原 `d6afcd8` privacy tests/build image 仍只在原范围内有效；跨 identity terminal L1 session cache 风险使产品修复、替代镜像、tools/三客户端 rebuild 与 scoped re-review 保持 Pending。尚无服务健康、真实 CLI headless、Mock 三写六读、live outsider/management、真实 API、TUI 或跨客户端业务流的 Runtime Passed 证据。
 
 旧 Windows 原生 Claude + Docker Claude 证据一律是 **Legacy**：保留原文供追溯，但不用于推断新的四 CLI 架构已通过。
 
@@ -54,7 +54,7 @@ flowchart LR
 | Stage 1 upstream source-build | Runtime Passed | 全部 tracked/image shell、Core/Proxy 新构建与必要 runtime assets Passed；Hub 保持原 Passed 镜像；不等于服务/业务 Runtime Passed |
 | Stage 1 Claude/OpenCode/Pi 原生路由 | Runtime Passed | Task 3 的 31/31 route 证据保持；Task 5 新镜像 full suite 113/113，仍不等于服务/客户端业务流 Passed |
 | Stage 1 client Compose/bootstrap/config/images | Runtime Passed | root Node 86/86、Compose matrix、owner/outsider cardinality、binding post-set 全字段验证、config/bundle no-follow、三 owner+outsider、六 cross-owner binding、三镜像 build/version/help/UID；仅 client build/config assets |
-| Stage 1 Task 5 root harness | Static/contract Passed | round 1 corrections 后 root Node 143/143 与 Compose config 6/6；固定 epoch/path、strict fixture、逐 operation oracle、outsider、run/build 与 evidence 合同，不是 Docker 业务运行 |
+| Stage 1 Task 5 root harness | Static/contract Passed | round 2 corrections 后 root Node 149/149 与 Compose config 6/6；固定 epoch/path、strict fixture、逐 operation oracle、outsider、exact project freshness、run/build 与 evidence ownership 合同，不是 Docker build/业务运行 |
 | Stage 1 Proxy privacy/build | Blocked / fix pending | `d6afcd8` 的既定 privacy suite/build-assets 仍是历史 Passed；跨 identity terminal L1 风险已复现，产品修复、替代镜像与 scoped re-review 未完成 |
 | Stage 1 Mock identity/share/isolation/leak | Not Run | 业务栈尚未启动；product build/assets 不替代该 Gate |
 | Stage 1 TUI | Not Run | 仅在 headless Gate 通过后由用户确认 |

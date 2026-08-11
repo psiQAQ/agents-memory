@@ -40,3 +40,18 @@
 - scoped independent re-review。
 
 所有失败或成功 project/volumes 的 destructive cleanup 均未获授权。本轮没有创建业务 Compose project/volume；未 push、PR 或修改 remote。
+
+## Formal scoped review 与 round 2 erratum（append-only）
+
+`8b5b8b7..0f8774f` formal scoped review 判定原七项 Important 为 `ADDRESSED 5 / NOT ADDRESSED 2`，因此本文件前文“七项 root-side Important 已通过”的表述过宽。未关闭项是：
+
+- I6：launcher 没有把 Compose project 唯一绑定到 run，也没有在任何 business step 前证明 exact project 的 containers/networks/volumes 均不存在；
+- I7：三个 UID10001 headless image 没有为新 named volume 初始化可写的 `/client-evidence` mountpoint。
+
+round 2 分别取得真实 RED：project/run mismatch 被接受且执行 17 个 business steps；container/network/volume 三类 exact label collision 均未拒绝；三个 client Dockerfile 均缺少 evidence mountpoint 创建/ownership。最小 GREEN 后：
+
+- `COMPOSE_PROJECT_NAME` 必须精确为 `refine-memory-${RUN_ID}`；launcher 以 Docker `container/network/volume ls --filter label=com.docker.compose.project=<project>` 在创建 evidence 目录和首个 Compose step 前 fail closed。任一探针非零或输出非空都停止，不读取/回显资源原文，也不清理碰撞资源。
+- Claude/OpenCode/Pi Dockerfile 均在 `USER agent` 前创建 `/client-evidence` 并 `chown 10001:10001`；headless 仍固定 `10001:10001`，不新增 root init service。
+- focused I6 5/5、I7 7/7、相关组合 29/29、fresh root Node 149/149 与 Compose config 6/6 Passed。
+
+这些结果仍是 **Static/contract Passed**。三个 client 与 tools 尚未 rebuild，named-volume ownership 没有 runtime 证明；产品修复、替代 Proxy、同一 reviewer scoped re-review、business stack、headless、三写六读、live outsider/management、TUI 与真实模型继续 Pending/Not Run。

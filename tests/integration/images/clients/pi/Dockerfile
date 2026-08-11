@@ -9,8 +9,8 @@ RUN node -e "const fs=require('node:fs');fetch(process.argv[1]).then(r=>{if(!r.o
 
 RUN groupadd --gid 10001 agent \
  && useradd --uid 10001 --gid 10001 --create-home --shell /bin/bash agent \
- && mkdir -p /workspace /opt/memory-client \
- && chown -R 10001:10001 /workspace /home/agent
+ && mkdir -p /workspace /opt/memory-client /client-evidence \
+ && chown -R 10001:10001 /workspace /home/agent /client-evidence
 
 COPY --from=integration tools/launch-client.mjs /opt/memory-client/launch-client.mjs
 COPY --from=integration tools/render-settings.mjs /opt/memory-client/render-settings.mjs
