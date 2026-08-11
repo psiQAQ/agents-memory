@@ -168,6 +168,7 @@ test('Claude diagnostic coordinator rejects noncanonical or malformed diagnostic
     ['not-run-continuous', JSON.stringify({ ...result, launch: 'not_run', launch_phase: 'not-run', proxy_dns_ok: false, proxy_tcp_ok: false })],
     ['launch-phase-mismatch', JSON.stringify({ ...result, launch_phase: 'cli-nonzero', launch_category: 'unknown' })],
     ['category-with-code0', JSON.stringify({ ...result, launch_category: 'filesystem' })],
+    ['recognized-without-output', JSON.stringify({ ...result, launch: 'nonzero', launch_phase: 'cli-nonzero', launch_category: 'filesystem' })],
     ['tcp-without-dns', JSON.stringify({ ...result, proxy_dns_ok: false })],
     ['setup-output', JSON.stringify({ ...result, launch: 'throw', launch_phase: 'setup-error', output_present: true })],
     ['unknown-phase', JSON.stringify({ ...result, launch: 'throw', launch_phase: 'other' })],

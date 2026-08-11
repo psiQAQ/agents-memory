@@ -105,6 +105,7 @@ function canonicalResult(stdout) {
     || (value.launch === 'nonzero' && value.launch_phase === 'cli-nonzero' && value.launch_category !== 'none')
     || (value.launch === 'throw' && ['spawn-failure', 'signal', 'timeout', 'overflow', 'sensitive-output', 'setup-error'].includes(value.launch_phase) && value.launch_category === 'none');
   if (!launchValid || (value.proxy_tcp_ok && !value.proxy_dns_ok)
+    || (!['none', 'unknown'].includes(value.launch_category) && !value.output_present)
     || (['overflow', 'sensitive-output'].includes(value.launch_phase) && !value.output_present)
     || (value.launch_phase === 'setup-error' && value.output_present)
     || value.expected_main_count < 0 || value.unexpected_operation_count < 0 || value.unexpected_path_count < 0 || value.dropped < 0

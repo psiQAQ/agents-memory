@@ -169,6 +169,73 @@ test('Claude diagnostic probes memory-proxy DNS and TCP once with fixed bounds a
   assert.doesNotMatch(JSON.stringify(failed), /RAW_DNS_ERROR|must not connect/i);
 });
 
+test('Claude diagnostic bounds pending DNS and classifies TCP error, timeout, and connect throws without details', async (context) => {
+  const before = aggregate();
+  const base = {
+    aggregate: async () => before,
+    launch: async () => launchResult('cli-nonzero', 'unknown'),
+  };
+  await context.test('dns-timeout', async () => {
+    const timers = [];
+    let lookups = 0;
+    let connects = 0;
+    const promise = runClaudeDiagnostic(args, environment, {
+      ...base,
+      lookup: async () => { lookups += 1; return await new Promise(() => {}); },
+      connect: () => { connects += 1; throw new Error('must not connect'); },
+      setTimer: (callback, delay) => { const token = { callback, delay, cleared: false }; timers.push(token); return token; },
+      clearTimer: (token) => { token.cleared = true; },
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(timers.length, 1);
+    assert.equal(timers[0].delay, 5000);
+    timers[0].callback();
+    const result = await promise;
+    assert.equal(lookups, 1);
+    assert.equal(connects, 0);
+    assert.equal(timers[0].cleared, true);
+    assert.equal(result.proxy_dns_ok, false);
+    assert.equal(result.proxy_tcp_ok, false);
+  });
+
+  for (const mode of ['error', 'timeout', 'throw']) await context.test(`tcp-${mode}`, async () => {
+    const timers = [];
+    const socket = new EventEmitter();
+    let lookups = 0;
+    let connects = 0;
+    let destroys = 0;
+    socket.destroy = () => { destroys += 1; };
+    const dependencies = {
+      ...base,
+      lookup: async () => { lookups += 1; return { address: '127.0.0.1', family: 4 }; },
+      connect: () => {
+        connects += 1;
+        if (mode === 'throw') throw new Error('RAW_CONNECT_THROW');
+        if (mode === 'error') process.nextTick(() => socket.emit('error', new Error('RAW_TCP_ERROR')));
+        return socket;
+      },
+      setTimer: (callback, delay) => { const token = { callback, delay, cleared: false }; timers.push(token); return token; },
+      clearTimer: (token) => { token.cleared = true; },
+    };
+    const promise = runClaudeDiagnostic(args, environment, dependencies);
+    if (mode === 'timeout') {
+      for (let attempt = 0; timers.length < 2 && attempt < 10; attempt += 1) await new Promise((resolve) => setImmediate(resolve));
+      assert.equal(timers.length, 2);
+      timers[1].callback();
+    }
+    const result = await promise;
+    assert.equal(lookups, 1);
+    assert.equal(connects, 1);
+    assert.equal(destroys, mode === 'throw' ? 0 : 1);
+    assert.equal(result.proxy_dns_ok, true);
+    assert.equal(result.proxy_tcp_ok, false);
+    assert.equal(timers.every(({ delay }) => delay === 5000), true);
+    socket.emit('connect');
+    assert.equal(destroys, mode === 'throw' ? 0 : 1);
+    assert.doesNotMatch(JSON.stringify(result), /127\.0\.0\.1|RAW_|connect throw|tcp error/i);
+  });
+});
+
 test('Claude diagnostic classifies invalid expected operations and unexpected requests without details', async () => {
   const before = aggregate();
   const extraHash = stage1OperationHash(runId, 'write', 'pi');

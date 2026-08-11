@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import test from 'node:test';
+import { setTimeout as delay } from 'node:timers/promises';
 
 const key = `sk-mem-${'L'.repeat(32)}`;
 const otherKey = `sk-mem-${'M'.repeat(32)}`;
@@ -117,19 +118,21 @@ test('launcher diagnostic classifies bounded child outcomes without returning ca
   const cases = [
     { name: 'cli-zero', chunks: [['ok'], []], code: 0, expected: { phase: 'cli-zero', category: 'none', outputPresent: true } },
     { name: 'filesystem', chunks: [[], ['EACCES: permission denied']], code: 1, expected: { phase: 'cli-nonzero', category: 'filesystem', outputPresent: true } },
-    { name: 'settings', chunks: [[], ['Invalid \u001b[31msettings\u001b[0m configuration']], code: 1, expected: { phase: 'cli-nonzero', category: 'settings', outputPresent: true } },
+    { name: 'settings', chunks: [[], ['Invalid \u001b[31msettings\u001b[0m']], code: 1, expected: { phase: 'cli-nonzero', category: 'settings', outputPresent: true } },
     { name: 'auth-onboarding', chunks: [[], ['Please run /login']], code: 1, expected: { phase: 'cli-nonzero', category: 'auth-onboarding', outputPresent: true } },
     { name: 'transport', chunks: [[], ['connect ECONNREFUSED']], code: 1, expected: { phase: 'cli-nonzero', category: 'transport', outputPresent: true } },
-    { name: 'http4xx', chunks: [[], ['HTTP status 429']], code: 1, expected: { phase: 'cli-nonzero', category: 'http4xx', outputPresent: true } },
-    { name: 'http5xx', chunks: [[], ['HTTP status 503']], code: 1, expected: { phase: 'cli-nonzero', category: 'http5xx', outputPresent: true } },
+    { name: 'http401', chunks: [[], ['API Error: 401']], code: 1, expected: { phase: 'cli-nonzero', category: 'http4xx', outputPresent: true } },
+    { name: 'http429-rejected', chunks: [[], ['API Error: Request rejected (429)']], code: 1, expected: { phase: 'cli-nonzero', category: 'http4xx', outputPresent: true } },
+    { name: 'http500', chunks: [[], ['API Error: 500']], code: 1, expected: { phase: 'cli-nonzero', category: 'http5xx', outputPresent: true } },
     { name: 'unknown-empty', chunks: [[], []], code: 1, expected: { phase: 'cli-nonzero', category: 'unknown', outputPresent: false } },
-    { name: 'multiple-is-unknown', chunks: [[], ['EACCES and HTTP status 503']], code: 1, expected: { phase: 'cli-nonzero', category: 'unknown', outputPresent: true } },
+    { name: 'multiple-is-unknown', chunks: [[], ['API Error: 401\nPlease run /login']], code: 1, expected: { phase: 'cli-nonzero', category: 'unknown', outputPresent: true } },
+    { name: 'innocent-response-prose', chunks: [[], ['the response 500 times']], code: 1, expected: { phase: 'cli-nonzero', category: 'unknown', outputPresent: true } },
+    { name: 'innocent-network-prose', chunks: [[], ['network error is a phrase']], code: 1, expected: { phase: 'cli-nonzero', category: 'unknown', outputPresent: true } },
     { name: 'split-sensitive', chunks: [['RAW_', 'PROMPT'], []], code: 1, expected: { phase: 'sensitive-output', category: 'none', outputPresent: true } },
     { name: 'overflow', chunks: [['x'.repeat(65)], []], code: 1, expected: { phase: 'overflow', category: 'none', outputPresent: true } },
     { name: 'signal', chunks: [[], []], code: null, signal: 'SIGTERM', expected: { phase: 'signal', category: 'none', outputPresent: false } },
     { name: 'spawn-failure', spawnError: true, expected: { phase: 'spawn-failure', category: 'none', outputPresent: false } },
     { name: 'spawn-throw', spawnThrow: true, expected: { phase: 'spawn-failure', category: 'none', outputPresent: false } },
-    { name: 'timeout', timeout: true, expected: { phase: 'timeout', category: 'none', outputPresent: false } },
   ];
   for (const entry of cases) await context.test(entry.name, async () => {
     const homeDir = await mkdtemp(join(tmpdir(), 'memory-client-diagnostic-'));
@@ -150,7 +153,7 @@ test('launcher diagnostic classifies bounded child outcomes without returning ca
         };
         process.nextTick(() => {
           if (entry.spawnError) child.emit('error', new Error('RAW_SPAWN_ERROR'));
-          else if (!entry.timeout) {
+          else {
             for (const chunk of entry.chunks[0]) child.stdout.write(chunk);
             for (const chunk of entry.chunks[1]) child.stderr.write(chunk);
             child.stdout.end();
@@ -162,11 +165,48 @@ test('launcher diagnostic classifies bounded child outcomes without returning ca
       };
       const result = await diagnoseClientLaunch({
         client: 'opencode', homeDir, bundleFile, spaceId: 'default', args: ['run'], spawnProcess,
-        capture: { maxBytes: 64, sensitiveValues: ['RAW_PROMPT'] }, timeoutMs: entry.timeout ? 5 : 1000,
+        capture: { maxBytes: 64, sensitiveValues: ['RAW_PROMPT'] }, timeoutMs: 1000,
       });
       assert.deepEqual(result, entry.expected);
-      assert.equal(kills, entry.timeout ? 1 : 0);
-      assert.doesNotMatch(JSON.stringify(result), /RAW_|permission denied|HTTP status|ECONNREFUSED|Invalid settings|Please run/i);
+      assert.equal(kills, 0);
+      assert.doesNotMatch(JSON.stringify(result), /RAW_|permission denied|API Error|ECONNREFUSED|Invalid settings|Please run|response 500|network error/i);
+    } finally { await rm(homeDir, { recursive: true, force: true }); }
+  });
+});
+
+test('launcher diagnostic waits for close after TERM and bounded KILL while unsafe output keeps precedence', async (context) => {
+  const { diagnoseClientLaunch } = await import('../tools/launch-client.mjs');
+  for (const entry of [
+    { name: 'term-close', closeAfter: 1, expectedPhase: 'timeout', output: '' },
+    { name: 'kill-close', closeAfter: 2, expectedPhase: 'timeout', output: '' },
+    { name: 'overflow-before-timeout', closeAfter: 1, expectedPhase: 'overflow', output: 'x'.repeat(65) },
+    { name: 'sensitive-before-timeout', closeAfter: 1, expectedPhase: 'sensitive-output', output: 'RAW_PROMPT' },
+  ]) await context.test(entry.name, async () => {
+    const homeDir = await mkdtemp(join(tmpdir(), 'memory-client-timeout-'));
+    await mkdir(join(homeDir, '.memory'));
+    const bundleFile = join(homeDir, '.memory', 'agent-bundle.json');
+    await writeFile(bundleFile, JSON.stringify({ memory_user_key: key, identity }));
+    const child = new EventEmitter();
+    child.stdout = new PassThrough();
+    child.stderr = new PassThrough();
+    const signals = [];
+    child.kill = (signal) => { signals.push(signal); return true; };
+    process.nextTick(() => { if (entry.output) child.stderr.write(entry.output); });
+    let settled = false;
+    try {
+      const promise = diagnoseClientLaunch({
+        client: 'opencode', homeDir, bundleFile, spaceId: 'default', args: ['run'], spawnProcess: () => child,
+        capture: { maxBytes: 64, sensitiveValues: ['RAW_PROMPT'] }, timeoutMs: 5, killGraceMs: 5,
+      });
+      promise.then(() => { settled = true; });
+      for (let attempt = 0; signals.length < entry.closeAfter && attempt < 100; attempt += 1) await delay(1);
+      assert.deepEqual(signals, entry.closeAfter === 1 ? ['SIGTERM'] : ['SIGTERM', 'SIGKILL']);
+      assert.equal(settled, false);
+      child.emit('close', null, entry.closeAfter === 1 ? 'SIGTERM' : 'SIGKILL');
+      const result = await promise;
+      assert.equal(result.phase, entry.expectedPhase);
+      assert.equal(result.category, 'none');
+      assert.equal(result.outputPresent, entry.output.length > 0);
     } finally { await rm(homeDir, { recursive: true, force: true }); }
   });
 });

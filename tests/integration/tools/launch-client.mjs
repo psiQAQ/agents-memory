@@ -11,12 +11,12 @@ const clients = {
 };
 const privateEnvironment = ['MEMORY_USER_KEY', 'TDAI_MEMORY_USER_KEY', 'MEMORY_TEAM_ID', 'MEMORY_AGENT_ID', 'MEMORY_TASK_ID', 'MEMORY_SESSION_ID'];
 const categoryPatterns = [
-  ['filesystem', [/\b(?:EACCES|EPERM|ENOENT)\b/i, /permission denied|read-only file system/i]],
-  ['settings', [/invalid (?:settings|configuration)/i, /failed to (?:parse|load) (?:settings|configuration)/i]],
-  ['auth-onboarding', [/not logged in/i, /please (?:run )?\/login/i, /authentication required/i, /api key (?:is )?(?:missing|required)/i]],
-  ['transport', [/\b(?:ECONNREFUSED|ECONNRESET|ENOTFOUND|EAI_AGAIN|ETIMEDOUT)\b/i, /network error|fetch failed|connection refused/i]],
-  ['http4xx', [/\b(?:HTTP(?: status)?|status(?: code)?|response)\s*[:=]?\s*4\d\d\b/i]],
-  ['http5xx', [/\b(?:HTTP(?: status)?|status(?: code)?|response)\s*[:=]?\s*5\d\d\b/i]],
+  ['filesystem', [/^(?:error:\s*)?(?:EACCES|EPERM|ENOENT)\b(?::.*)?$/im, /^(?:error:\s*)?(?:permission denied|read-only file system)(?::.*)?$/im]],
+  ['settings', [/^(?:error:\s*)?(?:invalid (?:settings|configuration)|failed to (?:parse|load) (?:settings|configuration))(?:[.:].*)?$/im]],
+  ['auth-onboarding', [/^(?:error:\s*)?(?:not logged in|please (?:run )?\/login|authentication required|api key (?:is )?(?:missing|required))(?:[.:].*)?$/im]],
+  ['transport', [/^(?:error:\s*)?(?:connect\s+)?(?:ECONNREFUSED|ECONNRESET|ENOTFOUND|EAI_AGAIN|ETIMEDOUT)\b(?::.*)?$/im, /^(?:error:\s*)?(?:fetch failed|connection refused)(?::.*)?$/im]],
+  ['http4xx', [/^API Error:\s*(?:4\d\d|Request rejected \(4\d\d\))\s*$/im]],
+  ['http5xx', [/^API Error:\s*(?:5\d\d|Request rejected \(5\d\d\))\s*$/im]],
 ];
 
 async function prepareClient({ client, homeDir, bundleFile, spaceId, args, template, capture, parentEnvironment }) {
@@ -38,7 +38,7 @@ function classifyOutput(output) {
   return matches.length === 1 ? matches[0][0] : 'unknown';
 }
 
-function captureChild(child, rendered, capture, timeoutMs) {
+function captureChild(child, rendered, capture, timeoutMs, killGraceMs) {
   const chunks = [];
   let size = 0;
   let overflow = false;
@@ -54,30 +54,36 @@ function captureChild(child, rendered, capture, timeoutMs) {
   const sensitiveValues = [...new Set([...Object.values(rendered.environment), ...capture.sensitiveValues])];
   return new Promise((resolve) => {
     let settled = false;
-    let timer;
+    let timedOut = false;
+    let timeoutTimer;
+    let graceTimer;
     const finish = (basePhase, code = null) => {
       if (settled) return;
       settled = true;
-      if (timer !== undefined) clearTimeout(timer);
+      if (timeoutTimer !== undefined) clearTimeout(timeoutTimer);
+      if (graceTimer !== undefined) clearTimeout(graceTimer);
       const outputPresent = size > 0;
       if (overflow) return resolve({ phase: 'overflow', category: 'none', outputPresent, code: null });
       const output = Buffer.concat(chunks).toString('utf8');
       if (sensitiveValues.some((value) => output.includes(value))) return resolve({ phase: 'sensitive-output', category: 'none', outputPresent, code: null });
+      if (timedOut) return resolve({ phase: 'timeout', category: 'none', outputPresent, code: null });
       if (basePhase !== 'exit') return resolve({ phase: basePhase, category: 'none', outputPresent, code: null });
       if (code === 0) return resolve({ phase: 'cli-zero', category: 'none', outputPresent, code });
       return resolve({ phase: 'cli-nonzero', category: classifyOutput(output), outputPresent, code: code ?? 1 });
     };
-    child.once('error', () => finish('spawn-failure'));
+    child.once('error', () => { if (!timedOut) finish('spawn-failure'); });
     child.once('close', (code, signal) => finish(signal ? 'signal' : 'exit', code));
-    if (timeoutMs !== undefined) timer = setTimeout(() => {
-      try { child.kill?.(); } catch {}
-      finish('timeout');
+    if (timeoutMs !== undefined) timeoutTimer = setTimeout(() => {
+      timedOut = true;
+      try { child.kill?.('SIGTERM'); } catch {}
+      graceTimer = setTimeout(() => { try { child.kill?.('SIGKILL'); } catch {} }, killGraceMs);
     }, timeoutMs);
   });
 }
 
-export async function diagnoseClientLaunch({ client, homeDir, bundleFile, spaceId, args = [], template, capture, timeoutMs = 180000, spawnProcess = spawn, parentEnvironment = process.env }) {
-  if (!capture || !Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 600000) throw new Error('invalid launcher arguments');
+export async function diagnoseClientLaunch({ client, homeDir, bundleFile, spaceId, args = [], template, capture, timeoutMs = 180000, killGraceMs = 5000, spawnProcess = spawn, parentEnvironment = process.env }) {
+  if (!capture || !Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 600000
+    || !Number.isInteger(killGraceMs) || killGraceMs < 1 || killGraceMs > 60000) throw new Error('invalid launcher arguments');
   const prepared = await prepareClient({ client, homeDir, bundleFile, spaceId, args, template, capture, parentEnvironment });
   let child;
   try {
@@ -85,7 +91,7 @@ export async function diagnoseClientLaunch({ client, homeDir, bundleFile, spaceI
   } catch {
     return { phase: 'spawn-failure', category: 'none', outputPresent: false };
   }
-  const { phase, category, outputPresent } = await captureChild(child, prepared.rendered, capture, timeoutMs);
+  const { phase, category, outputPresent } = await captureChild(child, prepared.rendered, capture, timeoutMs, killGraceMs);
   return { phase, category, outputPresent };
 }
 
