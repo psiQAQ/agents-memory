@@ -80,4 +80,4 @@ flowchart LR
 
 ## 下一 Gate
 
-Task 5 `auth.serviceToken` 与 Mock fixture fixes/replacement images 均保持 **Ready（build/assets only）**，但正式 run 已在 Claude write fail-stop。下一 Gate 不是重跑、TUI 或真实模型，而是先取得 Claude `-p`/capture/CLI-before-Proxy 路径的最小、无 secret 诊断证据并确定原因；当前 project/evidence 必须保留至脱敏归档与授权 cleanup。后续两次写入、六次有序跨 owner 读取、final oracle 与三个真实 headless 均为 Not Run；真实 API、TUI 与 Codex Stage 2 仍为 Not Run。active gitlink 在获得独立 push/归档授权前仍无法由 fresh clone 获取。
+Task 5 `auth.serviceToken` 与 Mock fixture fixes/replacement images 均保持 **Ready（build/assets only）**，但正式 run 已在 Claude write fail-stop。下一 Gate 不是重跑、TUI 或真实模型，而是按已登记的 [Claude -p diagnostic Ready preflight](reproduction/2026-08-11-task5-diag-claude-p-20260811-6d6e9f6a-ready.md) 先取得 Claude `-p`/capture/CLI-before-Proxy 路径的最小、无 secret 诊断证据并确定原因；当前 project/evidence 必须保留至脱敏归档与授权 cleanup。后续两次写入、六次有序跨 owner 读取、final oracle 与三个真实 headless 均为 Not Run；真实 API、TUI 与 Codex Stage 2 仍为 Not Run。active gitlink 在获得独立 push/归档授权前仍无法由 fresh clone 获取。

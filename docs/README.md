@@ -36,6 +36,7 @@
 | [Task 5 deterministic Mock authfix-2eae9df1 tool fixture Blocked](reproduction/2026-08-11-task5-mock-20260811-authfix-2eae9df1-tool-fixture-blocked.md) | step 6 的 tool fixture 脱敏观测与静态 root cause | Blocked；24-case protocol/leak Failed；management/headless/final/TUI/real Not Run |
 | [Task 5 tools fixture replacement build/assets Passed](reproduction/2026-08-11-task5-tools-fixture-replacement-build-passed.md) | Mock fixture TDD/review、唯一 tools build 与 image contract | Replacement Ready；全新 deterministic Mock rerun Not Run |
 | [Task 5 deterministic Mock toolsfix-7e1031af Claude write Blocked](reproduction/2026-08-11-task5-mock-20260811-toolsfix-7e1031af-claude-write-blocked.md) | formal run 的 step 8 fail-stop 与 Claude 路径脱敏边界 | Blocked；protocol 24/24、management ok；后续写/读/final/TUI/real Not Run |
+| [Task 5 Claude -p diagnostic 6d6e9f6a Ready](reproduction/2026-08-11-task5-diag-claude-p-20260811-6d6e9f6a-ready.md) | 单次、脱敏、最小 Claude write 诊断的固定 preflight | Ready；diagnostic write/runtime/TUI/real Not Run |
 | [Legacy Docker 运行资源精确清理](reproduction/2026-08-10-legacy-docker-resources-cleanup.md) | 旧 Compose projects、容器、网络、卷和镜像的不可恢复清理审计 | Runtime Cleanup Passed；不改变四 CLI 业务 Gate |
 | [集成实验 SOP](../tests/integration/README.md) | 后续静态验证与受控运行入口 | 历史与当前 Blocked 现场保留；Claude write diagnostic pending；TUI/real Not Run |
 
