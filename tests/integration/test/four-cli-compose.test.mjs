@@ -41,7 +41,7 @@ test('active four-CLI Compose fixes product images, profiles, private network, a
   assert.equal(parsed.services['memory-core'].image, 'local/refine-memory-core:49c4536-fix1@sha256:fded9d48d76bf71d0652023be0e9aa5553d46c039cc04ace0ec7c1e370f95d44');
   assert.equal(parsed.services['memory-proxy'].image, 'local/refine-memory-proxy:9e456a5-auth-fix@sha256:55fedae3f6a3a0a45ac8be45461d8cab23c52f11cc089c1c1e54c7d236de764b');
   assert.equal(parsed.services['memory-hub'].image, 'local/refine-memory-hub:0a568c3-task2@sha256:a60377245cb4cfff6f5769910ff3a7f4b2fa7b0b64a756a69bf2c552408c44e4');
-  const claudeImage = 'refine-memory-claude-code:2.1.226@sha256:058eccaf56507941c27fd1ce57e69cb6ae5cff20680e7a36ed80bddb22ec946b';
+  const claudeImage = 'refine-memory-claude-code:2.1.226@sha256:261a917376f791d9b5e092040c2f488f23588b7103a27606226426f273b040dd';
   assert.equal(parsed.services['claude-client'].image, claudeImage);
   assert.equal(parsed.services['claude-headless'].image, claudeImage);
   assert.deepEqual(parsed.services['mock-llm'].profiles, ['mock']);
@@ -154,6 +154,17 @@ test('active client containers are non-root and receive only their private home 
     assert.doesNotMatch(JSON.stringify(headless), /bootstrap-state|\/state|docker\.sock|DEEPSEEK/i);
   }
   assert.equal(clientVolumes.size, 6);
+});
+
+test('Claude read-only services receive only a bounded hardened temporary filesystem', () => {
+  const { parsed } = composeConfig();
+  const expected = ['/tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777'];
+  assert.deepEqual(parsed.services['claude-client'].tmpfs, expected);
+  assert.deepEqual(parsed.services['claude-headless'].tmpfs, expected);
+  for (const client of ['opencode', 'pi']) {
+    assert.equal(parsed.services[`${client}-client`].tmpfs, undefined);
+    assert.equal(parsed.services[`${client}-headless`].tmpfs, undefined);
+  }
 });
 
 test('active base and every explicit profile overlay parse without a secret-bearing launcher', () => {

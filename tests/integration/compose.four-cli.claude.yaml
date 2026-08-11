@@ -12,13 +12,14 @@ services:
       - claude-home:/agent-home
     restart: "no"
   claude-client:
-    image: refine-memory-claude-code:2.1.226@sha256:058eccaf56507941c27fd1ce57e69cb6ae5cff20680e7a36ed80bddb22ec946b
+    image: refine-memory-claude-code:2.1.226@sha256:261a917376f791d9b5e092040c2f488f23588b7103a27606226426f273b040dd
     profiles: ["claude"]
     user: "10001:10001"
     init: true
     stdin_open: true
     tty: true
     read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777"]
     cap_drop: ["ALL"]
     security_opt: ["no-new-privileges:true"]
     depends_on:
@@ -34,11 +35,12 @@ services:
       - claude-workspace:/workspace
     command: ["--version"]
   claude-headless:
-    image: refine-memory-claude-code:2.1.226@sha256:058eccaf56507941c27fd1ce57e69cb6ae5cff20680e7a36ed80bddb22ec946b
+    image: refine-memory-claude-code:2.1.226@sha256:261a917376f791d9b5e092040c2f488f23588b7103a27606226426f273b040dd
     profiles: ["claude"]
     user: "10001:10001"
     init: true
     read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777"]
     cap_drop: ["ALL"]
     security_opt: ["no-new-privileges:true"]
     depends_on:
