@@ -2,7 +2,7 @@
 
 ## 结论
 
-当前 active 目标是四 Docker CLI 共享记忆实验。Task 5 的 Proxy→Core auth service-token、Mock fixture 与 Claude EROFS/tmpfs 缺口均已完成 TDD、固定 replacement images 与 scoped review。全新 `113ca669` 单次 diagnostic 已 Runtime Passed：Claude exit0、Proxy DNS/TCP true、Mock 精确一个 expected main request、operation/path/marker 有效，且无额外请求、泄漏、丢弃或截断；该 project 已 exact cleanup 5/1/9 → `0/0/0`。当前下一 Gate 为 **完整 deterministic Mock Ready / Not Run**。三写六读、final、三个正式 headless、TUI 与真实 API/模型仍为 **Not Run**。
+当前 active 目标是四 Docker CLI 共享记忆实验。Task 5 的 Proxy→Core auth service-token、Mock fixture 与 Claude EROFS/tmpfs 缺口均已完成 TDD、固定 replacement images 与 scoped review；`113ca669` single Claude diagnostic Passed 并 exact cleanup。全新 `e83748e2` 已通过 project/evidence freshness、7-image、merged config 与 port preflight，当前为 **完整 deterministic Mock Ready / Not Run**。三写六读、final、三个正式 headless、TUI 与真实 API/模型仍为 **Not Run**。
 
 旧 Windows 原生 Claude + Docker Claude 证据一律是 **Legacy**：保留原文供追溯，但不用于推断新的四 CLI 架构已通过。
 
@@ -80,4 +80,4 @@ flowchart LR
 
 ## 下一 Gate
 
-[113ca669 diagnostic Passed](reproduction/2026-08-12-task5-diag-claude-p-20260812-113ca669-passed.md) 与 [exact cleanup](reproduction/2026-08-12-task5-diag-claude-p-20260812-113ca669-exact-cleanup-passed.md) 已归档。下一 Gate 是全新唯一 tuple 的 tracked 17-step deterministic Mock launcher：protocol/leak 24 cases → management/outsider → 三次 write → 六次 ordered cross-owner read → final oracle。不得复用 diagnostic project，不 build、retry、TUI 或真实模型；失败必须 fail-stop 并另增 reproduction，成功 project 则保留到 scoped review 与用户 TUI 决策。真实 API、TUI 与 Codex Stage 2 仍为 Not Run。active gitlink 在获得独立 push/归档授权前仍无法由 fresh clone 获取。
+[e83748e2 full Mock Ready](reproduction/2026-08-12-task5-mock-20260812-e83748e2-ready.md) 固定全新 run/project/evidence 与 7 个 exact images。下一 Gate 只允许 tracked 17-step deterministic Mock launcher：protocol/leak 24 cases → management/outsider → 三次 write → 六次 ordered cross-owner read → final oracle。不得 build、retry、TUI 或真实模型；失败必须 fail-stop 并另增 reproduction，成功 project 则保留到 scoped review 与用户 TUI 决策。真实 API、TUI 与 Codex Stage 2 仍为 Not Run。active gitlink 在获得独立 push/归档授权前仍无法由 fresh clone 获取。

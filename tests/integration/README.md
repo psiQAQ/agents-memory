@@ -6,7 +6,7 @@
 
 **Fact**：upstream base 锁定 `feat/server_team@0a568c328ea1aae3f22ed3656e7900da7ea565c1`，active fork/gitlink 为 reviewed Task 5 auth service-token fix `9e456a5b7bb47ae40596237d0f0b87c1edfc098f`。该 commit 是 local-only；`origin/codex/four-agent-memory-upstream` 仍为 `38ced16f46fed640bcb7360fb1ca45f9f9918628`，未经单独授权不得 push，fresh clone 暂不可取得。Stage 1 是 Claude Code `2.1.226`、OpenCode `1.18.16`、Pi `0.84.1`，Stage 2 是 Codex `0.147.0`。
 
-**Fact**：Task 5 auth service-token、Mock fixture 与 Claude EROFS/tmpfs fixes/replacement images 均已 Passed。`113ca669` single Claude diagnostic 为 code0、Proxy DNS/TCP true、exact expected main delta1、operation/path/marker valid、unsafe/dropped/truncated false；该 project 已 exact cleanup 5/1/9 → `0/0/0`。下一 Gate 是全新 tuple 的完整 tracked 17-step deterministic Mock；三写六读/final/三个正式 headless、TUI 与真实/Paid 模型仍为 Not Run。
+**Fact**：Task 5 auth service-token、Mock fixture 与 Claude EROFS/tmpfs fixes/replacement images 均已 Passed；`113ca669` single Claude diagnostic Passed/cleaned。全新 `e83748e2` 的 run/project/evidence freshness、7 exact images、merged config 与 port preflight Passed，当前是 full deterministic Mock Ready / Not Run。三写六读/final/三个正式 headless、TUI 与真实/Paid 模型仍为 Not Run。
 
 **Fact**：legacy ref `codex/legacy-proxy-hardening-69fd8b@69fd8b31e3fd4362af6c65407b92b26dfabebd0c` 是 local-only、未 push；fresh clone 不可取得，未经授权不得 push。跨 clone 可重建保全需要 push 或外部归档授权，在此之前仍未完成。
 
@@ -103,9 +103,9 @@ Root full Node 为 232/232，base + `mock`、`real`、`claude`、`opencode`、`p
 
 完整前置链见 [privacy/build Passed](../../docs/reproduction/2026-08-11-task5-proxy-privacy-build-passed.md)、[EROFS/tmpfs fix Passed](../../docs/reproduction/2026-08-12-task5-claude-erofs-tmpfs-fix-passed.md)、[113ca669 diagnostic Passed](../../docs/reproduction/2026-08-12-task5-diag-claude-p-20260812-113ca669-passed.md) 与 [113ca669 exact cleanup](../../docs/reproduction/2026-08-12-task5-diag-claude-p-20260812-113ca669-exact-cleanup-passed.md)。下一步仅为全新 tuple 的完整 deterministic Mock；不得将单次 diagnostic 扩写为三写六读/final/TUI/real 通过。
 
-## Task 5 Mock runtime 启动器（full deterministic Mock Ready / Not Run）
+## Task 5 Mock runtime 启动器（e83748e2 Ready / Not Run）
 
-历史固定 Mock/diagnostic runs 均保持 append-only。`113ca669` diagnostic Passed 且已 exact cleanup；下一次 runtime 必须生成全新的 run/project/evidence tuple，并只由 tracked `run-task5-mock.mjs` 执行固定 17 步。失败立即停并保留现场；成功在 scoped review 与用户 TUI 决策前保留 project，不读取 raw logs/evidence。
+历史固定 Mock/diagnostic runs 均保持 append-only。`e83748e2` 是当前唯一 Ready tuple，只由 tracked `run-task5-mock.mjs` 执行固定 17 步。失败立即停并保留现场；成功在 scoped review 与用户 TUI 决策前保留 project，不读取 raw logs/evidence。
 
 启动器不读取 Tencent `.env`、模型 key、settings、home 或旧 evidence；它只运行固定的 Mock 顺序，不接受任意命令，也不会执行 build、`down`、`down -v` 或 prune。以下命令保留为合同参考，不得用于覆盖或复用上述失败 tuple。
 
@@ -151,7 +151,7 @@ try {
 1. **Task 2（Passed，build/assets only）**：固定 image ID/digest 与不可变 RED→GREEN 已归档；不扩写为服务或业务通过。
 2. **Task 3（Passed，handler/route + build/assets only）**：三平台 literal Messages/`count_tokens` route、source/session fail-closed、Anthropic system context 与选定 console privacy 已固定；不扩写为服务业务或 comprehensive leak Gate 通过。
 3. **Task 4（Passed，client build/config assets only）**：active Compose、三客户端身份/config/image 已固定；不扩写为服务或业务流通过。
-4. **Task 5（full deterministic Mock Ready / Not Run）**：single Claude diagnostic Passed/cleaned。下一步为全新 tuple 的 fixed 17-step launcher；后续三写、六读、outsider、final oracle 与三个正式 headless 尚未运行，不得提前进入 TUI/real。
+4. **Task 5（e83748e2 Ready / Not Run）**：single Claude diagnostic Passed/cleaned；唯一 full Mock tuple preflight Passed。下一步仅运行 tracked fixed 17-step launcher；不得提前进入 TUI/real。
 5. **Task 6**：完整 Mock Gate 后且负责人明确授权，才可使用 host-only 双 key 与预算限制做真实 Stage 1。
 6. **Task 7–8**：在 Stage 1 后实现/验证 Codex Responses 与四客户端 binding 上限。
 
