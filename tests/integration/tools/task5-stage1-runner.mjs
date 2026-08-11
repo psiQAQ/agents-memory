@@ -8,6 +8,7 @@ import { stage1Marker, stage1OperationDigest, stage1OperationHash, stage1Sources
 const fixtures = ['text', 'stream', 'tool', 'count', 'http-400', 'http-429', 'http-500', 'timeout'];
 const clients = Object.keys(sources);
 const identityPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+const runIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const evidenceFiles = new Set(['stage1-mock.json', 'stage1-shared-memory.json', 'stage1-management.json']);
 const forbiddenHeaders = new Set([
   'authorization', 'cookie', 'cf-access-jwt-assertion', 'x-agent-id', 'x-claude-code-session-id',
@@ -56,13 +57,13 @@ function exactSet(actual, expected) {
     && [...actual].sort().every((value, index) => value === [...expected].sort()[index]);
 }
 
-async function loadStage1Manifest(manifestPath) {
-  if (!isAbsolute(manifestPath ?? '')) throw new Error('invalid Stage 1 manifest');
+async function loadStage1Manifest(manifestPath, expectedRunId) {
+  if (!isAbsolute(manifestPath ?? '') || !runIdPattern.test(expectedRunId ?? '')) throw new Error('invalid Stage 1 manifest');
   let manifest;
   const manifestDirectory = dirname(resolve(manifestPath));
   try {
     manifest = validateManifest(JSON.parse(await readFile(manifestPath, 'utf8')), manifestDirectory);
-    if (!exactSet(Object.keys(manifest.clients), clients)) throw new Error();
+    if (manifest.run_id !== expectedRunId || !exactSet(Object.keys(manifest.clients), clients)) throw new Error();
     const outsider = manifest.outsider;
     validateManifest({
       run_id: manifest.run_id,
@@ -209,12 +210,9 @@ function validProtocolResponse(fixture, status, contentType, bytes, sensitiveVal
   return messageEnvelope(data, 'end_turn') && block?.type === 'text' && typeof block.text === 'string' && block.text.length > 0;
 }
 
-export async function runProtocolLeakGate({ manifestPath, proxyUrl, mockUrl, outputDir, timeoutMs = 100 }) {
+export async function runProtocolLeakGate({ manifestPath, runId, proxyUrl, mockUrl, outputDir, timeoutMs = 100 }) {
   if (![manifestPath, outputDir].every((path) => isAbsolute(path ?? '')) || ![proxyUrl, mockUrl].every((url) => /^https?:\/\//.test(url ?? '')) || !Number.isInteger(timeoutMs) || timeoutMs < 10 || timeoutMs > 5000) throw new Error('invalid Stage 1 arguments');
-  let manifest;
-  try { manifest = validateManifest(JSON.parse(await readFile(manifestPath, 'utf8')), dirname(resolve(manifestPath))); } catch { throw new Error('invalid Stage 1 manifest'); }
-  if (Object.keys(manifest.clients).sort().join(',') !== 'claude,opencode,pi') throw new Error('invalid Stage 1 manifest');
-  const manifestDirectory = dirname(resolve(manifestPath));
+  const { manifest, manifestDirectory } = await loadStage1Manifest(manifestPath, runId);
   const keys = Object.fromEntries(await Promise.all(Object.entries(manifest.clients).map(async ([client, value]) => [client, await readKey(resolve(manifestDirectory, value.credential_file))])));
   const assertions = [];
   for (const entry of buildLeakCases()) {
@@ -320,11 +318,11 @@ function ownedMarkerMatches(items, marker, owner) {
     && item.team_id === owner.team_id && item.user_id === owner.user_id && item.agent_id === owner.agent_id && item.task_id === owner.task_id) : [];
 }
 
-export async function runOwnerOracle({ manifestPath, gatewayTokenFile, coreUrl, client, pollAttempts = 30, pollIntervalMs = 1000 }, dependencies = {}) {
+export async function runOwnerOracle({ manifestPath, runId, gatewayTokenFile, coreUrl, client, pollAttempts = 30, pollIntervalMs = 1000 }, dependencies = {}) {
   if (![manifestPath, gatewayTokenFile].every((path) => isAbsolute(path ?? '')) || !/^https?:\/\//.test(coreUrl ?? '') || !clients.includes(client)
     || !Number.isInteger(pollAttempts) || pollAttempts < 1 || pollAttempts > 120 || !Number.isInteger(pollIntervalMs) || pollIntervalMs < 0 || pollIntervalMs > 10000) throw new Error('invalid Stage 1 owner oracle arguments');
   try {
-    const { manifest, manifestDirectory } = await loadStage1Manifest(manifestPath);
+    const { manifest, manifestDirectory } = await loadStage1Manifest(manifestPath, runId);
     const key = await readKey(resolve(manifestDirectory, manifest.clients[client].credential_file));
     const gatewayToken = await readGatewayToken(gatewayTokenFile);
     const core = dependencies.core ?? coreRequest;
@@ -344,12 +342,12 @@ export async function runOwnerOracle({ manifestPath, gatewayTokenFile, coreUrl, 
   } catch { throw new Error('Stage 1 owner oracle failed'); }
 }
 
-export async function runOperationOracle({ manifestPath, gatewayTokenFile, coreUrl, scenario, client, owner }, dependencies = {}) {
+export async function runOperationOracle({ manifestPath, runId, gatewayTokenFile, coreUrl, scenario, client, owner }, dependencies = {}) {
   if (![manifestPath, gatewayTokenFile].every((path) => isAbsolute(path ?? '')) || !/^https?:\/\//.test(coreUrl ?? '')
     || !clients.includes(client)) throw new Error('invalid Stage 1 operation oracle arguments');
   try {
     stage1OperationDigest('validation-run', scenario, client, owner);
-    const { manifest, manifestDirectory } = await loadStage1Manifest(manifestPath);
+    const { manifest, manifestDirectory } = await loadStage1Manifest(manifestPath, runId);
     const key = await readKey(resolve(manifestDirectory, manifest.clients[client].credential_file));
     const gatewayToken = await readGatewayToken(gatewayTokenFile);
     const core = dependencies.core ?? coreRequest;
@@ -451,19 +449,19 @@ async function verifyClientEvidence(root) {
   return count;
 }
 
-export async function runFinalizeGate({ manifestPath, gatewayTokenFile, coreUrl, mockUrl, outputDir, clientEvidenceRoot }, dependencies = {}) {
+export async function runFinalizeGate({ manifestPath, runId, gatewayTokenFile, coreUrl, mockUrl, outputDir, clientEvidenceRoot }, dependencies = {}) {
   if (![manifestPath, gatewayTokenFile, outputDir, clientEvidenceRoot].every((path) => isAbsolute(path ?? '')) || ![coreUrl, mockUrl].every((url) => /^https?:\/\//.test(url ?? ''))) throw new Error('invalid Stage 1 final gate arguments');
   let assertion = 'manifest';
   try {
-    const { manifest } = await loadStage1Manifest(manifestPath);
+    const { manifest } = await loadStage1Manifest(manifestPath, runId);
     const ownerOracle = dependencies.ownerOracle ?? runOwnerOracle;
     const operationOracle = dependencies.operationOracle ?? runOperationOracle;
     assertion = 'owner-oracle';
     const actions = stage1Actions();
     for (const action of actions) {
       const result = action.scenario === 'write'
-        ? await ownerOracle({ manifestPath, gatewayTokenFile, coreUrl, client: action.client })
-        : await operationOracle({ manifestPath, gatewayTokenFile, coreUrl, ...action });
+        ? await ownerOracle({ manifestPath, runId, gatewayTokenFile, coreUrl, client: action.client })
+        : await operationOracle({ manifestPath, runId, gatewayTokenFile, coreUrl, ...action });
       if (result?.status !== 'ok' || result.l0_matches !== 1 || (action.scenario === 'write' && (!Number.isInteger(result.l1_matches) || result.l1_matches < 1))) throw new Error();
     }
     assertion = 'operation-aggregate';
@@ -579,11 +577,11 @@ async function panelRequest(path, { panelUrl }) {
   return { status: response.status, contentType: response.headers.get('content-type') ?? '' };
 }
 
-export async function runManagementGate({ manifestPath, gatewayTokenFile, coreUrl, proxyUrl, mockUrl, panelUrl, outputDir }, dependencies = {}) {
+export async function runManagementGate({ manifestPath, runId, gatewayTokenFile, coreUrl, proxyUrl, mockUrl, panelUrl, outputDir }, dependencies = {}) {
   if (![manifestPath, gatewayTokenFile, outputDir].every((path) => isAbsolute(path ?? '')) || ![coreUrl, proxyUrl, mockUrl, panelUrl].every((url) => /^https?:\/\//.test(url ?? ''))) throw new Error('invalid Stage 1 management arguments');
   let assertion = 'manifest';
   try {
-    const { manifest, manifestDirectory } = await loadStage1Manifest(manifestPath);
+    const { manifest, manifestDirectory } = await loadStage1Manifest(manifestPath, runId);
     assertion = 'credentials';
     const { keys, gatewayToken } = await loadStage1Secrets(manifest, manifestDirectory, gatewayTokenFile);
     const actors = { ...manifest.clients, outsider: manifest.outsider };
@@ -751,9 +749,9 @@ function parse(argv, allowed) {
 }
 
 export async function runTask5Cli(argv, environment = process.env, dependencies = {}) {
-  const values = parse(argv, new Set(['--manifest', '--scenario', '--gateway-token-file', '--output-dir', '--client-evidence-root', '--client']));
+  const values = parse(argv, new Set(['--manifest', '--run-id', '--scenario', '--gateway-token-file', '--output-dir', '--client-evidence-root', '--client']));
   const scenario = values['--scenario'];
-  if (!values['--manifest'] || !values['--gateway-token-file'] || !values['--output-dir'] || !['protocol-leak', 'owner-oracle', 'management', 'finalize'].includes(scenario)
+  if (!values['--manifest'] || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(values['--run-id'] ?? '') || !values['--gateway-token-file'] || !values['--output-dir'] || !['protocol-leak', 'owner-oracle', 'management', 'finalize'].includes(scenario)
     || (scenario === 'owner-oracle') !== Boolean(values['--client']) || (values['--client'] && !clients.includes(values['--client']))
     || (scenario === 'finalize' && !values['--client-evidence-root'])) throw new Error('invalid Stage 1 CLI arguments');
   const http = (name) => {
@@ -761,7 +759,7 @@ export async function runTask5Cli(argv, environment = process.env, dependencies 
     if (!/^https?:\/\//.test(value ?? '')) throw new Error('invalid Stage 1 CLI arguments');
     return value;
   };
-  const common = { manifestPath: values['--manifest'] };
+  const common = { manifestPath: values['--manifest'], runId: values['--run-id'] };
   if (scenario === 'protocol-leak') {
     const protocol = dependencies.protocol ?? runProtocolLeakGate;
     return protocol({ ...common, proxyUrl: http('PROXY_BASE_URL'), mockUrl: http('MOCK_BASE_URL'), outputDir: values['--output-dir'] });

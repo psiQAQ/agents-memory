@@ -27,6 +27,9 @@ active Compose 静态入口固定为 `compose.four-cli.yaml` 加所需 overlay�
 ```powershell
 $base = 'tests/integration/compose.four-cli.yaml'
 $env:MEMORY_CORE_GATEWAY_API_KEY = 'task4-static-gateway-key'
+$env:RUN_ID = 'task5-static'
+$env:COMPOSE_PROJECT_NAME = 'task5-static'
+$env:EVIDENCE_DIR = [System.IO.Path]::GetFullPath((Join-Path $PWD '.runtime\static\task5-static'))
 try {
   foreach ($profile in @('mock', 'real', 'claude', 'opencode', 'pi', 'management')) {
     docker compose --profile $profile -f $base `
@@ -35,6 +38,9 @@ try {
   }
 } finally {
   Remove-Item Env:MEMORY_CORE_GATEWAY_API_KEY -ErrorAction SilentlyContinue
+  Remove-Item Env:RUN_ID -ErrorAction SilentlyContinue
+  Remove-Item Env:COMPOSE_PROJECT_NAME -ErrorAction SilentlyContinue
+  Remove-Item Env:EVIDENCE_DIR -ErrorAction SilentlyContinue
 }
 ```
 
@@ -91,6 +97,37 @@ Root full Node 为 104/104，base + `mock`、`real`、`claude`、`opencode`、`p
 产品范围 `0bba4d7..d6afcd8` 关闭 upstream header/credential origin/redirect、结构化 telemetry sinks 与 active/auxiliary/injection/bootstrap diagnostics；product suite 113/113 和 independent review CLEAN。唯一 official public-context build 固定为 `local/refine-memory-proxy:d6afcd8-task5@sha256:d79751b6dca733c5aec2ea11a4484cc4184068373dde14c0f01e6793c6bc30e8`，UID10001、6 shell、SQLite 3.49.2、node-pty、public stub/source、tsx/tini Passed。这是 **Runtime Passed（product tests + build/assets only）**。
 
 完整证据见 [privacy RED](../../docs/reproduction/2026-08-11-task5-proxy-privacy-hardening-red.md) 与 [privacy/build Passed](../../docs/reproduction/2026-08-11-task5-proxy-privacy-build-passed.md)。独立根集成 review 前不得启动业务栈；review 通过后的实际顺序固定为 protocol/leak → management/outsider → 三次顺序写入 → 六次有序跨 owner 读取 → final oracle。三个真实 headless 全绿后才由用户确认 TUI。当前所有 live business steps 均为 **Not Run / User Confirmation Pending**，本节没有授权真实模型或破坏性清理。
+
+## Task 5 Mock runtime 启动器（下一 Gate，尚未运行）
+
+只有独立根集成 review、所需 tools/三客户端镜像重建与产品安全修复全部通过后，才能执行本节。启动器不读取 Tencent `.env`、模型 key、settings、home 或旧 evidence；它只运行固定的 Mock 顺序，不接受任意命令，也不会执行 build、`down`、`down -v` 或 prune。
+
+```powershell
+$runId = "task5-mock-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+$evidenceParent = [System.IO.Path]::GetFullPath((Join-Path $PWD '.runtime\runs'))
+New-Item -ItemType Directory -Force -Path $evidenceParent | Out-Null
+
+$env:RUN_ID = $runId
+$env:COMPOSE_PROJECT_NAME = "refine-memory-$runId"
+$env:EVIDENCE_DIR = Join-Path $evidenceParent $runId
+$env:MEMORY_CORE_GATEWAY_API_KEY = "task5-$([guid]::NewGuid().ToString('N'))"
+
+if (Test-Path -LiteralPath $env:EVIDENCE_DIR) {
+  throw "EVIDENCE_DIR must be a new path: $env:EVIDENCE_DIR"
+}
+
+try {
+  node tests/integration/tools/run-task5-mock.mjs
+  if ($LASTEXITCODE -ne 0) { throw 'Task 5 Mock launcher failed' }
+} finally {
+  Remove-Item Env:MEMORY_CORE_GATEWAY_API_KEY -ErrorAction SilentlyContinue
+  Remove-Item Env:RUN_ID -ErrorAction SilentlyContinue
+  Remove-Item Env:COMPOSE_PROJECT_NAME -ErrorAction SilentlyContinue
+  Remove-Item Env:EVIDENCE_DIR -ErrorAction SilentlyContinue
+}
+```
+
+启动器固定执行 long-running services → bootstrap → 三个 client config → protocol/leak → management/outsider → 三写 → 六读 → final oracle。任一步失败都会立即停止后续命令；精确 Compose project、volumes 与 evidence 目录必须保留诊断，不得自动清理。成功也只代表该唯一 Mock run，通过 review 和归档前同样不做破坏性清理。TUI 与真实模型均不在此启动器范围内。
 
 ## 后续受控顺序
 

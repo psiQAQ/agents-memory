@@ -115,6 +115,8 @@ services:
       - /runtime-config/gateway.token
       - --output-dir
       - /evidence
+      - --run-id
+      - ${RUN_ID:?set RUN_ID}
       - --client-evidence-root
       - /client-evidence
       - --scenario
@@ -126,6 +128,6 @@ services:
       - opencode-evidence:/client-evidence/opencode:ro
       - pi-evidence:/client-evidence/pi:ro
       - type: bind
-        source: ${EVIDENCE_DIR:-../../.runtime/runs/task5-manual}
+        source: ${EVIDENCE_DIR:?set EVIDENCE_DIR}
         target: /evidence
     restart: "no"

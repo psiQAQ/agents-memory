@@ -57,5 +57,5 @@ services:
       - claude-workspace:/workspace
       - claude-evidence:/client-evidence
     entrypoint: ["node", "/opt/memory-client/task5-headless-client.mjs"]
-    command: ["--client", "claude", "--run-id", "${RUN_ID:-task5-static}", "--home-dir", "/home/agent", "--bundle-file", "/home/agent/.memory/agent-bundle.json", "--space-id", "${MEMORY_SPACE_ID:-default}", "--template", "/opt/memory-client/settings.template.json", "--evidence-dir", "/client-evidence"]
+    command: ["--client", "claude", "--run-id", "${RUN_ID:?set RUN_ID}", "--home-dir", "/home/agent", "--bundle-file", "/home/agent/.memory/agent-bundle.json", "--space-id", "${MEMORY_SPACE_ID:-default}", "--template", "/opt/memory-client/settings.template.json", "--evidence-dir", "/client-evidence"]
     restart: "no"

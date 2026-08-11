@@ -219,7 +219,7 @@ test('Task 5 protocol runner executes all 24 Proxy cases and writes only atomic 
   const value = await fixture();
   try {
     const outputDir = join(value.directory, 'evidence');
-    const result = await runProtocolLeakGate({ manifestPath: value.manifestPath, proxyUrl: value.proxyUrl, mockUrl: value.mockUrl, outputDir, timeoutMs: 20 });
+    const result = await runProtocolLeakGate({ manifestPath: value.manifestPath, runId: value.manifest.run_id, proxyUrl: value.proxyUrl, mockUrl: value.mockUrl, outputDir, timeoutMs: 20 });
     assert.equal(result.status, 'ok');
     assert.equal(result.assertions.length, 24);
     assert.equal(result.assertions.filter((entry) => entry.status === 0).length, 3);
@@ -234,7 +234,7 @@ test('Task 5 owner oracle requires exact Core L0 and L1 ownership and polls only
   const calls = [];
   let atomicCalls = 0;
   try {
-    const result = await runOwnerOracle({ manifestPath: value.manifestPath, gatewayTokenFile: value.gatewayTokenFile, coreUrl: 'http://memory-core:8420', client: 'claude', pollAttempts: 3, pollIntervalMs: 0 }, {
+    const result = await runOwnerOracle({ manifestPath: value.manifestPath, runId: value.manifest.run_id, gatewayTokenFile: value.gatewayTokenFile, coreUrl: 'http://memory-core:8420', client: 'claude', pollAttempts: 3, pollIntervalMs: 0 }, {
       core: async (path, context) => {
         calls.push({ path, context });
         const owner = { team_id: 'team-shared', user_id: 'user-claude', agent_id: 'agent-claude', task_id: 'task-shared' };
@@ -258,9 +258,15 @@ test('Task 5 owner oracle requires exact Core L0 and L1 ownership and polls only
       { ...base, role: 'assistant' },
       { ...base, content: stage1Marker('task5-fixture', 'claude') },
       { ...base, user_id: 'user-opencode' },
-    ]) await assert.rejects(runOwnerOracle({ manifestPath: value.manifestPath, gatewayTokenFile: value.gatewayTokenFile, coreUrl: 'http://memory-core:8420', client: 'claude', pollAttempts: 1, pollIntervalMs: 0 }, {
+    ]) await assert.rejects(runOwnerOracle({ manifestPath: value.manifestPath, runId: value.manifest.run_id, gatewayTokenFile: value.gatewayTokenFile, coreUrl: 'http://memory-core:8420', client: 'claude', pollAttempts: 1, pollIntervalMs: 0 }, {
       core: async () => ({ status: 200, code: 0, data: { messages: [item] } }),
     }), /owner oracle failed/);
+    let mismatchedRunCoreCalls = 0;
+    await assert.rejects(runOwnerOracle({
+      manifestPath: value.manifestPath, runId: 'different-run', gatewayTokenFile: value.gatewayTokenFile,
+      coreUrl: 'http://memory-core:8420', client: 'claude', pollAttempts: 1, pollIntervalMs: 0,
+    }, { core: async () => { mismatchedRunCoreCalls += 1; return {}; } }), /owner oracle failed/);
+    assert.equal(mismatchedRunCoreCalls, 0);
   } finally { await value.close(); }
 });
 
@@ -275,6 +281,7 @@ test('Task 5 operation oracle binds a read operation to the exact reader identit
     const calls = [];
     const result = await runOperationOracle({
       manifestPath: value.manifestPath, gatewayTokenFile: value.gatewayTokenFile, coreUrl: 'http://memory-core:8420',
+      runId: value.manifest.run_id,
       scenario: 'read', client: 'opencode', owner: 'claude',
     }, { core: async (path, context) => { calls.push({ path, context }); return { status: 200, code: 0, data: { messages: [exact] } }; } });
     assert.deepEqual(result, { status: 'ok', l0_matches: 1 });
@@ -287,6 +294,7 @@ test('Task 5 operation oracle binds a read operation to the exact reader identit
     for (const item of [{ ...exact, session_id: 'session-claude' }, { ...exact, role: 'assistant' }, { ...exact, user_id: 'user-claude' }]) {
       await assert.rejects(runOperationOracle({
         manifestPath: value.manifestPath, gatewayTokenFile: value.gatewayTokenFile, coreUrl: 'http://memory-core:8420',
+        runId: value.manifest.run_id,
         scenario: 'read', client: 'opencode', owner: 'claude',
       }, { core: async () => ({ status: 200, code: 0, data: { messages: [item] } }) }), /operation oracle failed/);
     }
@@ -300,7 +308,7 @@ test('Task 5 final gate proves three writes and six ordered foreign reads withou
     const outputDir = join(value.directory, 'final-evidence');
     const clientEvidenceRoot = join(value.directory, 'client-evidence');
     await createClientEvidence(clientEvidenceRoot);
-    const result = await runFinalizeGate({ manifestPath: value.manifestPath, gatewayTokenFile: value.gatewayTokenFile, coreUrl: 'http://memory-core:8420', mockUrl: value.mockUrl, outputDir, clientEvidenceRoot }, {
+    const result = await runFinalizeGate({ manifestPath: value.manifestPath, runId: value.manifest.run_id, gatewayTokenFile: value.gatewayTokenFile, coreUrl: 'http://memory-core:8420', mockUrl: value.mockUrl, outputDir, clientEvidenceRoot }, {
       ownerOracle: async ({ client }) => { oracleOrder.push(`write:${client}`); return { status: 'ok', l0_matches: 1, l1_matches: 1 }; },
       operationOracle: async ({ scenario, client, owner }) => { oracleOrder.push(`${scenario}:${client}:${owner}`); return { status: 'ok', l0_matches: 1 }; },
       aggregate: async () => finalAggregate(value.manifest.run_id),
@@ -355,7 +363,7 @@ test('Task 5 final gate rejects wrong main-path markers, out-of-order sequences,
     for (const [name, aggregate] of cases) await context.test(name, async () => {
       const outputDir = join(value.directory, `final-negative-${name}`);
       await assert.rejects(runFinalizeGate({
-        manifestPath: value.manifestPath, gatewayTokenFile: value.gatewayTokenFile, coreUrl: 'http://memory-core:8420', mockUrl: value.mockUrl, outputDir, clientEvidenceRoot,
+        manifestPath: value.manifestPath, runId: value.manifest.run_id, gatewayTokenFile: value.gatewayTokenFile, coreUrl: 'http://memory-core:8420', mockUrl: value.mockUrl, outputDir, clientEvidenceRoot,
       }, {
         ownerOracle: async () => ({ status: 'ok', l0_matches: 1, l1_matches: 1 }),
         operationOracle: async () => ({ status: 'ok', l0_matches: 1 }),
@@ -376,7 +384,7 @@ test('Task 5 final gate rejects extra or sensitive client evidence before accept
       if (kind === 'extra-file') await writeFile(join(root, 'claude', 'unexpected.json'), '{}\n', { mode: 0o600 });
       const outputDir = join(value.directory, `final-client-evidence-${kind}`);
       await assert.rejects(runFinalizeGate({
-        manifestPath: value.manifestPath, gatewayTokenFile: value.gatewayTokenFile, coreUrl: 'http://memory-core:8420', mockUrl: value.mockUrl,
+        manifestPath: value.manifestPath, runId: value.manifest.run_id, gatewayTokenFile: value.gatewayTokenFile, coreUrl: 'http://memory-core:8420', mockUrl: value.mockUrl,
         outputDir, clientEvidenceRoot: root,
       }, {
         ownerOracle: async () => ({ status: 'ok', l0_matches: 1, l1_matches: 1 }),
@@ -443,7 +451,7 @@ test('Task 5 management gate validates topology and outsider isolation with muta
     };
   };
   try {
-    const result = await runManagementGate({ manifestPath: value.manifestPath, gatewayTokenFile: value.gatewayTokenFile, coreUrl: 'http://memory-core:8420', proxyUrl: value.proxyUrl, mockUrl: value.mockUrl, panelUrl: 'http://memory-hub:8125', outputDir: join(value.directory, 'management-evidence') }, {
+    const result = await runManagementGate({ manifestPath: value.manifestPath, runId: value.manifest.run_id, gatewayTokenFile: value.gatewayTokenFile, coreUrl: 'http://memory-core:8420', proxyUrl: value.proxyUrl, mockUrl: value.mockUrl, panelUrl: 'http://memory-hub:8125', outputDir: join(value.directory, 'management-evidence') }, {
       core: managementCoreFixture(value, ownBindings, outsiderBinding),
       reset,
       aggregate,
@@ -480,7 +488,7 @@ test('Task 5 management gate rejects a model side effect during an outsider Core
   try {
     const outputDir = join(value.directory, 'management-delta-evidence');
     await assert.rejects(runManagementGate({
-      manifestPath: value.manifestPath, gatewayTokenFile: value.gatewayTokenFile, coreUrl: 'http://memory-core:8420', proxyUrl: value.proxyUrl,
+      manifestPath: value.manifestPath, runId: value.manifest.run_id, gatewayTokenFile: value.gatewayTokenFile, coreUrl: 'http://memory-core:8420', proxyUrl: value.proxyUrl,
       mockUrl: value.mockUrl, panelUrl: 'http://memory-hub:8125', outputDir,
     }, {
       core: managementCoreFixture(value, ownBindings, outsiderBinding, (path) => { if (path === '/v3/meta/asset/list-accessible') leakModelRequest(); }),
@@ -532,7 +540,7 @@ test('Task 5 management gate rejects duplicate actor credentials before any Core
     await writeFile(join(value.directory, value.manifest.outsider.credential_file), `${value.keys.claude}\n`);
     const outputDir = join(value.directory, 'duplicate-credential-evidence');
     await assert.rejects(runManagementGate({
-      manifestPath: value.manifestPath, gatewayTokenFile: value.gatewayTokenFile, coreUrl: 'http://memory-core:8420', proxyUrl: value.proxyUrl,
+      manifestPath: value.manifestPath, runId: value.manifest.run_id, gatewayTokenFile: value.gatewayTokenFile, coreUrl: 'http://memory-core:8420', proxyUrl: value.proxyUrl,
       mockUrl: value.mockUrl, panelUrl: 'http://memory-hub:8125', outputDir,
     }, { core: async () => { coreCalls += 1; return {}; } }), /assertion=credentials/);
     assert.equal(coreCalls, 0);
@@ -544,7 +552,7 @@ test('Task 5 protocol runner fails closed and records only the failing assertion
   const value = await fixture({ unsafe: true });
   try {
     const outputDir = join(value.directory, 'evidence');
-    await assert.rejects(runProtocolLeakGate({ manifestPath: value.manifestPath, proxyUrl: value.proxyUrl, mockUrl: value.mockUrl, outputDir, timeoutMs: 20 }), /assertion=leak-claude-text/);
+    await assert.rejects(runProtocolLeakGate({ manifestPath: value.manifestPath, runId: value.manifest.run_id, proxyUrl: value.proxyUrl, mockUrl: value.mockUrl, outputDir, timeoutMs: 20 }), /assertion=leak-claude-text/);
     const evidence = await readFile(join(outputDir, 'stage1-mock.json'), 'utf8');
     assert.deepEqual(JSON.parse(evidence), { status: 'failed', assertion: 'leak-claude-text', passed: 0 });
     assert.doesNotMatch(evidence, /team-shared|x-team-id|sk-mem-|MEMORY_/i);
@@ -555,7 +563,7 @@ test('Task 5 protocol runner rejects a 200 response with the wrong Anthropic too
   const value = await fixture({ corruptTool: true });
   try {
     const outputDir = join(value.directory, 'corrupt-tool-evidence');
-    await assert.rejects(runProtocolLeakGate({ manifestPath: value.manifestPath, proxyUrl: value.proxyUrl, mockUrl: value.mockUrl, outputDir, timeoutMs: 20 }), /assertion=leak-claude-tool/);
+    await assert.rejects(runProtocolLeakGate({ manifestPath: value.manifestPath, runId: value.manifest.run_id, proxyUrl: value.proxyUrl, mockUrl: value.mockUrl, outputDir, timeoutMs: 20 }), /assertion=leak-claude-tool/);
     assert.deepEqual(JSON.parse(await readFile(join(outputDir, 'stage1-mock.json'), 'utf8')), { status: 'failed', assertion: 'leak-claude-tool', passed: 2 });
   } finally { await value.close(); }
 });
@@ -591,7 +599,7 @@ test('Task 5 protocol runner rejects malformed content types and incomplete Anth
     const value = await fixture({ mutateResponse: (response) => response.requestBody.includes(`STAGE1_FIXTURE_${entry.fixture}`) ? entry.mutate(response) : response });
     try {
       const outputDir = join(value.directory, `malformed-${entry.name}`);
-      await assert.rejects(runProtocolLeakGate({ manifestPath: value.manifestPath, proxyUrl: value.proxyUrl, mockUrl: value.mockUrl, outputDir, timeoutMs: 20 }), new RegExp(`assertion=leak-claude-${entry.fixture}`));
+      await assert.rejects(runProtocolLeakGate({ manifestPath: value.manifestPath, runId: value.manifest.run_id, proxyUrl: value.proxyUrl, mockUrl: value.mockUrl, outputDir, timeoutMs: 20 }), new RegExp(`assertion=leak-claude-${entry.fixture}`));
       assert.deepEqual(JSON.parse(await readFile(join(outputDir, 'stage1-mock.json'), 'utf8')), { status: 'failed', assertion: `leak-claude-${entry.fixture}`, passed: entry.passed });
     } finally { await value.close(); }
   });
@@ -617,7 +625,7 @@ test('Task 5 protocol runner scans response bytes in memory and never persists e
   });
   try {
     const outputDir = join(value.directory, 'echoed-sensitive-response');
-    await assert.rejects(runProtocolLeakGate({ manifestPath: value.manifestPath, proxyUrl: value.proxyUrl, mockUrl: value.mockUrl, outputDir, timeoutMs: 20 }), /assertion=leak-claude-text/);
+    await assert.rejects(runProtocolLeakGate({ manifestPath: value.manifestPath, runId: value.manifest.run_id, proxyUrl: value.proxyUrl, mockUrl: value.mockUrl, outputDir, timeoutMs: 20 }), /assertion=leak-claude-text/);
     const evidence = await readFile(join(outputDir, 'stage1-mock.json'), 'utf8');
     assert.deepEqual(JSON.parse(evidence), { status: 'failed', assertion: 'leak-claude-text', passed: 0 });
     assert.doesNotMatch(evidence, /sk-mem-|team-shared|agent-claude|task-shared|session-claude|MEMORY_|STAGE1_FIXTURE_|prompt|body/i);
@@ -748,15 +756,15 @@ test('Task 5 headless runtime rejects epoch changes, nonmonotonic or duplicate m
 });
 
 test('Task 5 CLI dispatches only fixed protocol, owner, management, and finalize contracts without ambient options', async () => {
-  const common = ['--manifest', '/state/run/run-manifest.json', '--gateway-token-file', '/runtime-config/gateway.token', '--output-dir', '/evidence', '--client-evidence-root', '/client-evidence'];
+  const common = ['--manifest', '/state/run/run-manifest.json', '--run-id', 'task5-fixture', '--gateway-token-file', '/runtime-config/gateway.token', '--output-dir', '/evidence', '--client-evidence-root', '/client-evidence'];
   const environment = {
     PROXY_BASE_URL: 'http://memory-proxy:8096', MOCK_BASE_URL: 'http://mock-llm:8080', CORE_BASE_URL: 'http://memory-core:8420', PANEL_BASE_URL: 'http://memory-hub:8125',
   };
   const cases = [
-    { scenario: 'protocol-leak', dependency: 'protocol', expected: { manifestPath: '/state/run/run-manifest.json', proxyUrl: environment.PROXY_BASE_URL, mockUrl: environment.MOCK_BASE_URL, outputDir: '/evidence' } },
-    { scenario: 'owner-oracle', dependency: 'owner', extra: ['--client', 'claude'], expected: { manifestPath: '/state/run/run-manifest.json', gatewayTokenFile: '/runtime-config/gateway.token', coreUrl: environment.CORE_BASE_URL, client: 'claude' } },
-    { scenario: 'management', dependency: 'management', expected: { manifestPath: '/state/run/run-manifest.json', gatewayTokenFile: '/runtime-config/gateway.token', coreUrl: environment.CORE_BASE_URL, proxyUrl: environment.PROXY_BASE_URL, mockUrl: environment.MOCK_BASE_URL, panelUrl: environment.PANEL_BASE_URL, outputDir: '/evidence' } },
-    { scenario: 'finalize', dependency: 'finalize', expected: { manifestPath: '/state/run/run-manifest.json', gatewayTokenFile: '/runtime-config/gateway.token', coreUrl: environment.CORE_BASE_URL, mockUrl: environment.MOCK_BASE_URL, outputDir: '/evidence', clientEvidenceRoot: '/client-evidence' } },
+    { scenario: 'protocol-leak', dependency: 'protocol', expected: { manifestPath: '/state/run/run-manifest.json', runId: 'task5-fixture', proxyUrl: environment.PROXY_BASE_URL, mockUrl: environment.MOCK_BASE_URL, outputDir: '/evidence' } },
+    { scenario: 'owner-oracle', dependency: 'owner', extra: ['--client', 'claude'], expected: { manifestPath: '/state/run/run-manifest.json', runId: 'task5-fixture', gatewayTokenFile: '/runtime-config/gateway.token', coreUrl: environment.CORE_BASE_URL, client: 'claude' } },
+    { scenario: 'management', dependency: 'management', expected: { manifestPath: '/state/run/run-manifest.json', runId: 'task5-fixture', gatewayTokenFile: '/runtime-config/gateway.token', coreUrl: environment.CORE_BASE_URL, proxyUrl: environment.PROXY_BASE_URL, mockUrl: environment.MOCK_BASE_URL, panelUrl: environment.PANEL_BASE_URL, outputDir: '/evidence' } },
+    { scenario: 'finalize', dependency: 'finalize', expected: { manifestPath: '/state/run/run-manifest.json', runId: 'task5-fixture', gatewayTokenFile: '/runtime-config/gateway.token', coreUrl: environment.CORE_BASE_URL, mockUrl: environment.MOCK_BASE_URL, outputDir: '/evidence', clientEvidenceRoot: '/client-evidence' } },
   ];
   for (const entry of cases) {
     const calls = [];

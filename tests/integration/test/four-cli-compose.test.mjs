@@ -15,6 +15,12 @@ const files = [
   'compose.four-cli.management.yaml',
 ];
 
+const staticEnvironment = {
+  COMPOSE_PROJECT_NAME: 'task5-static', RUN_ID: 'task5-static',
+  EVIDENCE_DIR: join(integrationRoot, '.static-evidence', 'task5-static'),
+  ACTIVE_CLIENTS: 'claude,opencode,pi', MEMORY_CORE_GATEWAY_API_KEY: 'task4-static-gateway-key',
+};
+
 function composeConfig(selectedFiles = files, profiles = ['*']) {
   const args = ['compose', '--project-directory', integrationRoot];
   for (const profile of profiles) args.push('--profile', profile);
@@ -22,7 +28,7 @@ function composeConfig(selectedFiles = files, profiles = ['*']) {
   args.push('config', '--format', 'json');
   const result = spawnSync('docker', args, {
     encoding: 'utf8',
-    env: { ...process.env, COMPOSE_PROJECT_NAME: 'task4-static', ACTIVE_CLIENTS: 'claude,opencode,pi', MEMORY_CORE_GATEWAY_API_KEY: 'task4-static-gateway-key' },
+    env: { ...process.env, ...staticEnvironment },
   });
   assert.equal(result.status, 0, result.stderr);
   return { parsed: JSON.parse(result.stdout), text: result.stdout };
@@ -30,6 +36,7 @@ function composeConfig(selectedFiles = files, profiles = ['*']) {
 
 test('active four-CLI Compose fixes product images, profiles, private network, and loopback-only Panel management', () => {
   const { parsed, text } = composeConfig();
+  assert.equal(parsed.name, staticEnvironment.COMPOSE_PROJECT_NAME);
   assert.equal(parsed.networks.default.internal, true);
   assert.equal(parsed.services['memory-core'].image, 'local/refine-memory-core:49c4536-fix1@sha256:fded9d48d76bf71d0652023be0e9aa5553d46c039cc04ace0ec7c1e370f95d44');
   assert.equal(parsed.services['memory-proxy'].image, 'local/refine-memory-proxy:d6afcd8-task5@sha256:d79751b6dca733c5aec2ea11a4484cc4184068373dde14c0f01e6793c6bc30e8');
@@ -45,6 +52,25 @@ test('active four-CLI Compose fixes product images, profiles, private network, a
   assert.equal(parsed.services['memory-hub'].ports.some(({ target }) => target === 8424), false);
   assert.equal(parsed.secrets, undefined);
   assert.doesNotMatch(text, /api\.deepseek\.com|PROXY_UPSTREAM_API_KEY|MEMORY_LLM_API_KEY|sk-mem-|docker\.sock/i);
+});
+
+test('active Compose fails fast unless project, run, and evidence values are all explicit', async () => {
+  const text = await Promise.all(files.map((file) => readFile(join(integrationRoot, file), 'utf8'))).then((values) => values.join('\n'));
+  assert.doesNotMatch(text, /RUN_ID:-|EVIDENCE_DIR:-|task4-static|task5-static/);
+  for (const missing of ['COMPOSE_PROJECT_NAME', 'RUN_ID', 'EVIDENCE_DIR']) {
+    const environment = { ...process.env, ...staticEnvironment };
+    delete environment[missing];
+    const args = ['compose', '--project-directory', integrationRoot, '--profile', '*'];
+    for (const file of files) args.push('-f', join(integrationRoot, file));
+    args.push('config', '--format', 'json');
+    const result = spawnSync('docker', args, { encoding: 'utf8', env: environment });
+    assert.notEqual(result.status, 0, `${missing} unexpectedly accepted`);
+    assert.match(result.stderr, new RegExp(missing));
+  }
+  const { parsed } = composeConfig();
+  assert.ok(parsed.services.bootstrap.command.includes(staticEnvironment.RUN_ID));
+  for (const client of ['claude', 'opencode', 'pi']) assert.ok(parsed.services[`${client}-headless`].command.includes(staticEnvironment.RUN_ID));
+  assert.equal(parsed.services['stage1-gate'].volumes.find((volume) => volume.target === '/evidence').source.replaceAll('\\', '/'), staticEnvironment.EVIDENCE_DIR.replaceAll('\\', '/'));
 });
 
 test('active runtime Compose cannot implicitly build an image', () => {
@@ -182,7 +208,13 @@ test('active SOP matrix supplies and clears only a disposable non-LLM gateway va
   const assignment = "$env:MEMORY_CORE_GATEWAY_API_KEY = 'task4-static-gateway-key'";
   assert.ok(block.indexOf(assignment) >= 0);
   assert.ok(block.indexOf(assignment) < block.indexOf("foreach ($profile"));
-  assert.match(block, /finally \{\n\s+Remove-Item Env:MEMORY_CORE_GATEWAY_API_KEY -ErrorAction SilentlyContinue\n\}/);
+  assert.match(block, /finally \{[\s\S]*Remove-Item Env:MEMORY_CORE_GATEWAY_API_KEY -ErrorAction SilentlyContinue[\s\S]*\}/);
+  for (const name of ['RUN_ID', 'COMPOSE_PROJECT_NAME', 'EVIDENCE_DIR']) {
+    assert.match(block, new RegExp(`\\$env:${name}\\s*=`));
+    assert.match(block, new RegExp(`Remove-Item Env:${name} -ErrorAction SilentlyContinue`));
+  }
   assert.match(readme, /disposable non-LLM gateway 值/);
   assert.match(readme, /不得在 Paid Gate 中复用/);
+  assert.match(readme, /node tests\/integration\/tools\/run-task5-mock\.mjs/);
+  assert.match(readme, /失败[\s\S]{0,120}project、volumes[\s\S]{0,80}保留/i);
 });

@@ -1,3 +1,5 @@
+name: ${COMPOSE_PROJECT_NAME:?set COMPOSE_PROJECT_NAME}
+
 x-tools-service: &tools-service
   image: refine-memory-integration-tools:task5
 
@@ -33,7 +35,7 @@ services:
       - --service-id
       - ${MEMORY_SPACE_ID:-default}
       - --run-id
-      - ${RUN_ID:-task4-static}
+      - ${RUN_ID:?set RUN_ID}
       - --output-dir
       - /state/run
       - --client-manifest
