@@ -6,7 +6,7 @@
 
 | 入口 | 用途 | 当前状态 |
 | --- | --- | --- |
-| [企业智能体记忆系统评估](enterprise-memory-system-evaluation.md) | 当前范围、风险、下一 Gate | Task 5 `7186820a` claude-cli-nonzero-before-mock Blocked；TUI/real Not Run |
+| [企业智能体记忆系统评估](enterprise-memory-system-evaluation.md) | 当前范围、风险、下一 Gate | Task 5 `92204e33` diagnostic Ready/Not Run；TUI/real Not Run |
 | [四 Docker CLI 实施计划](superpowers/plans/2026-08-10-four-docker-cli-memory.md) | 任务顺序与验收边界 | 计划，不是运行证据 |
 | [架构 ADR](decisions/2026-08-10-four-docker-cli-baseline.md) | 四 CLI 分阶段与身份隔离决策 | Accepted；runtime Not Run |
 | [baseline reproduction](reproduction/2026-08-10-four-docker-cli-baseline.md) | 固定版本、gitlink 与本轮未运行边界 | Append-only；Static baseline |
@@ -46,8 +46,9 @@
 | [Task 5 Claude -p diagnostic 7186820a Blocked before Mock](reproduction/2026-08-12-task5-diag-claude-p-20260812-7186820a-claude-cli-nonzero-before-mock-blocked.md) | canonical result 的 Claude child pre-Mock nonzero 边界 | Blocked；不区分 settings/CLI/auth/onboarding/capture/Proxy-before-Mock；新 tuple 待 TDD |
 | [Task 5 Claude -p diagnostic 7186820a exact cleanup Passed](reproduction/2026-08-12-task5-diag-claude-p-20260812-7186820a-exact-cleanup-passed.md) | 仅清理该 project 的 containers/network/volumes，保留 host evidence/images | Runtime Cleanup Passed；业务 Gate 仍 Blocked；bounded classifier 已 TDD、待复审/新 tuple |
 | [Task 5 Claude classifier replacement image Passed](reproduction/2026-08-12-task5-claude-classifier-image-build-passed.md) | timeout/官方错误分类 TDD、单次 Claude build、离线 assets 与 exact digest pin | Build/Assets Passed；follow-up 独立复审受额度限制；新 diagnostic tuple Not Run |
+| [Task 5 Claude -p diagnostic 92204e33 Ready](reproduction/2026-08-12-task5-diag-claude-p-20260812-92204e33-ready.md) | replacement classifier image 后的新唯一 tuple 与 freshness/overlay/coordinator preflight | Ready/Not Run；仅一次 canonical 18-key diagnostic 待执行 |
 | [Legacy Docker 运行资源精确清理](reproduction/2026-08-10-legacy-docker-resources-cleanup.md) | 旧 Compose projects、容器、网络、卷和镜像的不可恢复清理审计 | Runtime Cleanup Passed；不改变四 CLI 业务 Gate |
-| [集成实验 SOP](../tests/integration/README.md) | 后续静态验证与受控运行入口 | 7186820a 已精确 cleanup；classifier image Ready；新 diagnostic tuple Not Run |
+| [集成实验 SOP](../tests/integration/README.md) | 后续静态验证与受控运行入口 | 7186820a 已精确 cleanup；classifier image Ready；92204e33 diagnostic Ready/Not Run |
 
 建议阅读顺序：先读 [负责人思想](repo-author-comment/comment.md)，再读当前评估和本轮 ADR/reproduction；需要执行实验时才读 SOP 及相应产品源码/测试。负责人思想与企业设计草案分别位于 `repo-author-comment/` 和 [design/2026-08-06-enterprise-memory-design.md](design/2026-08-06-enterprise-memory-design.md)，不能当作本机运行证明。
 
