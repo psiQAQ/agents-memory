@@ -2,7 +2,7 @@
 
 ## 结论
 
-当前 active 目标是四 Docker CLI 共享记忆实验。Task 5 的 Proxy→Core auth service-token、Mock fixture 与 Claude EROFS/tmpfs 缺口均已完成 TDD、固定 replacement images 与 scoped review；`113ca669` single Claude diagnostic Passed 并 exact cleanup。全新 `e83748e2` 通过 preflight 后单次执行 tracked 17-step launcher，但仅返回 generic failure，step unknown；现场 `5 containers / 1 network / 14 volumes` 已 exact cleanup 为 `0/0/0`，host evidence 只计数为 2 且未读取。launcher 固定 step 输出已完成 TDD/static review；下一 fresh tuple 仍为 **Not Run**。三写六读、final、三个正式 headless、TUI 与真实 API/模型均未获得完整通过证明。
+当前 active 目标是四 Docker CLI 共享记忆实验。Task 5 的 Proxy→Core auth service-token、Mock fixture 与 Claude EROFS/tmpfs 缺口均已完成 TDD、固定 replacement images 与 scoped review；`113ca669` single Claude diagnostic Passed 并 exact cleanup。`e83748e2` generic failure 已归档并 exact cleanup；launcher 固定 step 输出已完成 TDD/static review。全新 `stepfix-2df660d8` 通过 project/evidence freshness、7-image、merged config 与 port preflight，当前为 **完整 deterministic Mock Ready / Not Run**。三写六读、final、三个正式 headless、TUI 与真实 API/模型仍未获得完整通过证明。
 
 旧 Windows 原生 Claude + Docker Claude 证据一律是 **Legacy**：保留原文供追溯，但不用于推断新的四 CLI 架构已通过。
 
@@ -56,7 +56,7 @@ flowchart LR
 | Stage 1 client Compose/bootstrap/config/images | Runtime Passed | tools 与三 client 串行各 build 一次；version/help、UID 10001、evidence ownership/writability、headless assets；仅 client build/config assets |
 | Stage 1 Task 5 root harness | Static/contract Passed | root Node 233/233 与 Compose config 7/7；fixture array text-block、固定 step allowlist、固定 epoch/path、strict fixture、逐 operation oracle、outsider、exact project freshness、run/build/evidence 与 request-local credential 合同，不是业务运行 |
 | Stage 1 Proxy privacy/build | Runtime Passed | reviewed `9e456a5` auth service-token fix、38/38 suites / 276/276 tests、exact six baseline typecheck errors、Proxy `sha256:55fedae3...`；replacement image Ready，product tests + build/assets only |
-| Stage 1 Mock identity/share/isolation/leak | Blocked / fresh run Not Run | `113ca669` single Claude diagnostic Passed；`e83748e2` full launcher generic failure、step unknown，随后 exact cleanup `5/1/14 → 0/0/0`。固定 step 输出 static Passed；全新 17-step Mock 尚未运行 |
+| Stage 1 Mock identity/share/isolation/leak | Ready / full Mock Not Run | `113ca669` single Claude diagnostic Passed；`e83748e2` generic failure/cleanup 保持 append-only。`stepfix-2df660d8` freshness、7 images 与 merged config Passed；仅允许单次 tracked 17-step run |
 | Stage 1 TUI | Not Run | 仅在 headless Gate 通过后由用户确认 |
 | Stage 1 真实模型 | Not Run | 需完整 Mock Gate 与明确授权 |
 | Stage 2 Codex Responses | Not Run | 在 Stage 1 后执行 |
@@ -80,4 +80,4 @@ flowchart LR
 
 ## 下一 Gate
 
-[e83748e2 generic failure](reproduction/2026-08-12-task5-mock-20260812-e83748e2-generic-launcher-failure-blocked.md) 已归档且完成 [exact cleanup](reproduction/2026-08-12-task5-mock-20260812-e83748e2-exact-cleanup-passed.md)，不得复用或 retry。launcher 现只对固定 `step=1..17` 输出安全分类。下一 Gate 是先为全新 run/project/evidence 做 freshness preflight，再单次执行 tracked 17-step deterministic Mock：protocol/leak 24 cases → management/outsider → 三次 write → 六次 ordered cross-owner read → final oracle。不得 build、TUI 或真实模型；失败必须 fail-stop 并另增 reproduction，成功 project 则保留到 scoped review 与用户 TUI 决策。真实 API、TUI 与 Codex Stage 2 仍为 Not Run。active gitlink 在获得独立 push/归档授权前仍无法由 fresh clone 获取。
+[stepfix-2df660d8 full Mock Ready](reproduction/2026-08-12-task5-mock-20260812-stepfix-2df660d8-ready.md) 固定全新 run/project/evidence 与 7 个 exact image IDs。下一 Gate 只允许单次执行 tracked 17-step deterministic Mock：protocol/leak 24 cases → management/outsider → 三次 write → 六次 ordered cross-owner read → final oracle。不得 build、retry、TUI 或真实模型；失败必须 fail-stop 并另增 reproduction，成功 project 则保留到 scoped review 与用户 TUI 决策。真实 API、TUI 与 Codex Stage 2 仍为 Not Run。active gitlink 在获得独立 push/归档授权前仍无法由 fresh clone 获取。

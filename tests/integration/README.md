@@ -6,7 +6,7 @@
 
 **Fact**：upstream base 锁定 `feat/server_team@0a568c328ea1aae3f22ed3656e7900da7ea565c1`，active fork/gitlink 为 reviewed Task 5 auth service-token fix `9e456a5b7bb47ae40596237d0f0b87c1edfc098f`。该 commit 是 local-only；`origin/codex/four-agent-memory-upstream` 仍为 `38ced16f46fed640bcb7360fb1ca45f9f9918628`，未经单独授权不得 push，fresh clone 暂不可取得。Stage 1 是 Claude Code `2.1.226`、OpenCode `1.18.16`、Pi `0.84.1`，Stage 2 是 Codex `0.147.0`。
 
-**Fact**：Task 5 auth service-token、Mock fixture 与 Claude EROFS/tmpfs fixes/replacement images 均已 Passed；`113ca669` single Claude diagnostic Passed/cleaned。全新 `e83748e2` 的 preflight Passed，但 tracked launcher 单次运行仅返回 generic failure，step unknown；exact project 已从 `5 containers / 1 network / 14 volumes` 清理为 `0/0/0`。固定 step 输出 TDD/static review Passed；下一 fresh tuple 尚未运行。三写六读/final/三个正式 headless、TUI 与真实/Paid 模型仍无完整通过证明。
+**Fact**：Task 5 auth service-token、Mock fixture 与 Claude EROFS/tmpfs fixes/replacement images 均已 Passed；`113ca669` single Claude diagnostic Passed/cleaned。`e83748e2` generic failure 已归档并 exact cleanup；固定 step 输出 TDD/static review Passed。全新 `stepfix-2df660d8` 的 run/project/evidence freshness、7 exact images、merged config 与 port preflight Passed，当前是 full deterministic Mock Ready / Not Run。三写六读/final/三个正式 headless、TUI 与真实/Paid 模型仍无完整通过证明。
 
 **Fact**：legacy ref `codex/legacy-proxy-hardening-69fd8b@69fd8b31e3fd4362af6c65407b92b26dfabebd0c` 是 local-only、未 push；fresh clone 不可取得，未经授权不得 push。跨 clone 可重建保全需要 push 或外部归档授权，在此之前仍未完成。
 
@@ -103,9 +103,9 @@ Root full Node 为 233/233，base + `mock`、`real`、`claude`、`opencode`、`p
 
 完整前置链见 [privacy/build Passed](../../docs/reproduction/2026-08-11-task5-proxy-privacy-build-passed.md)、[EROFS/tmpfs fix Passed](../../docs/reproduction/2026-08-12-task5-claude-erofs-tmpfs-fix-passed.md)、[113ca669 diagnostic Passed](../../docs/reproduction/2026-08-12-task5-diag-claude-p-20260812-113ca669-passed.md)、[e83748e2 generic failure](../../docs/reproduction/2026-08-12-task5-mock-20260812-e83748e2-generic-launcher-failure-blocked.md) 与 [e83748e2 exact cleanup](../../docs/reproduction/2026-08-12-task5-mock-20260812-e83748e2-exact-cleanup-passed.md)。下一步仅为全新 tuple 的完整 deterministic Mock；不得将 single diagnostic 或 generic failure 扩写为三写六读/final/TUI/real 通过。
 
-## Task 5 Mock runtime 启动器（e83748e2 Blocked / cleaned；fresh tuple Not Run）
+## Task 5 Mock runtime 启动器（stepfix-2df660d8 Ready / Not Run）
 
-历史固定 Mock/diagnostic runs 均保持 append-only。`e83748e2` 已单次 fail-stop、仅返回 generic failure且 step unknown，随后 exact cleanup；不得复用或 retry。tracked `run-task5-mock.mjs` 现只对完整匹配的 `step=1..17` 输出固定单行，任何其他异常仍为 generic，不转发 child stdout/stderr。下一次必须使用全新 tuple；失败保留现场，成功在 scoped review 与用户 TUI 决策前保留 project，不读取 raw logs/evidence。
+历史固定 Mock/diagnostic runs 均保持 append-only。`e83748e2` 已单次 fail-stop、仅返回 generic failure且 step unknown，随后 exact cleanup；不得复用或 retry。`stepfix-2df660d8` 是当前唯一 Ready tuple。tracked `run-task5-mock.mjs` 只对完整匹配的 `step=1..17` 输出固定单行，任何其他异常仍为 generic，不转发 child stdout/stderr。失败保留现场，成功在 scoped review 与用户 TUI 决策前保留 project，不读取 raw logs/evidence。
 
 启动器不读取 Tencent `.env`、模型 key、settings、home 或旧 evidence；它只运行固定的 Mock 顺序，不接受任意命令，也不会执行 build、`down`、`down -v` 或 prune。以下命令保留为合同参考，不得用于覆盖或复用上述失败 tuple。
 
@@ -151,7 +151,7 @@ try {
 1. **Task 2（Passed，build/assets only）**：固定 image ID/digest 与不可变 RED→GREEN 已归档；不扩写为服务或业务通过。
 2. **Task 3（Passed，handler/route + build/assets only）**：三平台 literal Messages/`count_tokens` route、source/session fail-closed、Anthropic system context 与选定 console privacy 已固定；不扩写为服务业务或 comprehensive leak Gate 通过。
 3. **Task 4（Passed，client build/config assets only）**：active Compose、三客户端身份/config/image 已固定；不扩写为服务或业务流通过。
-4. **Task 5（e83748e2 Blocked / cleaned；fresh tuple Not Run）**：single Claude diagnostic Passed/cleaned；首次 full Mock 只得到 generic failure，资源已 exact cleanup；安全 step 分类 static Passed。下一步仅对全新 tuple 单次运行 tracked fixed 17-step launcher；不得提前进入 TUI/real。
+4. **Task 5（stepfix-2df660d8 Ready / Not Run）**：single Claude diagnostic Passed/cleaned；`e83748e2` generic failure/cleanup 保持历史；安全 step 分类 static Passed。下一步仅对当前唯一 fresh tuple 单次运行 tracked fixed 17-step launcher；不得提前进入 TUI/real。
 5. **Task 6**：完整 Mock Gate 后且负责人明确授权，才可使用 host-only 双 key 与预算限制做真实 Stage 1。
 6. **Task 7–8**：在 Stage 1 后实现/验证 Codex Responses 与四客户端 binding 上限。
 
