@@ -6,7 +6,7 @@
 
 **Fact**：upstream base 锁定 `feat/server_team@0a568c328ea1aae3f22ed3656e7900da7ea565c1`，active fork/gitlink 为 reviewed Task 5 auth service-token fix `9e456a5b7bb47ae40596237d0f0b87c1edfc098f`。该 commit 是 local-only；`origin/codex/four-agent-memory-upstream` 仍为 `38ced16f46fed640bcb7360fb1ca45f9f9918628`，未经单独授权不得 push，fresh clone 暂不可取得。Stage 1 是 Claude Code `2.1.226`、OpenCode `1.18.16`、Pi `0.84.1`，Stage 2 是 Codex `0.147.0`。
 
-**Fact**：Task 5 产品、replacement images 与前置 diagnostics 已通过对应 Gate并完成 cleanup。`full-6449fcf8` 的单次 17-step launcher在 fixed step 11 fail-stop；steps 1–10 exit `0`，protocol/leak、management 与三客户端 write 已通过；首个 Claude cross-owner read、后续五读与 final 未通过。exact project 已从 `5/1/15` cleanup 为 `0/0/0`，active images `7/7` 保留。业务 Gate 为 Blocked；下一 Gate 是 TDD Claude read fixed-phase diagnostic。
+**Fact**：Task 5 产品、replacement images 与前置 diagnostics 已通过对应 Gate并完成 cleanup。`full-6449fcf8` 的单次 17-step launcher在 fixed step 11 fail-stop；steps 1–10 exit `0`，protocol/leak、management 与三客户端 write 已通过；首个 Claude cross-owner read、后续五读与 final 未通过。exact project 已从 `5/1/15` cleanup 为 `0/0/0`，active images `7/7` 保留。Claude read fixed-phase coordinator 已通过 focused `51/51`、root `258/258`、Compose `8/8` 与 review `C0/I0/M0`；全新 diagnostic `1080bc3e` 为 Ready/Not Run。业务 Gate 仍为 Blocked。
 
 **Fact**：legacy ref `codex/legacy-proxy-hardening-69fd8b@69fd8b31e3fd4362af6c65407b92b26dfabebd0c` 是 local-only、未 push；fresh clone 不可取得，未经授权不得 push。跨 clone 可重建保全需要 push 或外部归档授权，在此之前仍未完成。
 
@@ -14,7 +14,7 @@
 
 ## 静态验证
 
-在根仓库执行完整 Node suite；当前预期为 239/239。它只验证当前根集成契约，不能证明 active Docker 业务流：
+在根仓库执行完整 Node suite；当前预期为 258/258。它只验证当前根集成契约，不能证明 active Docker 业务流：
 
 ```powershell
 node --test tests/integration/test/*.test.mjs
@@ -97,17 +97,49 @@ formal review 后，bootstrap 在发布 private/public artifact 前验证三 own
 - 三个 active client Dockerfile 在 `USER agent` 前创建 `/client-evidence` 并归属 10001:10001；headless 仍以 `10001:10001` 运行且三个 evidence named volume 彼此独立。三镜像已验证该目录归属与 UID10001 写入；named volume 的业务流使用仍为 Not Run。
 - launcher 删除继承的所有私有 identity/key 变量，再从选定 private bundle 的同一 `memory_user_key` 设置 `MEMORY_USER_KEY` 与 product-required request-local `TDAI_MEMORY_USER_KEY`；值不进入 Compose、prompt、cache、log、evidence 或 tracked file。
 
-Root full Node 为 254/254，base + `mock`、`real`、`claude`、`opencode`、`pi`、`management` Compose config 为 7/7，normal headless diagnostic overlay config 为 1/1。normal headless fixed-phase diagnostic 先以 missing module/export RED，再以 focused `47/47` GREEN；独立 review 为 `C0/I0/M0`。这些均为 **Static/contract Passed**，不是业务运行。
+Claude read fixed-phase diagnostic 先以缺失 export、错误 read 分类与 overlay 合同 RED，再以 focused `51/51`、root full Node `258/258`、base + `mock`、`real`、`claude`、`opencode`、`pi`、`management` 加 Claude-read diagnostic overlay Compose config `8/8` GREEN；独立 review 为 `C0/I0/M0`。这些均为 **Static/contract Passed**，不是业务运行。
 
 产品 auth service-token fix 固定为 `9e456a5b7bb47ae40596237d0f0b87c1edfc098f`；focused `3/3`、fresh full `38/38` suites / `276/276` tests、typecheck exact six baseline errors与最终 review `CLEAN`。Compose 固定使用 `local/refine-memory-proxy:9e456a5-auth-fix@sha256:55fedae3f6a3a0a45ac8be45461d8cab23c52f11cc089c1c1e54c7d236de764b`；replacement image 已完成唯一 build、离线 tests/assets 与 root exact pin，状态为 **Ready（build/assets only）**。旧 image 只保留历史证据，不得进入新的 Task 5 runtime。
 
 完整前置链见 [privacy/build Passed](../../docs/reproduction/2026-08-11-task5-proxy-privacy-build-passed.md)、[OpenCode fixed-title replacement image Passed](../../docs/reproduction/2026-08-12-task5-opencode-title-replacement-image-passed.md)、[OpenCode typed diagnostic `89398d1d` Passed](../../docs/reproduction/2026-08-12-task5-diag-opencode-20260812-89398d1d-passed.md)、[normal headless phase diagnostic `a666e597` Passed](../../docs/reproduction/2026-08-12-task5-diag-opencode-headless-20260812-a666e597-passed.md) 与 [exact cleanup](../../docs/reproduction/2026-08-12-task5-diag-opencode-headless-20260812-a666e597-exact-cleanup-passed.md)。不得把 diagnostics、single Mock request、static contract 或 build/assets 扩写为完整三写六读/final/TUI/real 通过。
 
-## Task 5 Mock runtime 启动器（`full-6449fcf8` step 11 Blocked/cleaned）
+## Task 5 Claude cross-owner read fixed-phase diagnostic（`1080bc3e` Ready/Not Run）
 
 历史固定 Mock/diagnostic runs 均保持 append-only。`e83748e2`、`stepfix-2df660d8`、`opentitle-4f056ee6`、typed diagnostic `89398d1d` 与 phase diagnostic `a666e597` 均已 exact cleanup，不得复用或 retry。`a666e597` 已证明 prior Claude operation 后的 normal OpenCode client、exact aggregate verifier 与 atomic evidence publish 路径成功，但不覆盖完整 17-step baseline。
 
-下一 Gate 只允许先按 TDD 扩展 fixed-phase wrapper 的 read success 合同，再使用全新唯一 tuple 运行“三 writes → Claude read(owner=opencode)”脱敏诊断。禁止重跑 full Mock、retry、旧 tuple、raw child/log/evidence、TUI 或真实模型。任何新 project 仍须 freshness、append-only result 与 exact cleanup；不得使用 `--rmi` 或全局 prune。
+fixed coordinator 精确重放 `full-6449fcf8` 的 steps 1–10：services、bootstrap、三 config、protocol/leak、management/outsider 与三 writes；前置 action 不使用 diagnostic overlay，只有最终 Claude read(owner=opencode) 使用它。全新 tuple、clean freshness 与静态证据见 [diagnostic `1080bc3e` Ready](../../docs/reproduction/2026-08-12-task5-diag-claude-read-20260812-1080bc3e-ready.md)。
+
+唯一下一 Gate 是在 root worktree 中设置以下四个环境变量，并只调用一次 tracked launcher；disposable gateway 不是模型 key，不得输出或复用：
+
+```powershell
+$env:RUN_ID = 'task5-diag-claude-read-20260812-1080bc3e'
+$env:COMPOSE_PROJECT_NAME = 'refine-memory-task5-diag-claude-read-20260812-1080bc3e'
+$env:EVIDENCE_DIR = 'D:\workspace\refine-memory\.worktrees\four-agent-memory\.runtime\runs\task5-diag-claude-read-20260812-1080bc3e'
+$env:MEMORY_CORE_GATEWAY_API_KEY = "task5-$([guid]::NewGuid().ToString('N'))"
+
+node tests/integration/tools/run-task5-claude-read-diagnostic.mjs
+```
+
+canonical stdout 必须是单行 `{"status":"classified","phase":"<phase>"}`。五种 phase 都以 launcher exit `0` 返回；只有 `phase=success` 将本 diagnostic 记为 Passed，完整 Mock 仍为 Blocked。`phase=client`、`observation`、`evidence` 或 `setup` 均将本 diagnostic 记为 Blocked，且不得读取 raw child/log/evidence、retry 或复用 tuple。launcher 非零时，唯一允许的失败面是空 stdout 与 stderr 精确单行 `Task 5 Claude read diagnostic coordinator failed`；其他输出是 contract failure，不得解释为 phase。
+
+禁止 build、重跑 full Mock、TUI 或真实/Paid 模型。freshness 通过且运行创建 exact project 后，无论结果均先做脱敏盘点与 append-only result，再使用精确 profiles `mock`、`management`、`claude`、`opencode`、`pi` 及以下七个 files 清理该 project：
+
+```powershell
+docker compose `
+  --profile mock --profile management --profile claude --profile opencode --profile pi `
+  -f tests/integration/compose.four-cli.yaml `
+  -f tests/integration/compose.four-cli.mock.yaml `
+  -f tests/integration/compose.four-cli.claude.yaml `
+  -f tests/integration/compose.four-cli.opencode.yaml `
+  -f tests/integration/compose.four-cli.pi.yaml `
+  -f tests/integration/compose.four-cli.management.yaml `
+  -f tests/integration/compose.four-cli.claude-read-diagnostic.yaml `
+  down --volumes --remove-orphans
+```
+
+cleanup 后独立复查 exact project 与 global container count，再删除上述四个进程环境变量。不得使用 `--rmi` 或全局 prune，active images 保留。若 preflight 或 label collision 失败，则保留现场审计，不执行 cleanup。
+
+### 历史 full Mock launcher（当前禁止重跑）
 
 `COMPOSE_PROJECT_NAME` 必须由 launcher 验证为 `refine-memory-${RUN_ID}`，不能复用无关 project 名。创建 evidence 目录或执行首个 Compose step 前，launcher 内部实际执行以下只读探针：
 
@@ -151,7 +183,7 @@ try {
 1. **Task 2（Passed，build/assets only）**：固定 image ID/digest 与不可变 RED→GREEN 已归档；不扩写为服务或业务通过。
 2. **Task 3（Passed，handler/route + build/assets only）**：三平台 literal Messages/`count_tokens` route、source/session fail-closed、Anthropic system context 与选定 console privacy 已固定；不扩写为服务业务或 comprehensive leak Gate 通过。
 3. **Task 4（Passed，client build/config assets only）**：active Compose、三客户端身份/config/image 已固定；不扩写为服务或业务流通过。
-4. **Task 5（Blocked；step 11）**：steps 1–10/三 writes Passed，首个 Claude read Blocked；下一步只允许 TDD read phase diagnostic，不得进入 TUI/real。
+4. **Task 5（Blocked；step 11）**：steps 1–10/三 writes Passed，首个 Claude read Blocked；diagnostic `1080bc3e` Ready/Not Run，下一步只允许其 tracked 单次运行，不得进入 TUI/real。
 5. **Task 6**：完整 Mock Gate 后且负责人明确授权，才可使用 host-only 双 key 与预算限制做真实 Stage 1。
 6. **Task 7–8**：在 Stage 1 后实现/验证 Codex Responses 与四客户端 binding 上限。
 
