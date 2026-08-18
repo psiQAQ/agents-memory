@@ -3,6 +3,8 @@
 > 调研基线：`submodules/TencentDB-Agent-Memory`，上游 `TencentCloud/TencentDB-Agent-Memory` 默认分支 `feat/server_team` @ `97f9465`（`v2.0.1-beta.2` 之后 1 个文档提交，2026-08-15）。本地 `upstream` remote 已配置，三个上游分支（`main`、`feat/server`、`feat/server_team`）与全部 tag 已拉取，工作树已 fast-forward 到上游最新。
 >
 > 调研方法与验证状态：**Static**（纯源码 + 仓库文档静态调研，未启动任何服务）。所有断言以当前代码为准；文中 `文件:行号` 均为 submodule 内相对路径。与本仓库既有文档的关系：`docs/reference/tencentdb-agent-memory.md` 是 2026-08-10 基于 fork `c75ef58` 的架构参考快照，本报告不覆盖它，而是基于上游最新代码回答负责人提出的六个专题问题（部署方式、团队搭建模式、资产形式、管理员与成员差异、成员/Agent/Task 关系、记忆更新与管理入口）。
+>
+> 本版另融合了一份基于相同提示词独立完成的外部调研（基线同为 `97f9465`）：其增量断言已逐条对照源码验证后并入正文，验证不成立的条目见第 9 节。
 
 ## 摘要
 
@@ -11,6 +13,26 @@
 - 组织模型：每个实例只有一个 System Admin，负责开号与建团队入口；团队内角色分 `admin / member / reviewer`；Agent 和 Task 都是 owner/creator 制。没有脱离团队的"个人资产"，个人与团队之分靠资产可见性（`private / team / restricted`，另有 `agent / task` 两档预留）表达。
 - 记忆自动沉淀为四类资产（Chat Memory L0-L3、Skill、Wiki、CodeGraph），经 Fixed Binding 加 ACL 装配给 Agent。对话内可以读记忆（6 个只读工具）、触发 Skill 提炼（`mem:create-skill`）；编辑、删除、共享、构建知识库这类治理操作只能走 Web Panel 或 API，对话内的工具白名单不放行写操作。
 - 几处边界要留意：资产审核工作流（`candidate/approved` 状态）只有枚举没有实现；`reviewer` 角色是半成品；根目录 `README.docker.md`/`README.deployment.md` 是 v1 旧文档，与当前树不符；有几处前端按钮可见性宽于内核的权限裁决。
+
+### 能力总表（当前代码实际行为）
+
+| 能力 | 当前判断 |
+| --- | --- |
+| 一键自托管部署 | 已实现，公开 Docker 三件套直接可跑 |
+| 多用户、多团队 | 已实现；扁平 Team 模型，无组织树或嵌套团队 |
+| 团队管理员与普通成员 | 已实现；资产 owner 权限高于 team admin |
+| 成员多 Agent | 已实现；入队自动生成默认 Agent |
+| Agent 与 Task 多对多 | 已实现；Task 是工作上下文，不是任务调度器 |
+| Chat Memory 自动沉淀 | 已实现，L0→L1→L2→L3 异步管线 |
+| Skill 自动提取 + 手工维护 | 已实现（无人工审核环节） |
+| Wiki / CodeGraph | 已实现；网页构建，Agent 只读检索 |
+| Agent Loadout（固定资产装配） | 已实现 |
+| 对话内直接管理知识 | 部分实现：可读、可强制提炼 Skill；Wiki/CodeGraph 工具只读 |
+| 跨团队资产共享 | 未实现：Team 检查先于 ACL，资产不能跨 Team 挂载 |
+| 审批流 / Reviewer 语义 | 未实现：审核状态仅枚举预留 |
+| 高可用云服务化 | 代码有 Redis/TCVDB/COS 的 service 后端，K8s 部署清单不在当前树，非开箱即用 |
+
+总体上，它已经是一个可用的"团队 Agent 记忆与知识资产控制台"，但还不是完整的企业组织、审批和跨项目知识治理平台。
 
 ---
 
@@ -38,7 +60,9 @@
 | 4 | 源码直跑（Node.js ≥ 22，不用 Docker） | 仓库源码 | 开发、二次开发 |
 | 5 | OpenClaw npm 插件（两种）/ Hermes 插件 | npm 包 + 安装脚本 | 插件生态用户，不经 Proxy |
 | 6 | SDK 直连（TypeScript / Python） | npm / pip 包 | 自研 Agent 或应用直接调 `/v3` API |
-| 7 | （历史）K8s / Service 模式（TCVDB+COS+Redis） | `README.deployment.md` 描述 | 旧版 v1 文档，引用的部署清单在当前树中已不存在，标记"待验证"，不可按文档复现 |
+| 7 | Service 模式（Redis + TCVDB + COS 后端） | 代码层支持（`MemoryCore/src/core/store/tcvdb.ts` 等）；`README.deployment.md` 引用的 K8s 清单在当前树中已不存在 | 多副本/云端形态；部署文档是 v1 旧版，按文档不可复现，标记"待验证" |
+
+两点澄清：仓库没有提供可注册使用的官方托管 SaaS，"在线拉取"指从 Docker Hub 拉公开镜像后自托管；部署脚本全部是 Bash，Windows 宿主建议放在 WSL2 或 Git Bash 环境执行。
 
 ### 2.2 方式 1：一键三件套（在线拉取 Docker 镜像）
 
@@ -164,6 +188,8 @@ flowchart TB
 
 ### 3.2 角色体系：两层三值
 
+组织结构是扁平的多团队模型：实例下直接是 Team，没有 Department、Sub-Team 之类的嵌套层级（`TeamEntity` 无任何父子字段）；一个用户可属多个 Team，每个 Agent/Task/资产只属一个 Team。
+
 | 层 | 角色 | 来源 |
 | --- | --- | --- |
 | 全局（每实例） | `system_admin` / `normal`（`UserType`，`MemoryCore/src/metadata/types.ts:16`） | DB 部分唯一索引保证每实例只有一个 system_admin（`sqlite-adapter.ts:143`），由首启 `init-admin` 创建 |
@@ -237,6 +263,17 @@ flowchart TB
 
 隔离要点：Alice 在两个团队各有独立的 Agent 与记忆资产；所有资产/Agent/Task 都挂 `team_id`，权限判定按"该资产所在团队里 caller 的 membership"进行，跨团队零渗透；资产绑定强制同团队（`permission-checker.ts:159-171`）。
 
+这个案例可以用下面几条做最小验收：
+
+| 验收点 | 通过条件 |
+| --- | --- |
+| 多团队成员 | Alice 的 `team/list` 同时出现两个 Team，两处角色独立 |
+| Agent 隔离 | Alice 在两个 Team 各有一个 default-agent，记忆互不相通 |
+| Task 隔离 | Task 只能 link 同 Team 的 Agent（跨 Team link 返回 403 `agent_team_mismatch`） |
+| 资产隔离 | Team-Frontend 的资产无法绑定到 Team-Backend 的 Agent |
+| 私有保护 | team admin 读不到成员的 `private` 资产 |
+| 团队共享 | 成员能读到本 Team 的 `team` 可见资产，借入后可在对话中检索 |
+
 ### 3.5 Team Admin 与普通 Member 的完整差异
 
 后端强制（内核裁决，前端只是可见性）：
@@ -259,6 +296,8 @@ flowchart TB
 
 这套权限的设计取向是 owner 制重于角色制：Agent/Task/资产的写权限只认 owner/creator；team admin 多出来的是成员管理、团队级共享资产的读写分配和可见性审计，接管不了成员的私有物。`private` 严格到连 team admin 都不可见（2026-07 收紧，`permission-checker.ts:66-82`）。
 
+从实现看这是两层叠加：通用权限检查器（`checkPermission`）给 team admin 对 `team` 资产的 `read/write/assign/share` 角色默认；具体业务 API 的包装器（agent/task/asset 的 update 与 delete、ACL grant、固定绑定 set）再叠加一道 owner/creator 断言。所以 team admin 的 write 角色默认主要在经 `acl/check` 的内容操作上生效（如 Wiki ingest），改不了别人资产的元数据。
+
 已知的前后端口径差异（前端按钮可见 ≠ 内核放行，实际操作会 403）：前端允许 team admin 删除他人 Agent、允许任意成员编辑 Task，内核分别只认 agent owner 与 task creator。
 
 ## 4. 团队成员、Agent 与 Task 的关系
@@ -266,8 +305,8 @@ flowchart TB
 ### 4.1 三个实体
 
 - 成员（User）：真人，持 user_key，可属多团队，每团队一个角色。
-- Agent：成员在某团队内的"分身"，即角色化的工作单元。严格单团队、owner 制（创建后不可转让）；字段含 `name / description / prompt`（角色定位与规则两段拼接）。没有模型配置、没有独立密钥，模型由 Proxy 统一决定，身份靠成员的 user_key。入队自动获得 `default-agent-<username>`；每个 Agent 创建时自动铸造专属 Chat Memory 资产 `chat_memory-{team_id}-{agent_id}`，一个 Agent 对应一份记忆。
-- Task：团队协作单元，creator 制；状态刻意简化为二态 `running | completed`；没有 assignee 字段。它与 Agent 的关联走两套并行语义：
+- Agent：成员在某团队内的"分身"，即角色化的工作单元。严格单团队、owner 制（创建后不可转让）；字段含 `name / description / prompt`（角色定位与规则两段拼接）。没有模型配置、没有独立密钥，模型由 Proxy 统一决定，身份靠成员的 user_key。入队自动获得 `default-agent-<username>`；每个 Agent 创建时自动铸造专属 Chat Memory 资产 `chat_memory-{team_id}-{agent_id}`，一个 Agent 对应一份记忆。Agent 只是元数据实体，官方 README 明说"MemoryCore 不负责托管、调度或运行 Agent 本身"（`MemoryCore/README_CN.md:9`），真正运行的仍是 Claude Code、Codex 等客户端。
+- Task：团队协作单元，creator 制；状态刻意简化为二态 `running | completed`；没有 assignee 字段。它是工作上下文的标签，不是任务调度器：不排执行顺序、不管依赖、不派发 Agent。它与 Agent 的关联走两套并行语义：
   - `task-agent/link`（意图）：creator 手工声明"哪些 Agent 该干这个任务"（须同团队）；
   - `participation-log`（观测，append-only）：Proxy 在每次会话初始化完成时自动记一条 `(team, task, agent, user)`，即"谁实际用哪个 Agent 对这个任务开过工"。
 
@@ -328,15 +367,17 @@ flowchart TB
 
 可见性五档。代码枚举比 README 的四档多一个 `task`；`agent`/`task` 两档当前无生产创建入口，属预留：
 
-| visibility | 语义 | 备注 |
-| --- | --- | --- |
-| `private` | 严格仅 owner，team admin 也不可见 | Chat Memory / Skill 自动登记的默认值 |
-| `team` | 团队共享；角色默认 admin=`read/write/assign/share`，member/reviewer=`read` | Wiki / CodeGraph 登记的默认值 |
-| `restricted` | 非 admin 仅显式 ACL 白名单可用 | ACL 主体：`user / team_role / agent` × 动作 `read/write/delete/assign/share/use` |
-| `agent` | 预留（判定同 team） | 无创建入口 |
-| `task` | 预留（非 admin 只读） | 无创建入口 |
+| visibility | 语义 | 能否固定绑定给 Agent | 备注 |
+| --- | --- | --- | --- |
+| `private` | 严格仅 owner，team admin 也不可见 | 只能绑给同 owner 的 Agent | Chat Memory / Skill 自动登记的默认值 |
+| `team` | 团队共享；角色默认 admin=`read/write/assign/share`，member/reviewer=`read` | 同 Team 即可 | Wiki / CodeGraph 登记的默认值 |
+| `restricted` | 非 admin 仅显式 ACL 白名单可用 | 不可绑定 | ACL 主体：`user / team_role / agent` × 动作 `read/write/delete/assign/share/use` |
+| `agent` | 预留（判定同 team） | 同 Team 即可 | 无创建入口 |
+| `task` | 预留（非 admin 只读） | 不可绑定 | 无创建入口 |
 
 写操作权限（内核强制）：资产元数据 update/delete/改可见性/touch-usage 仅 owner；ACL grant/revoke 仅 owner；ACL list 为 owner 或 team admin。
+
+还有一条硬边界：ACL 突破不了 Team。权限判定顺序里"caller 是该资产所在 Team 的 active 成员"先于 visibility 和 ACL 检查（`permission-checker.ts:43-139`），给另一个 Team 的用户或 Agent 发 ACL 也不会生效；固定绑定同样强制 Agent 与资产同 Team（`canBindAsset`，`permission-checker.ts:155-172`）。跨项目的公共资产目前只能靠复制、fork，或专门建一个共享 Team。
 
 ### 5.2 四类资产形式总表
 
@@ -347,7 +388,9 @@ flowchart TB
 | Wiki（`wiki-*`） | KS 侧：raw 源文件 + LLM 生成的结构化页面（wikilink 图谱）+ 每 wiki 私有 SQLite 索引（FTS5 + graph） | 文档类团队知识；Agent 经 `<knowledge_tools>` 两步自发现（tools/list → tools/call），7 个只读工具（search/read_page/get_graph 等），不整库注入 | 团队内，owner=创建人；登记默认 `team` | Panel 上 allocate → `agent-fixed-asset/set`（`tool` 型注入）；unbind 移除；ready 状态才注入 | 上传文本文件（单文件 ≤512KB、单次 ≤10 个）→ 手动点"开始抽取"（ingest：`draft→pending→processing→ready/failed`，version+1，按 sha256 增量跳过未变源）；可直接改单页；不支持 URL/git 作为源 |
 | CodeGraph（`cg-*`） | KS 侧：git 浅克隆 + 预建代码图谱（文件/符号/调用关系），带 repo/branch/commit/stats | 代码结构知识；9 个只读工具（search/explore/callers/callees/impact 等），改代码前查影响面 | 同 Wiki（登记默认 `team`） | 同 Wiki（`tool` 型绑定） | create 即入队建图；手动 sync（git fetch 增量，失败回退全量）；可选定时自动 sync（默认关，10 分钟扫描间隔）；当前仅支持公开 HTTPS git 仓库（SSH/私有仓库 coming soon） |
 
-统一机制：四类资产的归属/可见性/状态在 `meta_assets`，Agent 装配在 `meta_agent_fixed_assets`（Fixed Binding：`injection_mode` + `priority`），授权在 `meta_asset_acl`。这就是 README 所说的 "Fixed Binding + ACL"。
+统一机制：四类资产的归属/可见性/状态在 `meta_assets`，Agent 装配在 `meta_agent_fixed_assets`（Fixed Binding：`injection_mode` + `priority`），授权在 `meta_asset_acl`。这就是 README 所说的 "Fixed Binding + ACL"。资产正文则分处两地：Chat Memory 和 Skill 在 MemoryCore，Wiki 和 CodeGraph 在 MemoryKnowledge，内核只持有后两者的元信息与访问关系。
+
+一个容易踩的边界：Panel 可以手工创建独立的 `mem-*` Chat Memory 块，但它只有元数据、没有对应的 (team, agent) 数据面，分层接口直接返回空（`chat-memory.ts:1040-1046`）。可持续写入的记忆必须绑在具体 Agent 上（`chat_memory-{team}-{agent}`）。
 
 ### 5.3 装配与共享的三种机制（按资产类型分流）
 
@@ -358,6 +401,8 @@ flowchart TB
 ## 6. 记忆如何产生、注入与更新到知识库
 
 ### 6.1 对话 → 记忆的自动流水线
+
+先划清边界：这里不是一个统一的"知识库"，而是四条独立管线。对话自动沉淀的只有 Chat Memory 和 Skill；对话不会自动变成 Wiki，Git 仓库更新也不会经对话自动同步 CodeGraph，后两者必须在 Panel 上传源文件、触发 ingest 或执行 sync。四类产物只在元数据、ACL 和 Agent Loadout 层被统一管理。
 
 ```mermaid
 flowchart LR
@@ -446,13 +491,28 @@ flowchart LR
 8. Proxy 调 `auth/verify` 不带 Bearer（源码遗漏，部署脚本注释确认），因此启用内核 Layer1 `MEMORY_CORE_GATEWAY_API_KEY` 会打断 Proxy 鉴权。一键部署默认将其留空。
 9. SDK/npm 包名：README 写 `memory-sdk-ts` / `tencentdb-agent-memory-sdk-python`，树内实名带 `-v2` 后缀；npm/pip 线上实际可装版本待验证。
 10. `feat/server_team` 相对 v2.0.1-beta 的最新增量（本次 fast-forward 带入）：`memory-prompt`（instance/team/agent 三级自定义提炼策略 + 防护栏注入）与 `memory-generation-log`（每次提炼的不可变溯源日志，含 prompt 版本 hash、输入/输出记忆引用）。两者 API/SDK 已就绪、Panel 无 UI。另有 Codex/WorkBuddy/dsh 三个新客户端通道与 Wiki ingest 增量优化。
+11. Wiki 的写门控不一致：`raw/write`（上传源文件）只要求调用者是 team member（`wiki-routes.ts:283`），而 `ingest`、`page/rm`、`raw/rm`、`delete` 都要求对该资产有 `write` 权限（`wiki-routes.ts:91` 实际传 `action:'write'`，该行注释里的"read"是笔误）。也就是说任何团队成员都能往别人的 Wiki 里上传源文件，删源反而要 write 权限。生产使用前应补齐这道检查。
+12. Skill 的 `private` 语义没有下推到数据面：skill 检索按 `team_id`（加 `owner_agent_id`）过滤，`MemoryCore/src/core/skill/` 与 `skill-handlers.ts` 中没有任何 visibility 过滤逻辑（grep 零命中）。meta 层标为 `private` 的 skill，同团队成员经对话内 `skill_search` 或 `/v3/skill/search` 仍可能检索到正文；`private` 目前只约束 meta API（资产列表、绑定、Panel 展示）。实际暴露面待运行验证。
+13. System Admin 的资产功能，文档超前于实现：README（本次 `97f9465` 刚更新）称 System Admin"也可使用 Wiki、CodeGraph、Skill 等资产管理功能"（`README_CN.md:136`），但前端 `ResourceGuard` 仍把 `admin` 角色重定向出全部资源页（`RouteGuards.tsx:11-22`，注释写明"admin 管团队不管资源"）。
+14. 前端把两种"admin"折叠成一个值：`useCurrentRole` 对全局 System Admin 返回 `'admin'`，对成员表 `role='admin'` 的 team admin 也返回 `'admin'`；而后端建团队会把 owner 以 `role='admin'` 写进成员表。`roleInTeam` 的兜底注释假定"owner 不一定出现在 members 数组中"，与后端行为不符（`backendStore.ts:305-315`）。链路成立时 team owner/admin 会被 `ResourceGuard` 一并挡出资源页，属于前端角色语义缺陷，实际影响待运行验证。
 
 ## 8. 结论（对本仓库第一目标的参照意义）
 
-- 部署：`deploy/global-images` 在线镜像路径已相当成熟（随机 admin key、健康检查、一行命令接入、purge 清理）。与本仓库现有 Docker-first SOP 的差距主要在版本基线：本报告基于的 `97f9465` 尚未经过本仓库任何 Runtime Gate，现有运行记录仍只证明其各自 pin 的 SHA。
+- 部署：`deploy/global-images` 在线镜像路径已相当成熟（随机 admin key、健康检查、一行命令接入、purge 清理）。与本仓库现有 Docker-first SOP 的差距主要在版本基线：本报告基于的 `97f9465` 尚未经过本仓库任何 Runtime Gate，现有运行记录仍只证明其各自 pin 的 SHA。该分支处于 Beta 快速迭代期，Release、CHANGELOG 与 Docker tag 不完全同步，引用时应固定 commit 或镜像 digest，不要依赖 `latest`。
 - 团队共享演示：上游原生已覆盖"两个用户、独立 Agent/user_key、team 可见性授权、借入验证共享、private 反例隔离"的全部机制点，与本仓库 A/B 双客户端演示目标一一对应；`x-team-id` 等 header 直登方式适合 headless 自动化 Gate。
 - 治理映射：负责人思想中的"身份颗粒度管理 / 按披露程度交流 / AI 初步生成 + 查询人决定颗粒 / MCP 登录与跨级调取"，前三条在上游分别对应 user_key+owner 制、五档 visibility+ACL、L0-L3 分层+借入只读。第四条上游走的是 Proxy 透明代理而非 MCP，这是与负责人思想的结构性差异，后续方案取舍需负责人确认。
 
+## 9. 与外部独立调研的交叉验证
+
+负责人另提供了一份基于相同提示词独立完成的调研（基线同为 `97f9465`）。两份结论高度一致；其增量发现经源码验证后已并入上文，包括：扁平团队模型、MemoryCore 不托管/调度 Agent 的定位声明、ACL 不越 Team 边界、Wiki `raw/write` 门控不一致、手工 `mem-*` 块无数据面、无官方托管 SaaS、Skill `private` 双层语义疑点、能力总表与最小案例验收表的形式。以下外部断言经验证不成立或需要修正，未采纳：
+
+| 外部断言 | 验证结果 |
+| --- | --- |
+| 资产 `source_type` 枚举为 `generated / uploaded / imported / learned / manual` | 不成立。该字段是无枚举约束的自由字符串（`v3-meta-schemas.ts:246` 为 `nonEmpty`），实际写入值是 `auto / extracted / manual / uploaded` |
+| `injection_mode` 是资产（`meta_assets`）字段 | 不准确。它是绑定表 `meta_agent_fixed_assets` 的字段，描述"某资产挂到某 Agent"的注入方式 |
+| INSTALL 文档保留"System Admin 不能创建业务资产、需切换普通用户"的旧说明 | 未找到。当前中英文 INSTALL 均无此说明；真实的不一致方向相反：README 说 System Admin 可用资产功能，前端 Guard 仍在拦（见第 7 节第 13 条） |
+| Service/K8s 模式按 `README.deployment.md` 可部署 | 部分成立。TCVDB/COS/Redis 后端在代码层存在，但该文档引用的 K8s 清单等文件已不在当前树，按文档不可复现 |
+
 ---
 
-*报告生成：2026-08-18。调研方式：5 路并行源码调研，另对 6 项关键断言做主线抽查（可见性枚举、system_admin 唯一索引、mem 命令表、L1 触发参数、start-all 输出命令、借入上限），全部与源码一致。*
+*报告生成：2026-08-18。调研方式：5 路并行源码调研 + 关键断言主线抽查。首轮抽查 6 项（可见性枚举、system_admin 唯一索引、mem 命令表、L1 触发参数、start-all 输出命令、借入上限）；融合外部调研时再验 12 项（source_type、wiki 各路由门控、useCurrentRole 与 roleInTeam、ResourceGuard、skill 数据面 visibility、MemoryCore 定位声明、团队嵌套字段、INSTALL 旧说明等）。全部正文结论与源码一致。*
