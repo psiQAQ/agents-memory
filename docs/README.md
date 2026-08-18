@@ -28,6 +28,7 @@
 
 | 文档 | 作用 |
 | --- | --- |
+| [TencentDB Agent Memory 上游能力调研报告](2026-08-18-tencentdb-agent-memory-capability-survey.md) | 2026-08-18 基于上游 `feat/server_team` @ `97f9465` 的源码调研：部署方式、团队/权限模型、资产形式、记忆与知识更新链路；比 `reference/tencentdb-agent-memory.md` 快照更新，验证状态 Static |
 | [AI 智能体记忆管理调研报告](exa-results/agent-memory-management-2026-08-03.md) | Exa 主调研：产品与框架对比、价值衡量、提取和共享路线 |
 | [GPT 对主调研的评审](exa-results/GPT-review.md) | 四层记忆模型、生命周期、Memory Firewall 与待补方向 |
 | [AI 智能体记忆管理补充调研](firecrawl-results/agent-memory-supplement-2026-08-06.md) | Firecrawl 补充：MCP OAuth、检索前 ACL、治理与 Memory PR |

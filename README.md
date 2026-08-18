@@ -27,6 +27,8 @@
   → 用 superpowers:writing-plans 产出 `docs/superpowers/plans/2026-08-07-tencentdb-memory-retrofit.md`(10 个 PR、5 个 Phase)。该计划早于当前 `fe3230f` 源码快照，目录和命令需要在复现后重新校准，不能直接执行。
 - **v9(2026-08-07)**:「首先复现腾讯的方案，解决 Claude Code 的适配性问题；其次在本机 Windows Codex、Windows Claude Code 和 WSL Claude Code 三个智能体上搭建和管理记忆共享平台。」
   → 首次提交改为可开发基线：TencentDB submodule 指向 `psiQAQ/TencentDB-Agent-Memory` fork；执行顺序收敛为“原样复现 → 最小兼容性修复 → 三智能体共享验证”。
+- **v10(2026-08-18)**:「submodules\TencentDB-Agent-Memory 这个仓库配置上游仓库 TencentCloud/TencentDB-Agent-Memory 并拉取上游的三个分支的最新状态……调研这个仓库目前可实现的效果:部署运行方式……管理和团队搭建模式(举一个完整多团队建设的最小案例)……团队资产/个人资产的资产形式(表格展示用处特点与挂载/更新方式)……管理员和普通成员的区别……团队成员和 agent 和 task 的关系……记忆如何更新到知识库中,普通成员和管理员能以哪些方式管理(网页登录或 agent 对话等)……多层结构用 mermaid 给出,汇总到 docs/ 下整理成一篇报告。」
+  → submodule 配置 `upstream` 并拉取三个上游分支(`main`/`feat/server`/`feat/server_team`),工作树 fast-forward 到上游默认分支最新 `97f9465`(v2.0.1-beta.2+1);产出上游能力调研报告:`docs/2026-08-18-tencentdb-agent-memory-capability-survey.md`(5 路并行源码调研 + 关键断言抽查,验证状态 Static)。
 
 ## 仓库结构与阅读顺序
 
