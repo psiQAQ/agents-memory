@@ -19,5 +19,6 @@
 ## 溯源边界
 
 - 该实验线包含历史 fork、历史本地 commit 和过去的运行环境；它不追踪当前 TencentDB Agent Memory 的 `local_ds`。
-- 曾关联的 `codex/four-agent-memory-upstream` 计划在外部源码仓库归档后删除。本归档不依赖尚未创建的 tag；如需追溯，请以各文档已记录的 commit 为准。
+- `agents-memory` 的历史执行分支 `codex/four-agent-memory-compose` 已归档为注释 tag `archive/codex-four-agent-memory-compose-20260901`，peeled commit 为 `cafd509d23ae4f17077fcf745f64eb4cacc1a7f5`；原远端分支已删除。该 tag 仅用于溯源，不能恢复任何执行义务。
+- 外部源码仓库中曾关联的 `codex/four-agent-memory-upstream` 已归档为 `archive/codex-four-agent-memory-upstream-20260901`，peeled commit 为 `9e456a5b7bb47ae40596237d0f0b87c1edfc098f`。它与本仓库的历史 Compose 实验线是不同的引用，均不代表当前 TencentDB Agent Memory 的开发状态。
 - 如要调研 TencentDB 的当前能力，应新增带访问日期和 immutable commit 的 Snapshot，而不是复用本目录的运行结论。
