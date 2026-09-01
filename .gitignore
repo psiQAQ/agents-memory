@@ -1,39 +1,20 @@
-# Isolated worktrees and local Claude state
-.worktrees/
-.claude/*
-.claude-home/
-.claude-home-*/
+# Local research scratch space and caches
+.research-work/
+.cache/
+.tmp/
+*.tmp
+*.bak
+.DS_Store
+Thumbs.db
 
-# Local secrets and runtime evidence
-.secrets/
-.runtime/
+# Credentials, local settings, and raw captures
 .env
 .env.*
 !.env.example
 !.env.template
-!.env.*.example
-
-# Raw local logs; documentation and explicit examples remain trackable.
+.secrets/
+*.key
+*.pem
 *.log
-logs/*
 *.raw
 *.trace
-
-# Explicitly named, sanitized log fixtures may be tracked at the repository
-# level or directly under logs/.
-!/*.example.log
-!/*.template.log
-!/*.example.raw
-!/*.template.raw
-!/*.example.trace
-!/*.template.trace
-!/logs/*.example.log
-!/logs/*.template.log
-!/logs/*.example.raw
-!/logs/*.template.raw
-!/logs/*.example.trace
-!/logs/*.template.trace
-
-# Only explicitly named, non-secret Claude fixtures may be tracked.
-!.claude/*.template.json
-!.claude/*.example.json
