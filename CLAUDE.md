@@ -12,7 +12,7 @@
 
 1. 从 [docs/README.md](docs/README.md) 定位主题。
 2. 阅读 [调研方法](docs/foundations/research-methodology.md)，确认状态和来源边界。
-3. 研究外部项目时阅读对应项目参考；设计工作再阅读 [企业记忆方案](docs/design/enterprise-memory-design.md)。
+3. 研究外部项目时阅读对应项目参考；涉及文献目录或 Zotero 标识时阅读 [Zotero 文献调研工作规则](docs/foundations/zotero-research-workflow.md)；设计工作再阅读 [企业记忆方案](docs/design/enterprise-memory-design.md)。
 4. 只有追溯历史时才进入 [history/](docs/history/)；不得把其中结果写成当前运行事实。
 
 ## 文档纪律
@@ -21,13 +21,15 @@
 - 每份新 Active 或 Snapshot 文档必须写明：更新日期、问题范围、来源、版本边界、关联文档、Fact、Inference、Recommendation 和待验证项。
 - 外部源码分析必须记录仓库 URL 与检查日期；若引用代码行为，还必须记录 branch、tag 或 commit。
 - 旧版本、厂商自报数据、单次实验和二手资料不得外推为通用事实。
-- 目录按内容类型组织：`foundations/`、`research/reports/`、`references/projects/`、`design/`、`templates/` 和 `history/`。新增材料须同步更新 [docs/README.md](docs/README.md)。
+- Zotero collection/item key、附件、标签、stars 和条目状态是带日期的元数据 Snapshot；未通过 MCP 或第一方来源回读时，不得标为当前事实。
+- 目录按内容类型组织：`foundations/`、`research/reports/`、`research/catalogs/`、`references/projects/`、`design/`、`templates/` 和 `history/`。新增材料须同步更新 [docs/README.md](docs/README.md)。
 - 新报告使用 [调研报告模板](docs/templates/research-report-template.md)；Markdown 相对链接必须在变更后校验。
 
 ## 明确禁止
 
 - 不在本仓库新增或恢复产品源码、Docker Compose、运行脚本、测试代码、客户端 settings 或 submodule。
 - 不在本仓库执行外部产品的部署、付费模型调用、客户端接入或运行时验证。
+- 不在本仓库保存或配置 Zotero 数据库、PDF 附件、MCP 设置、token、cookie 或客户端运行状态。
 - 不把历史 `four-agent-memory-upstream`、历史 fork commit 或 2026-08 Mock 实验结论表述为当前实现状态。
 - 不修改外部源码仓库的 branch、tag、remote 或工作树，除非用户单独明确授权。
 

@@ -7,7 +7,7 @@
 ## 从这里开始
 
 1. 阅读 [文档索引](docs/README.md)，按问题进入对应主题。
-2. 阅读 [负责人原则](docs/foundations/owner-principles.md) 和 [调研方法](docs/foundations/research-methodology.md)。
+2. 阅读 [负责人原则](docs/foundations/owner-principles.md) 和 [调研方法](docs/foundations/research-methodology.md)；涉及文献目录时再阅读 [Zotero 文献调研工作规则](docs/foundations/zotero-research-workflow.md)。
 3. 需要对比外部项目时，使用 [项目参考](docs/references/projects/)；需要形成结论时，使用 [报告模板](docs/templates/research-report-template.md)。
 4. 查阅已结束的 2026-08 实验时，只能从 [历史归档](docs/history/integration-lab-2026-08/README.md) 进入。
 
@@ -21,7 +21,7 @@
 
 ## 持续更新
 
-- 新主题报告放入 `docs/research/reports/`，新项目分析放入 `docs/references/projects/`。
+- 新主题报告放入 `docs/research/reports/`，带 Zotero 标识的发现目录放入 `docs/research/catalogs/`，新项目分析放入 `docs/references/projects/`。
 - 每份新材料必须记录来源、检查日期、版本边界、Fact / Inference / Recommendation 和局限。
 - 外部源码、部署或运行验证应在其各自仓库完成；本仓库只保存脱离运行环境仍可阅读的调研与结论。
 

@@ -18,3 +18,9 @@ Thumbs.db
 *.log
 *.raw
 *.trace
+
+# Local Zotero application data (curated Markdown remains trackable)
+.zotero/
+zotero.sqlite
+zotero.sqlite-*
+zotero-storage/
